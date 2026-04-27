@@ -22,7 +22,7 @@ func main() {
 
 	fmt.Println("Database connected successfully")
 
-	s := server.New()
+	s := server.New(db)
 	fmt.Println("MediaHub API starting on port 9090...")
 	if err := s.Start(":9090"); err != nil {
 		log.Fatal(err)
