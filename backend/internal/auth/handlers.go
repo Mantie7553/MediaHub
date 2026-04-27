@@ -104,3 +104,25 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 
 	_ = time.Now()
 }
+
+func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
+	user := GetUser(r)
+
+	var username, email, role string
+	err := h.db.QueryRow(
+		`SELECT username, email, role FROM users WHERE id = $1`,
+		user.UserID,
+	).Scan(&username, &email, &role)
+	if err != nil {
+		http.Error(w, "user not found", http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"id":       user.UserID,
+		"username": username,
+		"email":    email,
+		"role":     role,
+	})
+}

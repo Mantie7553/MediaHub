@@ -36,4 +36,17 @@ func (s *Server) routes() {
 
 	s.router.Post("/auth/register", authHandler.Register)
 	s.router.Post("/auth/login", authHandler.Login)
+
+	s.router.Group(func(r chi.Router) {
+		r.Use(auth.Middleware)
+		r.Get("/me", authHandler.Me)
+	})
+
+	s.router.Group(func(r chi.Router) {
+		r.Use(auth.Middleware)
+		r.Use(auth.RequireAdmin)
+		r.Get("/admin/test", func(w http.ResponseWriter, r *http.Request) {
+			fmt.Fprintln(w, "admin only")
+		})
+	})
 }
