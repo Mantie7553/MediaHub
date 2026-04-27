@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/Mantie7553/MediaHub/backend/internal/auth"
+	"github.com/Mantie7553/MediaHub/backend/internal/media"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -29,6 +30,7 @@ func (s *Server) Start(addr string) error {
 
 func (s *Server) routes() {
 	authHandler := auth.NewHandler(s.db)
+	mediaHandler := media.NewHandler(s.db)
 
 	s.router.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintln(w, "ok")
@@ -45,6 +47,7 @@ func (s *Server) routes() {
 	s.router.Group(func(r chi.Router) {
 		r.Use(auth.Middleware)
 		r.Use(auth.RequireAdmin)
+		r.Post("/media", mediaHandler.Upload)
 		r.Get("/admin/test", func(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintln(w, "admin only")
 		})
