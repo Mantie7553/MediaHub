@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/Mantie7553/MediaHub/backend/internal/auth"
+	"github.com/Mantie7553/MediaHub/backend/internal/lists"
 	"github.com/Mantie7553/MediaHub/backend/internal/media"
 	"github.com/go-chi/chi/v5"
 )
@@ -31,6 +32,7 @@ func (s *Server) Start(addr string) error {
 func (s *Server) routes() {
 	authHandler := auth.NewHandler(s.db)
 	mediaHandler := media.NewHandler(s.db)
+	listsHandler := lists.NewHandler(s.db)
 
 	s.router.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintln(w, "ok")
@@ -45,6 +47,12 @@ func (s *Server) routes() {
 		r.Get("/me", authHandler.Me)
 		r.Get("/media", mediaHandler.GetAll)
 		r.Get("/media/{id}", mediaHandler.GetSpecific)
+
+		r.Post("/me/media", listsHandler.Add)
+    	r.Get("/me/media", listsHandler.GetAll)
+    	r.Put("/me/media/{id}", listsHandler.Update)
+    	r.Delete("/me/media/{id}", listsHandler.Delete)
+    	r.Post("/me/anime/{id}/progress", listsHandler.UpdateProgress)
 	})
 
 	// Endpoints for admin users
