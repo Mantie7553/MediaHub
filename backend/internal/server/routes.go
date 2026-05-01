@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/Mantie7553/MediaHub/backend/internal/auth"
+	"github.com/Mantie7553/MediaHub/backend/internal/clients"
 	"github.com/Mantie7553/MediaHub/backend/internal/lists"
 	"github.com/Mantie7553/MediaHub/backend/internal/media"
 	"github.com/Mantie7553/MediaHub/backend/internal/requests"
@@ -13,14 +14,18 @@ import (
 )
 
 type Server struct {
-	router *chi.Mux
-	db     *sql.DB
+	router  *chi.Mux
+	db      *sql.DB
+	clients *clients.Set
 }
 
-func New(db *sql.DB) *Server {
+// New builds a Server with all dependencies wired in. The clients.Set is held on
+// the Server so handler constructors can pull only the clients they need.
+func New(db *sql.DB, clientSet *clients.Set) *Server {
 	s := &Server{
-		router: chi.NewRouter(),
-		db:     db,
+		router:  chi.NewRouter(),
+		db:      db,
+		clients: clientSet,
 	}
 	s.routes()
 	return s
@@ -51,10 +56,10 @@ func (s *Server) routes() {
 		r.Get("/media/{id}", mediaHandler.GetSpecific)
 
 		r.Post("/me/media", listsHandler.Add)
-    	r.Get("/me/media", listsHandler.GetAll)
-    	r.Put("/me/media/{id}", listsHandler.Update)
-    	r.Delete("/me/media/{id}", listsHandler.Delete)
-    	r.Post("/me/anime/{id}/progress", listsHandler.UpdateProgress)
+		r.Get("/me/media", listsHandler.GetAll)
+		r.Put("/me/media/{id}", listsHandler.Update)
+		r.Delete("/me/media/{id}", listsHandler.Delete)
+		r.Post("/me/anime/{id}/progress", listsHandler.UpdateProgress)
 
 		r.Get("/requests", requestsHandler.GetAll)
 		r.Post("/requests", requestsHandler.Add)
