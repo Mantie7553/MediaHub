@@ -148,3 +148,9 @@ postman/
 
 #VSCode
 .vscode
+
+#Environment files
+.env
+
+#IDE files
+.idea
