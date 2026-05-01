@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/lib/pq"
 )
 
@@ -144,6 +145,128 @@ func (h *Handler) Upload(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]string{"id": mediaID})
+}
+
+func (h *Handler) GetAll(w http.ResponseWriter, r *http.Request) {
+	mediaType := r.URL.Query().Get("type")
+
+	items := []MediaItem{}
+
+	var queryString string = `SELECT id, type, title, description, 
+		cover_image_url, release_date, external_id, 
+		external_source, created_at 
+		FROM media_items` 
+
+	if mediaType != "" {
+		queryString += ` WHERE type = $1` 
+	}
+
+	var rows *sql.Rows
+	var err error
+
+	if mediaType != "" {
+		rows, err = h.db.Query(queryString, mediaType)
+	} else {
+		rows, err = h.db.Query(queryString)
+	}
+
+	if err != nil {
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var item MediaItem
+		err := rows.Scan (
+			&item.ID, &item.Type, &item.Title, &item.Description,
+			&item.CoverImageURL, &item.ReleaseDate, &item.ExternalID,
+			&item.ExternalSource, &item.CreatedAt,
+		)
+
+		if err != nil {
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+		items = append(items, item)
+	}
+
+	if err := rows.Err(); err != nil {
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(items)
+}
+
+func (h *Handler) GetSpecific(w http.ResponseWriter, r *http.Request) {
+	mediaId := chi.URLParam(r, "id")
+	item := MediaItem{}
+
+	queryString := `SELECT id, type, title, description, 
+		cover_image_url, release_date, external_id, 
+		external_source, created_at 
+		FROM media_items WHERE id = $1`
+
+	err := h.db.QueryRow(queryString, mediaId).Scan (
+		&item.ID, &item.Type, &item.Title, &item.Description,
+		&item.CoverImageURL, &item.ReleaseDate, &item.ExternalID,
+		&item.ExternalSource, &item.CreatedAt,
+	)
+
+	if err == sql.ErrNoRows {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+
+	if err != nil {
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	var metadata any
+
+	switch item.Type {
+	case "anime": 
+		var meta AnimeMetadata
+		err := h.db.QueryRow(
+			`SELECT studio, status, genres FROM anime_metadata WHERE media_item_id = $1`,
+			item.ID,
+		).Scan(&meta.Studio, &meta.Status, pq.Array(&meta.Genres))
+		if err != nil && err != sql.ErrNoRows {
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+		metadata = meta
+	case "movie":
+		var meta MovieMetadata
+		err := h.db.QueryRow(
+			`SELECT runtime_mins, director, genres FROM movie_metadata WHERE media_item_id = $1`,
+			item.ID,
+		).Scan(&meta.RuntimeMins, &meta.Director, pq.Array(&meta.Genres))
+		if err != nil && err != sql.ErrNoRows {
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+		metadata = meta
+
+	case "music_track":
+		var meta MusicMetadata
+		err := h.db.QueryRow(
+			`SELECT artist, track_number, duration_secs, genres FROM music_metadata WHERE media_item_id = $1`,
+			item.ID,
+		).Scan(&meta.Artist, &meta.TrackNumber, &meta.DurationSecs, pq.Array(&meta.Genres))
+		if err != nil && err != sql.ErrNoRows {
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+		metadata = meta
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(MediaItemDetail{MediaItem: item, Metadata: metadata})
+
 }
 
 // nullString returns nil for empty strings so Postgres stores NULL rather than "".
