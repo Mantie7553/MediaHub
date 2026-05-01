@@ -8,6 +8,7 @@ import (
 	"github.com/Mantie7553/MediaHub/backend/internal/auth"
 	"github.com/Mantie7553/MediaHub/backend/internal/lists"
 	"github.com/Mantie7553/MediaHub/backend/internal/media"
+	"github.com/Mantie7553/MediaHub/backend/internal/requests"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -33,6 +34,7 @@ func (s *Server) routes() {
 	authHandler := auth.NewHandler(s.db)
 	mediaHandler := media.NewHandler(s.db)
 	listsHandler := lists.NewHandler(s.db)
+	requestsHandler := requests.NewHandler(s.db)
 
 	s.router.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintln(w, "ok")
@@ -53,6 +55,10 @@ func (s *Server) routes() {
     	r.Put("/me/media/{id}", listsHandler.Update)
     	r.Delete("/me/media/{id}", listsHandler.Delete)
     	r.Post("/me/anime/{id}/progress", listsHandler.UpdateProgress)
+
+		r.Get("/requests", requestsHandler.GetAll)
+		r.Post("/requests", requestsHandler.Add)
+
 	})
 
 	// Endpoints for admin users
@@ -63,5 +69,9 @@ func (s *Server) routes() {
 		r.Get("/admin/test", func(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintln(w, "admin only")
 		})
+
+		r.Get("/requests/all", requestsHandler.GetAllAdmin)
+		r.Put("/requests/{id}/approve", requestsHandler.Approve)
+		r.Put("/requests/{id}/reject", requestsHandler.Reject)
 	})
 }
