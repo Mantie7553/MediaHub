@@ -145,3 +145,6 @@ vite.config.ts.timestamp-*
 # Postman
 postman/
 .postman
+
+#VSCode
+.vscode
