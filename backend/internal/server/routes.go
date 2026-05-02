@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/Mantie7553/MediaHub/backend/internal/auth"
+	"github.com/Mantie7553/MediaHub/backend/internal/jobs"
 	"github.com/Mantie7553/MediaHub/backend/internal/lists"
 	"github.com/Mantie7553/MediaHub/backend/internal/media"
 	"github.com/Mantie7553/MediaHub/backend/internal/requests"
@@ -35,6 +36,7 @@ func (s *Server) routes() {
 	mediaHandler := media.NewHandler(s.db)
 	listsHandler := lists.NewHandler(s.db)
 	requestsHandler := requests.NewHandler(s.db)
+	jobsHandler := jobs.NewHandler(s.db)
 
 	s.router.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintln(w, "ok")
@@ -50,14 +52,19 @@ func (s *Server) routes() {
 		r.Get("/media", mediaHandler.GetAll)
 		r.Get("/media/{id}", mediaHandler.GetSpecific)
 
+		// Media tracking endpoints
 		r.Post("/me/media", listsHandler.Add)
-    	r.Get("/me/media", listsHandler.GetAll)
-    	r.Put("/me/media/{id}", listsHandler.Update)
-    	r.Delete("/me/media/{id}", listsHandler.Delete)
-    	r.Post("/me/anime/{id}/progress", listsHandler.UpdateProgress)
+		r.Get("/me/media", listsHandler.GetAll)
+		r.Put("/me/media/{id}", listsHandler.Update)
+		r.Delete("/me/media/{id}", listsHandler.Delete)
+		r.Post("/me/anime/{id}/progress", listsHandler.UpdateProgress)
 
+		// Download Request endpoints
 		r.Get("/requests", requestsHandler.GetAll)
 		r.Post("/requests", requestsHandler.Add)
+
+		// Job endpoints
+		r.Get("/me/jobs", jobsHandler.GetMine)
 
 	})
 
@@ -69,9 +76,13 @@ func (s *Server) routes() {
 		r.Get("/admin/test", func(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintln(w, "admin only")
 		})
-
+		// Download Request endpoints
 		r.Get("/requests/all", requestsHandler.GetAllAdmin)
 		r.Put("/requests/{id}/approve", requestsHandler.Approve)
 		r.Put("/requests/{id}/reject", requestsHandler.Reject)
+
+		// Job endpoints
+		r.Get("/admin/jobs", jobsHandler.GetAll)
+		r.Post("/admin/jobs", jobsHandler.Create)
 	})
 }
