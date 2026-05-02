@@ -11,6 +11,7 @@ import (
 	"github.com/Mantie7553/MediaHub/backend/internal/media"
 	"github.com/Mantie7553/MediaHub/backend/internal/requests"
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/cors"
 )
 
 type Server struct {
@@ -37,6 +38,12 @@ func (s *Server) routes() {
 	listsHandler := lists.NewHandler(s.db)
 	requestsHandler := requests.NewHandler(s.db)
 	jobsHandler := jobs.NewHandler(s.db)
+
+	s.router.Use(cors.Handler(cors.Options{
+		AllowedOrigins: []string{"http://localhost:5173"},
+		AllowedMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedHeaders: []string{"Authorization", "Content-Type"},
+	}))
 
 	s.router.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintln(w, "ok")
