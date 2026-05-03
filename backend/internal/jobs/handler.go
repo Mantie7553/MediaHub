@@ -26,10 +26,12 @@ Purpose: Get a list of all jobs
 func (h *Handler) GetAll(w http.ResponseWriter, r *http.Request) {
 	items := []JobResponse{}
 
-	queryString := `SELECT id, request_id, status, handler,
-    progress_pct, destination_path, source_url,
-    error_message, started_at, completed_at, created_at
-    FROM download_jobs`
+	queryString := `SELECT j.id, j.request_id, j.status, j.handler,
+    j.progress_pct, j.destination_path, j.source_url,
+    j.error_message, j.started_at, j.completed_at, j.created_at,
+    mi.title
+    FROM download_jobs j
+    JOIN media_items mi ON mi.id = j.media_item_id`
 
 	rows, err := h.db.Query(queryString)
 
@@ -46,7 +48,7 @@ func (h *Handler) GetAll(w http.ResponseWriter, r *http.Request) {
 			&item.ID, &item.RequestID, &item.Status, &item.Handler,
 			&item.ProgressPct, &item.DestinationPath, &item.SourceURL,
 			&item.ErrorMessage, &item.StartedAt, &item.CompletedAt,
-			&item.CreatedAt,
+			&item.CreatedAt, &item.MediaTitle,
 		)
 
 		if err != nil {
