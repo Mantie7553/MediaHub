@@ -7,6 +7,7 @@ import (
 
 	"github.com/Mantie7553/MediaHub/backend/internal/auth"
 	"github.com/Mantie7553/MediaHub/backend/internal/downloader"
+	"github.com/Mantie7553/MediaHub/backend/internal/utils"
 	"github.com/go-chi/chi/v5"
 	"github.com/lib/pq"
 )
@@ -26,12 +27,12 @@ func (h *Handler) Add(w http.ResponseWriter, r *http.Request) {
 	user := auth.GetUser(r)
 
 	if err = json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request body", http.StatusBadRequest)
+		utils.Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
 	if req.MediaItemId == "" && req.TitleOverride == "" {
-		http.Error(w, "media_item_id or title_override is required", http.StatusBadRequest)
+		utils.Error(w, http.StatusBadRequest, "media_item_id or title_override is required")
 		return
 	}
 
@@ -39,8 +40,7 @@ func (h *Handler) Add(w http.ResponseWriter, r *http.Request) {
 		`SELECT download_permission FROM users WHERE id = $1`,
 		user.UserID,
 	).Scan(&downloadPermission)
-	if err != nil {
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+	if utils.InternalError(w, err) {
 		return
 	}
 
@@ -58,22 +58,20 @@ func (h *Handler) Add(w http.ResponseWriter, r *http.Request) {
 		source_url, status, auto_approved, admin_notes)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		RETURNING id`,
-		user.UserID, nullString(req.MediaItemId), nil,
-		nullString(req.TitleOverride), req.SourceUrl,
+		user.UserID, utils.NullString(req.MediaItemId), nil,
+		utils.NullString(req.TitleOverride), req.SourceUrl,
 		status, autoApproved, nil,
 	).Scan(&requestId)
 	if err != nil {
 		if pqErr, ok := err.(*pq.Error); ok && pqErr.Code == "23505" {
-			http.Error(w, "download request already made", http.StatusConflict)
+			utils.Error(w, http.StatusConflict, "download request already made")
 			return
 		}
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		utils.Error(w, http.StatusInternalServerError, "internal server error")
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]string{"id": requestId})
+	utils.JSON(w, map[string]string{"id": requestId}, http.StatusCreated)
 }
 
 func (h *Handler) GetAll(w http.ResponseWriter, r *http.Request) {
@@ -89,8 +87,7 @@ func (h *Handler) GetAll(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := h.db.Query(queryString, user.UserID)
 
-	if err != nil {
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+	if utils.InternalError(w, err) {
 		return
 	}
 	defer rows.Close()
@@ -102,20 +99,17 @@ func (h *Handler) GetAll(w http.ResponseWriter, r *http.Request) {
 			&item.TitleOverride, &item.MediaTitle,
 		)
 
-		if err != nil {
-			http.Error(w, "internal server error", http.StatusInternalServerError)
+		if utils.InternalError(w, err) {
 			return
 		}
 		items = append(items, item)
 	}
 
-	if err := rows.Err(); err != nil {
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+	if utils.InternalError(w, rows.Err()) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(items)
+	utils.JSON(w, items)
 }
 
 func (h *Handler) GetAllAdmin(w http.ResponseWriter, r *http.Request) {
@@ -129,8 +123,7 @@ func (h *Handler) GetAllAdmin(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := h.db.Query(queryString)
 
-	if err != nil {
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+	if utils.InternalError(w, err) {
 		return
 	}
 	defer rows.Close()
@@ -142,20 +135,17 @@ func (h *Handler) GetAllAdmin(w http.ResponseWriter, r *http.Request) {
 			&item.TitleOverride, &item.MediaTitle, &item.RequestedBy,
 		)
 
-		if err != nil {
-			http.Error(w, "internal server error", http.StatusInternalServerError)
+		if utils.InternalError(w, err) {
 			return
 		}
 		items = append(items, item)
 	}
 
-	if err := rows.Err(); err != nil {
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+	if utils.InternalError(w, rows.Err()) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(items)
+	utils.JSON(w, items)
 }
 
 func (h *Handler) Approve(w http.ResponseWriter, r *http.Request) {
@@ -173,12 +163,11 @@ func (h *Handler) Approve(w http.ResponseWriter, r *http.Request) {
 	).Scan(&requestThingId, &mediaItemId, &sourceURL)
 
 	if err == sql.ErrNoRows {
-		http.Error(w, "not found", http.StatusNotFound)
+		utils.Error(w, http.StatusNotFound, "not found")
 		return
 	}
 
-	if err != nil {
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+	if utils.InternalError(w, err) {
 		return
 	}
 
@@ -190,20 +179,17 @@ func (h *Handler) Approve(w http.ResponseWriter, r *http.Request) {
 		mediaItemId,
 	).Scan(&mediaType, &externalID)
 
-	if err != nil {
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+	if utils.InternalError(w, err) {
 		return
 	}
 
 	_, err = downloader.Dispatch(h.db, requestThingId, mediaItemId, sourceURL, mediaType, externalID)
 
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	if utils.InternalError(w, err) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"id": requestThingId})
+	utils.JSON(w, map[string]string{"id": requestThingId})
 }
 
 func (h *Handler) Reject(w http.ResponseWriter, r *http.Request) {
@@ -211,7 +197,7 @@ func (h *Handler) Reject(w http.ResponseWriter, r *http.Request) {
 	requestId := chi.URLParam(r, "id")
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request body", http.StatusBadRequest)
+		utils.Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
@@ -221,27 +207,17 @@ func (h *Handler) Reject(w http.ResponseWriter, r *http.Request) {
 		SET status = 'rejected', resolved_at = NOW(), admin_notes = $2
 		WHERE id = $1
 		RETURNING id`,
-		requestId, nullString(req.AdminNotes),
+		requestId, utils.NullString(req.AdminNotes),
 	).Scan(&requestThingId)
 
 	if err == sql.ErrNoRows {
-		http.Error(w, "not found", http.StatusNotFound)
+		utils.Error(w, http.StatusNotFound, "not found")
 		return
 	}
 
-	if err != nil {
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+	if utils.InternalError(w, err) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"id": requestThingId})
-}
-
-// nullString returns nil for empty strings so Postgres stores NULL rather than "".
-func nullString(s string) interface{} {
-	if s == "" {
-		return nil
-	}
-	return s
+	utils.JSON(w, map[string]string{"id": requestThingId})
 }

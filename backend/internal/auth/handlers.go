@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"time"
+
+	"github.com/Mantie7553/MediaHub/backend/internal/utils"
 )
 
 type Handler struct {
@@ -34,18 +36,17 @@ type authResponse struct {
 func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	var req registerRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request body", http.StatusBadRequest)
+		utils.Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
 	if req.Username == "" || req.Email == "" || req.Password == "" {
-		http.Error(w, "username, email and password are required", http.StatusBadRequest)
+		utils.Error(w, http.StatusBadRequest, "username, email and password are required")
 		return
 	}
 
 	hash, err := HashPassword(req.Password)
-	if err != nil {
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+	if utils.InternalError(w, err) {
 		return
 	}
 
@@ -57,31 +58,27 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		req.Username, req.Email, hash,
 	).Scan(&userID)
 	if err != nil {
-		http.Error(w, "username or email already taken", http.StatusConflict)
+		utils.Error(w, http.StatusConflict, "username or email already taken")
 		return
 	}
 
 	token, err := GenerateToken(userID, "user")
-	if err != nil {
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+	if utils.InternalError(w, err) {
 		return
 	}
 
 	refreshToken, err := GenerateRefreshToken(h.db, userID)
-	if err != nil {
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+	if utils.InternalError(w, err) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(authResponse{Token: token, RefreshToken: refreshToken})
+	utils.JSON(w, authResponse{Token: token, RefreshToken: refreshToken}, http.StatusCreated)
 }
 
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	var req loginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request body", http.StatusBadRequest)
+		utils.Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
@@ -96,24 +93,21 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !CheckPassword(req.Password, passwordHash) {
-		http.Error(w, "invalid credentials", http.StatusUnauthorized)
+		utils.Error(w, http.StatusUnauthorized, "invalid credentials")
 		return
 	}
 
 	token, err := GenerateToken(userID, role)
-	if err != nil {
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+	if utils.InternalError(w, err) {
 		return
 	}
 
 	refreshToken, err := GenerateRefreshToken(h.db, userID)
-	if err != nil {
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+	if utils.InternalError(w, err) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(authResponse{Token: token, RefreshToken: refreshToken})
+	utils.JSON(w, authResponse{Token: token, RefreshToken: refreshToken})
 }
 
 func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
@@ -121,7 +115,7 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 		RefreshToken string `json:"refresh_token"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.RefreshToken == "" {
-		http.Error(w, "invalid request body", http.StatusBadRequest)
+		utils.Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
@@ -138,27 +132,24 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 	).Scan(&userID, &role, &expiresAt)
 
 	if err == sql.ErrNoRows {
-		http.Error(w, "invalid refresh token", http.StatusUnauthorized)
+		utils.Error(w, http.StatusUnauthorized, "invalid refresh token")
 		return
 	}
-	if err != nil {
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+	if utils.InternalError(w, err) {
 		return
 	}
 
 	if time.Now().After(expiresAt) {
-		http.Error(w, "refresh token expired", http.StatusUnauthorized)
+		utils.Error(w, http.StatusUnauthorized, "refresh token expired")
 		return
 	}
 
 	token, err := GenerateToken(userID, role)
-	if err != nil {
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+	if utils.InternalError(w, err) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(authResponse{Token: token, RefreshToken: req.RefreshToken})
+	utils.JSON(w, authResponse{Token: token, RefreshToken: req.RefreshToken})
 }
 
 func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
@@ -166,7 +157,7 @@ func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 		RefreshToken string `json:"refresh_token"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.RefreshToken == "" {
-		http.Error(w, "invalid request body", http.StatusBadRequest)
+		utils.Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
@@ -174,8 +165,7 @@ func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 		`DELETE FROM refresh_tokens WHERE token_hash = $1`,
 		hashToken(req.RefreshToken),
 	)
-	if err != nil {
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+	if utils.InternalError(w, err) {
 		return
 	}
 
@@ -191,12 +181,11 @@ func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
 		user.UserID,
 	).Scan(&username, &email, &role)
 	if err != nil {
-		http.Error(w, "user not found", http.StatusNotFound)
+		utils.Error(w, http.StatusNotFound, "user not found")
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{
+	utils.JSON(w, map[string]string{
 		"id":       user.UserID,
 		"username": username,
 		"email":    email,

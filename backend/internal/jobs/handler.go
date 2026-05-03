@@ -7,6 +7,7 @@ import (
 
 	"github.com/Mantie7553/MediaHub/backend/internal/auth"
 	"github.com/Mantie7553/MediaHub/backend/internal/downloader"
+	"github.com/Mantie7553/MediaHub/backend/internal/utils"
 )
 
 type Handler struct {
@@ -33,8 +34,7 @@ func (h *Handler) GetAll(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := h.db.Query(queryString)
 
-	if err != nil {
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+	if utils.InternalError(w, err) {
 		return
 	}
 	defer rows.Close()
@@ -49,20 +49,17 @@ func (h *Handler) GetAll(w http.ResponseWriter, r *http.Request) {
 			&item.CreatedAt, &item.MediaTitle,
 		)
 
-		if err != nil {
-			http.Error(w, "internal server error", http.StatusInternalServerError)
+		if utils.InternalError(w, err) {
 			return
 		}
 		items = append(items, item)
 	}
 
-	if err := rows.Err(); err != nil {
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+	if utils.InternalError(w, rows.Err()) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(items)
+	utils.JSON(w, items)
 }
 
 /*
@@ -82,8 +79,7 @@ func (h *Handler) GetMine(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := h.db.Query(queryString, user.UserID)
 
-	if err != nil {
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+	if utils.InternalError(w, err) {
 		return
 	}
 	defer rows.Close()
@@ -98,20 +94,17 @@ func (h *Handler) GetMine(w http.ResponseWriter, r *http.Request) {
 			&item.CreatedAt,
 		)
 
-		if err != nil {
-			http.Error(w, "internal server error", http.StatusInternalServerError)
+		if utils.InternalError(w, err) {
 			return
 		}
 		items = append(items, item)
 	}
 
-	if err := rows.Err(); err != nil {
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+	if utils.InternalError(w, rows.Err()) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(items)
+	utils.JSON(w, items)
 }
 
 /*
@@ -127,7 +120,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 
 	// decode the request body into the JobRequest struct
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request body", http.StatusBadRequest)
+		utils.Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
@@ -136,8 +129,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		req.RequestID,
 	).Scan(&itemID)
 
-	if err != nil {
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+	if utils.InternalError(w, err) {
 		return
 	}
 
@@ -147,18 +139,15 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		itemID,
 	).Scan(&mediaType, &externalID)
 
-	if err != nil {
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+	if utils.InternalError(w, err) {
 		return
 	}
 
 	jobID, err = downloader.Dispatch(h.db, req.RequestID, itemID, req.SourceURL, mediaType, externalID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		utils.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"id": jobID})
-
+	utils.JSON(w, map[string]string{"id": jobID})
 }
