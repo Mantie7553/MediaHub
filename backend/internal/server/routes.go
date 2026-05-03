@@ -51,6 +51,8 @@ func (s *Server) routes() {
 
 	s.router.Post("/auth/register", authHandler.Register)
 	s.router.Post("/auth/login", authHandler.Login)
+	s.router.Delete("/auth/logout", authHandler.Logout)
+	s.router.Post("/auth/refresh", authHandler.Refresh)
 
 	// Endpoints for all authenticated users
 	s.router.Group(func(r chi.Router) {

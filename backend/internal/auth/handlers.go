@@ -27,7 +27,8 @@ type loginRequest struct {
 }
 
 type authResponse struct {
-	Token string `json:"token"`
+	Token        string `json:"token"`
+	RefreshToken string `json:"refresh_token"`
 }
 
 func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
@@ -66,9 +67,15 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	refreshToken, err := GenerateRefreshToken(h.db, userID)
+	if err != nil {
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(authResponse{Token: token})
+	json.NewEncoder(w).Encode(authResponse{Token: token, RefreshToken: refreshToken})
 }
 
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
@@ -99,10 +106,80 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(authResponse{Token: token})
+	refreshToken, err := GenerateRefreshToken(h.db, userID)
+	if err != nil {
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
 
-	_ = time.Now()
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(authResponse{Token: token, RefreshToken: refreshToken})
+}
+
+func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		RefreshToken string `json:"refresh_token"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.RefreshToken == "" {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	tokenHash := hashToken(req.RefreshToken)
+
+	var userID, role string
+	var expiresAt time.Time
+	err := h.db.QueryRow(
+		`SELECT u.id, u.role, rt.expires_at
+		FROM refresh_tokens rt
+		JOIN users u ON u.id = rt.user_id
+		WHERE rt.token_hash = $1`,
+		tokenHash,
+	).Scan(&userID, &role, &expiresAt)
+
+	if err == sql.ErrNoRows {
+		http.Error(w, "invalid refresh token", http.StatusUnauthorized)
+		return
+	}
+	if err != nil {
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	if time.Now().After(expiresAt) {
+		http.Error(w, "refresh token expired", http.StatusUnauthorized)
+		return
+	}
+
+	token, err := GenerateToken(userID, role)
+	if err != nil {
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(authResponse{Token: token, RefreshToken: req.RefreshToken})
+}
+
+func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		RefreshToken string `json:"refresh_token"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.RefreshToken == "" {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	_, err := h.db.Exec(
+		`DELETE FROM refresh_tokens WHERE token_hash = $1`,
+		hashToken(req.RefreshToken),
+	)
+	if err != nil {
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {

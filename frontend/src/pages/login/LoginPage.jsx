@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom"
 import api from "../../services/api"
 
 export default function Login() {
-    const naviagte = useNavigate();
+    const navigate = useNavigate();
     const [username, setUserName] = useState("");
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
@@ -16,7 +16,8 @@ export default function Login() {
         api.post("/auth/login", {email, password})
         .then(res => {
             localStorage.setItem("token", res.data.token);
-            naviagte("/");
+            localStorage.setItem("refresh_token", res.data.refresh_token);
+            navigate("/");
         })
         .catch(err => {
             setError(err.message ?? "Invalid email or password");
@@ -34,7 +35,8 @@ export default function Login() {
         api.post("/auth/register", {username, email, password})
         .then(res => {
             localStorage.setItem("token", res.data.token);
-            naviagte("/");
+            localStorage.setItem("refresh_token", res.data.refresh_token);
+            navigate("/");
         })
         .catch(err => {
             setError(err.message ?? "Invalid email or password");

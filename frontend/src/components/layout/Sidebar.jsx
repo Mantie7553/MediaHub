@@ -1,20 +1,33 @@
-import { NavLink, useLocation } from "react-router-dom"
+import { NavLink, useLocation, useNavigate } from "react-router-dom"
+import api from "../../services/api"
 
 /**
  *  Navigation for the application
  * @returns A sidebar used for navigating the application
  */
 export default function Sidebar() {
-    return <div className="drawer lg:drawer-open w-fit">
+    const navigate = useNavigate();
+
+    function handleLogout() {
+        api.delete("/auth/logout", {
+            data: {refresh_token: localStorage.getItem("refresh_token")}
+        });
+        localStorage.removeItem("token");
+        localStorage.removeItem("refresh_token");
+        navigate("/login");
+    }
+
+    return <div className="drawer lg:drawer-open w-fit min-h-screen">
         <input id="my-drawer-3" type="checkbox" className="drawer-toggle" />
-        <div className="drawer-side bg-base-200 p-2">
+        <div className=" flex flex-col h-full drawer-side bg-base-200 p-2 items-center">
             <h1 className="text-lg font-bold">Media<span className="text-primary">Hub</span></h1>
-            <ul className="menu">
+            <ul className="menu flex-1">
                 <NavItem path="/" title="Dashboard"/>
                 <NavItem path="/downloads" title="Downloads"/>
                 <NavItem path="/media" title="Media"/>
                 <NavItem path="/settings" title="Settings"/>
             </ul>
+            <button className="btn btn-ghost text-error justify-start" onClick={handleLogout}>Log Out</button>
         </div>
     </div>
 }
