@@ -1,8 +1,9 @@
 import { BrowserRouter, Routes, Route, Outlet } from 'react-router-dom'
-import Layout from './components/layout/Layout'
-import ProtectedRoute from './components/layout/ProtectedRoute'
+import DashboardPage from './pages/dashboard/DashboardPage'
 import DownloadsPage from './pages/downloads/DownloadsPage'
+import Layout from './components/layout/Layout'
 import LoginPage from './pages/login/LoginPage'
+import ProtectedRoute from './components/layout/ProtectedRoute'
 
 function App() {
   return (
@@ -10,7 +11,7 @@ function App() {
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route element={<ProtectedRoute><Layout><Outlet /></Layout></ProtectedRoute>}>
-          <Route path="/" element={<div>Dashboard</div>} />
+          <Route path="/" element={<DashboardPage/>} />
           <Route path="/downloads" element={<DownloadsPage />} />
           <Route path="/media" element={<div>Media</div>} />
           <Route path="/settings" element={<div>Settings</div>} />
