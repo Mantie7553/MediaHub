@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/Mantie7553/MediaHub/backend/internal/auth"
+	"github.com/Mantie7553/MediaHub/backend/internal/downloader"
 	"github.com/go-chi/chi/v5"
 	"github.com/lib/pq"
 )
@@ -36,11 +37,11 @@ func (h *Handler) Add(w http.ResponseWriter, r *http.Request) {
 
 	err = h.db.QueryRow(
 		`SELECT download_permission FROM users WHERE id = $1`,
-    	user.UserID,
+		user.UserID,
 	).Scan(&downloadPermission)
 	if err != nil {
-    	http.Error(w, "internal server error", http.StatusInternalServerError)
-    	return
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
 	}
 
 	status := "pending"
@@ -57,7 +58,7 @@ func (h *Handler) Add(w http.ResponseWriter, r *http.Request) {
 		source_url, status, auto_approved, admin_notes)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		RETURNING id`,
-		user.UserID, nullString(req.MediaItemId), nil, 
+		user.UserID, nullString(req.MediaItemId), nil,
 		nullString(req.TitleOverride), req.SourceUrl,
 		status, autoApproved, nil,
 	).Scan(&requestId)
@@ -96,7 +97,7 @@ func (h *Handler) GetAll(w http.ResponseWriter, r *http.Request) {
 
 	for rows.Next() {
 		var item downloadRequestResponse
-		err := rows.Scan (
+		err := rows.Scan(
 			&item.ID, &item.Status, &item.AutoApproved, &item.RequestedAt,
 			&item.TitleOverride, &item.MediaTitle,
 		)
@@ -136,7 +137,7 @@ func (h *Handler) GetAllAdmin(w http.ResponseWriter, r *http.Request) {
 
 	for rows.Next() {
 		var item downloadRequestResponse
-		err := rows.Scan (
+		err := rows.Scan(
 			&item.ID, &item.Status, &item.AutoApproved, &item.RequestedAt,
 			&item.TitleOverride, &item.MediaTitle, &item.RequestedBy,
 		)
@@ -161,21 +162,43 @@ func (h *Handler) Approve(w http.ResponseWriter, r *http.Request) {
 	requestId := chi.URLParam(r, "id")
 
 	var requestThingId string
+	var mediaItemId string
+	var sourceURL string
 	err := h.db.QueryRow(
 		`UPDATE download_requests
 		SET status = 'approved', resolved_at = NOW()
 		WHERE id = $1
-		RETURNING id`,
+		RETURNING id, media_item_id, source_url`,
 		requestId,
-	).Scan(&requestThingId)
+	).Scan(&requestThingId, &mediaItemId, &sourceURL)
 
 	if err == sql.ErrNoRows {
-    http.Error(w, "not found", http.StatusNotFound)
-    return
+		http.Error(w, "not found", http.StatusNotFound)
+		return
 	}
 
 	if err != nil {
 		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	var mediaType string
+	var externalID *string
+	err = h.db.QueryRow(
+		`SELECT type, external_id FROM media_items
+		WHERE id = $1`,
+		mediaItemId,
+	).Scan(&mediaType, &externalID)
+
+	if err != nil {
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	_, err = downloader.Dispatch(h.db, requestThingId, mediaItemId, sourceURL, mediaType, externalID)
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -202,8 +225,8 @@ func (h *Handler) Reject(w http.ResponseWriter, r *http.Request) {
 	).Scan(&requestThingId)
 
 	if err == sql.ErrNoRows {
-    http.Error(w, "not found", http.StatusNotFound)
-    return
+		http.Error(w, "not found", http.StatusNotFound)
+		return
 	}
 
 	if err != nil {
@@ -214,7 +237,6 @@ func (h *Handler) Reject(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"id": requestThingId})
 }
-
 
 // nullString returns nil for empty strings so Postgres stores NULL rather than "".
 func nullString(s string) interface{} {
