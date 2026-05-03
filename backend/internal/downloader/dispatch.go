@@ -3,6 +3,7 @@ package downloader
 import (
 	"database/sql"
 	"fmt"
+	"os"
 	"strconv"
 
 	"github.com/Mantie7553/MediaHub/backend/internal/arr"
@@ -10,21 +11,22 @@ import (
 
 func Dispatch(db *sql.DB, requestID string, mediaItemID string,
 	sourceURL string, mediaType string, externalID *string) (string, error) {
+	mediaRoot := os.Getenv("MEDIA_ROOT")
 	var dest string
 	var handler string
 
 	switch mediaType {
 	case "anime":
-		dest = "/Media/TV Shows/"
+		dest = mediaRoot + "/TV Shows/"
 		handler = "sonarr"
 	case "movie":
-		dest = "/Media/Movies/"
+		dest = mediaRoot + "/Movies/"
 		handler = "radarr"
 	case "music_track":
-		dest = "/Media/Music/"
+		dest = mediaRoot + "/Music/"
 		handler = "ytdlp"
 	default:
-		dest = "/Media/Downloads/"
+		dest = mediaRoot + "/Downloads/"
 		handler = "ytdlp"
 	}
 
@@ -86,7 +88,7 @@ func Dispatch(db *sql.DB, requestID string, mediaItemID string,
 		)
 
 	default:
-		go Run(db, jobID)
+		go Run(db, jobID, mediaItemID)
 	}
 
 	return jobID, nil
