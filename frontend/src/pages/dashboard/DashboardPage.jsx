@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react"
 import api from "../../services/api"
-import Format from "../../utils/format";
-import { mediaStatusBadge } from "../../utils/status";
+import { TVCard, MovieCard, MusicCard } from "../../components/cards"
 
 export default function DashboardPage() {
     const [content, setContent] = useState([]);
@@ -41,75 +40,5 @@ function ContentList({items, heading}) {
                     : <MusicCard key={item.id} item={item} />
             })}
         </ul>
-    </div>
-}
-
-function TVCard({item}) {
-    const season = item.season_number ? `S${item.season_number}` : null
-    const episodes = item.episodes_watched ?? 0
-    const total = item.episode_count
-    const progressPct = total ? Math.round((episodes / total) * 100) : 0
-    const progressLabel = [season, `E${episodes}${total ? ` / ${total}` : ""}`].filter(Boolean).join(" · ")
-
-    return <li className="card border border-base-300 w-48 shrink-0">
-        <figure className="relative">
-            <span className={`badge ${mediaStatusBadge(item.status)} absolute top-2 left-2 z-10 text-xs p-1`}>{Format.cleanString(item.status)}</span>
-            {item.cover_image_url ? (
-                <img src={item.cover_image_url} className="w-full h-48"/>
-            ) : (
-                <div className="skeleton h-48 w-full"></div>
-            )}
-        </figure>
-        <div className="card-body">
-            <h3 className="card-title">{item.media_title}</h3>
-            <span>{progressLabel}</span>
-            <progress className="progress" value={progressPct} max="100"></progress>
-            <Rating selected={item.rating} id={item.id} />
-        </div>
-    </li>
-}
-
-function MovieCard({item}) {
-    return <li className="card border border-base-300 w-48 shrink-0">
-        <figure className="relative">
-            <span className={`badge ${mediaStatusBadge(item.status)} absolute top-2 left-2 z-10 text-xs p-1`}>{Format.cleanString(item.status)}</span>
-            {item.cover_image_url ? (
-                <img src={item.cover_image_url} className="w-full h-48"/>
-            ) : (
-                <div className="skeleton h-48 w-full"></div>
-            )}
-        </figure>
-        <div className="card-body">
-            <h3 className="card-title">{item.media_title}</h3>
-            <span>{Format.year(item.release_date)}</span>
-            <Rating selected={item.rating} id={item.id} />
-        </div>
-    </li>
-}
-
-function MusicCard({item}) {
-    return <li className="card border border-base-300 w-48 shrink-0">
-        <figure>
-            {item.cover_image_url ? (
-                <img src={item.cover_image_url}  className="w-full h-32"/>
-            ) : (
-                <div className="skeleton h-32 w-32"></div>
-            )}
-        </figure>
-        <div className="card-body">
-            <h3 className="card-title">{item.media_title}</h3>
-            <span>{item.artist}</span>
-        </div>
-    </li>
-}
-
-
-function Rating({selected, id}) {
-    return <div className="rating rating-xs">
-        <div className="mask mask-star-2" aria-label="1 star" aria-current={selected === 1}></div>
-        <div className="mask mask-star-2" aria-label="2 star" aria-current={selected === 2}></div>
-        <div className="mask mask-star-2" aria-label="3 star" aria-current={selected === 3}></div>
-        <div className="mask mask-star-2" aria-label="4 star" aria-current={selected === 4}></div>
-        <div className="mask mask-star-2" aria-label="5 star" aria-current={selected === 5}></div>
     </div>
 }
