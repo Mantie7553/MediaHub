@@ -1,6 +1,8 @@
 package media
 
-import "time"
+import (
+	"time"
+)
 
 type uploadRequest struct {
 	Type           string `json:"type"`
@@ -24,6 +26,11 @@ type uploadRequest struct {
 	Artist      string `json:"artist"`
 	TrackNumber *int   `json:"track_number"`
 	DurationSec *int   `json:"duration_secs"`
+}
+
+type progressRequest struct {
+	LastPageRead int  `json:"last_page_read"`
+	Completed    bool `json:"completed"`
 }
 
 type MediaItem struct {
@@ -55,6 +62,37 @@ type MusicMetadata struct {
 	TrackNumber  *int     `json:"track_number"`
 	DurationSecs *int     `json:"duration_secs"`
 	Genres       []string `json:"genres"`
+}
+
+type MangaMetadata struct {
+	MediaItemID   string   `json:"media_item_id"`
+	TotalChapters *int     `json:"total_chapters"`
+	Genres        []string `json:"genres"`
+	Status        *string  `json:"status"`
+}
+
+type MangaChapter struct {
+	ID            string     `json:"id"`
+	MediaItemID   string     `json:"media_item_id"`
+	ChapterNumber float64    `json:"chapter_number"`
+	Title         *string    `json:"title"`
+	FilePath      *string    `json:"file_path"`
+	PageCount     *int       `json:"page_count"`
+	CreatedAt     *time.Time `json:"created_at"`
+}
+
+type MangaProgress struct {
+	UserID       string    `json:"user_id"`
+	ChapterID    string    `json:"chapter_id"`
+	MediaItemID  string    `json:"media_item_id"`
+	LastPageRead *string   `json:"last_page_read"`
+	Completed    bool      `json:"completed"`
+	UpdatedAt    time.Time `json:"updated_at"`
+}
+
+type MangaDetail struct {
+	MangaMetadata
+	Chapters []MangaChapter `json:"chapters"`
 }
 
 type MediaItemDetail struct {

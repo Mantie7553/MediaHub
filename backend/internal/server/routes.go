@@ -58,21 +58,25 @@ func (s *Server) routes() {
 	s.router.Group(func(r chi.Router) {
 		r.Use(auth.Middleware)
 		r.Get("/me", authHandler.Me)
+
+		// Media Handler Endpoints
 		r.Get("/media", mediaHandler.GetAll)
 		r.Get("/media/{id}", mediaHandler.GetSpecific)
+		r.Get("/manga/{id}/chapters/{chapterId}/pages/{pageNum}", mediaHandler.ServePage)
+		r.Put("/manga/{id}/chapters/{chapterId}/progress", mediaHandler.MangaProgress)
 
-		// Media tracking endpoints
+		// List Handler endpoints
 		r.Post("/me/media", listsHandler.Add)
 		r.Get("/me/media", listsHandler.GetAll)
 		r.Put("/me/media/{id}", listsHandler.Update)
 		r.Delete("/me/media/{id}", listsHandler.Delete)
 		r.Post("/me/anime/{id}/progress", listsHandler.UpdateProgress)
 
-		// Download Request endpoints
+		// Request Handler endpoints
 		r.Get("/requests", requestsHandler.GetAll)
 		r.Post("/requests", requestsHandler.Add)
 
-		// Job endpoints
+		// Job Handler endpoints
 		r.Get("/me/jobs", jobsHandler.GetMine)
 
 	})
@@ -85,12 +89,12 @@ func (s *Server) routes() {
 		r.Get("/admin/test", func(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintln(w, "admin only")
 		})
-		// Download Request endpoints
+		// Request Handler endpoints
 		r.Get("/requests/all", requestsHandler.GetAllAdmin)
 		r.Put("/requests/{id}/approve", requestsHandler.Approve)
 		r.Put("/requests/{id}/reject", requestsHandler.Reject)
 
-		// Job endpoints
+		// Job Handler endpoints
 		r.Get("/admin/jobs", jobsHandler.GetAll)
 		r.Post("/admin/jobs", jobsHandler.Create)
 	})

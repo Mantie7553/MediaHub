@@ -1,11 +1,18 @@
 package media
 
 import (
+	"archive/zip"
 	"database/sql"
 	"encoding/json"
+	"io"
 	"net/http"
+	"path/filepath"
+	"sort"
+	"strconv"
+	"strings"
 	"time"
 
+	"github.com/Mantie7553/MediaHub/backend/internal/auth"
 	"github.com/Mantie7553/MediaHub/backend/internal/utils"
 	"github.com/go-chi/chi/v5"
 	"github.com/lib/pq"
@@ -124,7 +131,7 @@ func (h *Handler) GetAll(w http.ResponseWriter, r *http.Request) {
 
 	items := []MediaItem{}
 
-	var queryString string = `SELECT id, type, title, description, 
+	queryString := `SELECT id, type, title, description, 
 		cover_image_url, release_date, external_id, 
 		external_source, created_at 
 		FROM media_items`
@@ -229,7 +236,130 @@ func (h *Handler) GetSpecific(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		metadata = meta
+	case "manga":
+		var meta MangaMetadata
+		var chapters []MangaChapter
+		err := h.db.QueryRow(
+			`SELECT total_chapters, genres, status FROM manga_metadata WHERE media_item_id = $1`,
+			item.ID,
+		).Scan(&meta.TotalChapters, pq.Array(&meta.Genres), &meta.Status)
+		if err != nil && err != sql.ErrNoRows {
+			utils.Error(w, http.StatusInternalServerError, "internal server error")
+			return
+		}
+
+		rows, err := h.db.Query(
+			`SELECT chapter_number, title, file_path, page_count, created_at FROM manga_chapters
+			WHERE media_item_id = $1 ORDER BY chapter_number`,
+			item.ID,
+		)
+		if utils.InternalError(w, err) {
+			return
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var chapter MangaChapter
+			err := rows.Scan(
+				&chapter.ChapterNumber, &chapter.Title, &chapter.FilePath,
+				&chapter.PageCount, &chapter.CreatedAt,
+			)
+
+			if utils.InternalError(w, err) {
+				return
+			}
+			chapters = append(chapters, chapter)
+		}
+		metadata = MangaDetail{MangaMetadata: meta, Chapters: chapters}
 	}
 
 	utils.JSON(w, MediaItemDetail{MediaItem: item, Metadata: metadata})
+}
+
+func (h *Handler) MangaProgress(w http.ResponseWriter, r *http.Request) {
+	var req progressRequest
+	chapterId := chi.URLParam(r, "chapterId")
+	user := auth.GetUser(r)
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utils.Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	_, err := h.db.Exec(
+		`INSERT INTO manga_progress (user_id, chapter_id, media_item_id, last_page_read, completed, updated_at)
+		VALUES ($1, $2, (SELECT media_item_id FROM manga_chapters WHERE id = $2), $3, $4, NOW())
+		ON CONFLICT (user_id, chapter_id) DO UPDATE SET
+		last_page_read = EXCLUDED.last_page_read,
+		completed = EXCLUDED.completed,
+		updated_at = NOW()`,
+		user.UserID, chapterId, req.LastPageRead, req.Completed,
+	)
+
+	if utils.InternalError(w, err) {
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Handler) ServePage(w http.ResponseWriter, r *http.Request) {
+	var fPath string
+	chapterId := chi.URLParam(r, "chapterId")
+	pageNum, err := strconv.Atoi(chi.URLParam(r, "pageNum"))
+
+	if utils.InternalError(w, err) {
+		return
+	}
+
+	err = h.db.QueryRow(
+		`SELECT file_path FROM manga_chapters WHERE id = $1`,
+		chapterId,
+	).Scan(&fPath)
+
+	if err == sql.ErrNoRows {
+		utils.Error(w, http.StatusNotFound, "chapter not found")
+		return
+	}
+	if utils.InternalError(w, err) {
+		return
+	}
+
+	reader, err := zip.OpenReader(fPath)
+	if utils.InternalError(w, err) {
+		return
+	}
+	defer reader.Close()
+
+	sort.Slice(reader.File, func(i, j int) bool {
+		return reader.File[i].Name < reader.File[j].Name
+	})
+
+	if pageNum < 0 || pageNum >= len(reader.File) {
+		utils.Error(w, http.StatusNotFound, "page not found")
+		return
+	}
+
+	entry := reader.File[pageNum]
+
+	contentTypes := map[string]string{
+		".jpg":  "image/jpeg",
+		".jpeg": "image/jpeg",
+		".png":  "image/png",
+		".webp": "image/webp",
+	}
+
+	ct, ok := contentTypes[strings.ToLower(filepath.Ext(entry.Name))]
+	if !ok {
+		ct = "application/octet-stream"
+	}
+
+	f, err := entry.Open()
+	if utils.InternalError(w, err) {
+		return
+	}
+	defer f.Close()
+
+	w.Header().Set("Content-Type", ct)
+	io.Copy(w, f)
 }
