@@ -2,6 +2,10 @@ import { useEffect, useState } from "react"
 import api from "../../services/api"
 import { MangaCard } from "../../components/cards"
 
+/**
+ * Manga Library page layout
+ * @returns
+ */
 export default function LibraryPage() {
     const [content, setContent] = useState([]);
     const [error, setError] = useState("");

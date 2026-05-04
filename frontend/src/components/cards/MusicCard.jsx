@@ -1,4 +1,9 @@
 
+/**
+ * Display music information in a card
+ * @param {any} item the music this displays
+ * @returns
+ */
 export default function MusicCard({item}) {
     return <li className="card border border-base-300 w-48 shrink-0">
         <figure>

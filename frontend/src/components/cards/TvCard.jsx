@@ -2,6 +2,11 @@ import Format from "../../utils/format";
 import Rating from "../Rating";
 import { mediaStatusBadge } from "../../utils/status";
 
+/**
+ * Display Anime information as a card
+ * @param {any} item the anime this displays
+ * @returns
+ */
 export default function TVCard({item}) {
     const season = item.season_number ? `S${item.season_number}` : null
     const episodes = item.episodes_watched ?? 0

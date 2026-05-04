@@ -1,6 +1,11 @@
 import { useState, useEffect } from 'react'
 import api from '../services/api'
 
+/**
+ * Hook for getting job information from the database
+ * that sets loading and error states
+ * @returns a list of jobs, the loading state, the error state, and a function to refetch data
+ */
 export default function useJobs() {
     const [jobs, setJobs] = useState([])
     const [loading, setLoading] = useState(true)

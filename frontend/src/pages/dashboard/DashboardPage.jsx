@@ -2,6 +2,10 @@ import { useEffect, useState } from "react"
 import api from "../../services/api"
 import { TVCard, MovieCard, MusicCard } from "../../components/cards"
 
+/**
+ * Dashboard page layout
+ * @returns
+ */
 export default function DashboardPage() {
     const [content, setContent] = useState([]);
     const [error, setError] = useState("");
@@ -23,7 +27,12 @@ export default function DashboardPage() {
     </section>
 }
 
-
+/**
+ * A list of some content type
+ * @param {any} items the items this list will contain
+ * @param {any} heading the heading for this list
+ * @returns
+ */
 function ContentList({items, heading}) {
 
     return <div className="my-4 max-w-fit">

@@ -2,6 +2,10 @@ import { useState } from "react"
 import { useNavigate } from "react-router-dom"
 import api from "../../services/api"
 
+/**
+ * Login page layout
+ * @returns
+ */
 export default function Login() {
     const navigate = useNavigate();
     const [username, setUserName] = useState("");
@@ -11,6 +15,13 @@ export default function Login() {
     const [error, setError] = useState(null);
     const [signUp, setSignUp] = useState(false);
 
+    /**
+     * Login a user
+     *      - make the request for the tokens
+     *      - set token and refresh_token in localstorage for later use
+     *      - send user to dashboard
+     * @param {any} e the onClick event
+     */
     function handleLogin(e) {
         e.preventDefault()
         api.post("/auth/login", {email, password})
@@ -24,6 +35,14 @@ export default function Login() {
         })
     }
 
+    /**
+     * Sign up a user
+     *      - confirm their password
+     *      - make the request to add them to the database
+     *      - send user to dashboard
+     * @param {any} e the onClick event
+     * @returns
+     */
     function handleSignUp(e) {
         e.preventDefault()
 

@@ -1,5 +1,10 @@
 import { NavLink } from "react-router-dom";
 
+/**
+ * Display manga information in a card
+ * @param {any} item the manga this displays
+ * @returns
+ */
 export default function MangaCard({item}) {
     return <li className="card border border-base-300 w-48 shrink-0">
         <NavLink to={`/manga/${item.id}`}>

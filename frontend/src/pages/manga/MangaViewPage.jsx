@@ -3,6 +3,10 @@ import { NavLink, useParams} from "react-router-dom";
 import api from "../../services/api";
 
 
+/**
+ * Manga view page layout
+ * @returns
+ */
 export default function DisplayPage() {
     const [manga, setManga] = useState(null);
     const [loading, setLoading] = useState(false);

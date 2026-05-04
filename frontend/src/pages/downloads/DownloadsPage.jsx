@@ -6,7 +6,8 @@ import Format from "../../utils/format";
 import { statusBadge, statusColor } from "../../utils/status";
 
 /**
- * Page where downloading content is handled
+ * Downloads and requests page layout
+ * @returns
  */
 export default function DownloadsPage() {
 
@@ -111,6 +112,9 @@ function Table({ columns, items }) {
     )
 }
 
+/**
+ * A confirmation modal for rejecting a request
+ */
 const Modal = forwardRef(function Modal({onConfirm}, ref) {
 const notesRef = useRef(null);
 

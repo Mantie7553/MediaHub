@@ -2,6 +2,11 @@ import Format from "../../utils/format";
 import Rating from "../Rating";
 import { mediaStatusBadge } from "../../utils/status";
 
+/**
+ * Display movie information in a card
+ * @param {any} item the movie this displays
+ * @returns
+ */
 export default function MovieCard({item}) {
     return <li className="card border border-base-300 w-48 shrink-0">
         <figure className="relative">

@@ -1,6 +1,11 @@
 import { useState, useEffect } from 'react'
 import api from '../services/api'
 
+/**
+ * Hook for getting download requests from the database
+ *  that sets the loading and error states
+ * @returns a list of requests, the loading state, the error state, and a function to refetch the data
+ */
 export default function useRequests() {
     const [requests, setRequests] = useState([])
     const [loading, setLoading] = useState(true)

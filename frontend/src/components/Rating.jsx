@@ -1,5 +1,10 @@
 
-export default function Rating({selected, id}) {
+/**
+ * Component for a 5 star rating system that is view only
+ * @param {any} selected the current value for the stars
+ * @returns
+ */
+export default function Rating({selected}) {
     return <div className="rating rating-xs">
         <div className="mask mask-star-2" aria-label="1 star" aria-current={selected === 1}></div>
         <div className="mask mask-star-2" aria-label="2 star" aria-current={selected === 2}></div>
