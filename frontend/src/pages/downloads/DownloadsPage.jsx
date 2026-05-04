@@ -3,6 +3,7 @@ import useJobs from "../../hooks/useJobs";
 import useRequests from "../../hooks/useRequests"
 import { approveRequest, rejectRequest } from "../../services/requestsService";
 import Format from "../../utils/format";
+import { statusBadge, statusColor } from "../../utils/status";
 
 /**
  * Page where downloading content is handled
@@ -144,32 +145,3 @@ const notesRef = useRef(null);
     </div>
   </dialog>
 })
-
-/**
- * Helper function for translating status into color
- * @param status the status we are matching the color to
- * @returns the class representation of the color we want displayed
- */
-function statusBadge(status) {
-    switch(status) {
-        case "approved": return "badge-success"
-        case "pending": return "badge-warning"
-        case "rejected": return "badge-error"
-        default: return "badge-neutral"
-    }
-}
-
-/**
- * Helper function for translating status into color
- * @param status the status we are matching the color to
- * @returns the class representation of the color we want displayed
- */
-function statusColor(status) {
-    switch(status) {
-        case "complete": return "status-success"
-        case "downloading": return "status-info"
-        case "queued": return "status-warning"
-        case "failed": return "status-error"
-        default: return "status-neutral"
-    }
-}

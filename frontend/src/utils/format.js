@@ -8,7 +8,7 @@ export default class Format {
             hour: 'numeric',
             hour12: true,
             minute: '2-digit'
-        }).format(new Date(date))
+        }).format(new Date(date));
     }
 
     static date(date) {
@@ -16,6 +16,16 @@ export default class Format {
             year: 'numeric',
             month: 'long',
             day: 'numeric',
-        }).format(new Date(date))
+        }).format(new Date(date));
+    }
+
+    static year(date) {
+        return new Intl.DateTimeFormat('en-US', {
+            year: 'numeric'
+        }).format(new Date(date));
+    }
+
+    static cleanString(string) {
+        return string.replaceAll("_", " ").replace(/^\w/, c => c.toUpperCase());
     }
 }

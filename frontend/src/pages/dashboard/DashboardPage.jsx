@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react"
 import api from "../../services/api"
+import Format from "../../utils/format";
+import { mediaStatusBadge } from "../../utils/status";
+
 export default function DashboardPage() {
     const [content, setContent] = useState([]);
     const [error, setError] = useState("");
@@ -24,11 +27,13 @@ export default function DashboardPage() {
 
 function ContentList({items, heading}) {
 
-    return <div>
-        <h2>{heading}</h2>
-        <button className="link">Show all</button>
-        <ul className="flex gap-2">
-            {items.map(item => {
+    return <div className="my-4 max-w-fit">
+        <div className="flex justify-between items-center mb-2">
+            <h2 className="font-bold">{heading}</h2>
+            <button className="link">Show all</button>
+        </div>
+        <ul className="flex gap-2 overflow-x-auto flex-nowrap">
+            {items.slice(0,10).map(item => {
                 return item.media_type === "anime" ? 
                     <TVCard key={item.id} item={item} />
                     : item.media_type === "movie" ? 
@@ -46,10 +51,14 @@ function TVCard({item}) {
     const progressPct = total ? Math.round((episodes / total) * 100) : 0
     const progressLabel = [season, `E${episodes}${total ? ` / ${total}` : ""}`].filter(Boolean).join(" · ")
 
-    return <li className="card">
-        <figure>
-            <span className="badge">{item.status}</span>
-            <img src={item.cover_image_url} />
+    return <li className="card border border-base-300 w-48 shrink-0">
+        <figure className="relative">
+            <span className={`badge ${mediaStatusBadge(item.status)} absolute top-2 left-2 z-10 text-xs p-1`}>{Format.cleanString(item.status)}</span>
+            {item.cover_image_url ? (
+                <img src={item.cover_image_url} className="w-full h-48"/>
+            ) : (
+                <div className="skeleton h-48 w-full"></div>
+            )}
         </figure>
         <div className="card-body">
             <h3 className="card-title">{item.media_title}</h3>
@@ -61,23 +70,31 @@ function TVCard({item}) {
 }
 
 function MovieCard({item}) {
-    return <li className="card">
-        <figure>
-            <span className="badge">{item.status}</span>
-            <img src={item.cover_image_url} />
+    return <li className="card border border-base-300 w-48 shrink-0">
+        <figure className="relative">
+            <span className={`badge ${mediaStatusBadge(item.status)} absolute top-2 left-2 z-10 text-xs p-1`}>{Format.cleanString(item.status)}</span>
+            {item.cover_image_url ? (
+                <img src={item.cover_image_url} className="w-full h-48"/>
+            ) : (
+                <div className="skeleton h-48 w-full"></div>
+            )}
         </figure>
         <div className="card-body">
             <h3 className="card-title">{item.media_title}</h3>
-            <span>{item.release_date}</span>
+            <span>{Format.year(item.release_date)}</span>
             <Rating selected={item.rating} id={item.id} />
         </div>
     </li>
 }
 
 function MusicCard({item}) {
-    return <li className="card">
+    return <li className="card border border-base-300 w-48 shrink-0">
         <figure>
-            <img src={item.cover_image_url} />
+            {item.cover_image_url ? (
+                <img src={item.cover_image_url}  className="w-full h-32"/>
+            ) : (
+                <div className="skeleton h-32 w-32"></div>
+            )}
         </figure>
         <div className="card-body">
             <h3 className="card-title">{item.media_title}</h3>
