@@ -26,6 +26,13 @@ func NewHandler(db *sql.DB) *Handler {
 	return &Handler{db: db}
 }
 
+/*
+	Function:	Upload
+	Purpose:	add a new media item
+	Params:
+		- w: http response writer to respond to the front end
+		- r: http request coming from the frontend
+*/
 func (h *Handler) Upload(w http.ResponseWriter, r *http.Request) {
 	var req uploadRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -33,16 +40,19 @@ func (h *Handler) Upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// check that the type and title were actually provided
 	if req.Type == "" || req.Title == "" {
 		utils.Error(w, http.StatusBadRequest, "type and title are required")
 		return
 	}
 
+	// if adding music make sure an artist name was provided
 	if req.Type == "music_track" && req.Artist == "" {
 		utils.Error(w, http.StatusBadRequest, "artist is required for music_track")
 		return
 	}
 
+	// confirm the release date is valid
 	var releaseDate *time.Time
 	if req.ReleaseDate != "" {
 		t, err := time.Parse("2006-01-02", req.ReleaseDate)
@@ -59,6 +69,7 @@ func (h *Handler) Upload(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback()
 
+	// add the new item to the database
 	var mediaID string
 	err = tx.QueryRow(
 		`INSERT INTO media_items (type, title, description, cover_image_url, release_date, external_id, external_source)
@@ -81,6 +92,7 @@ func (h *Handler) Upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// add in the specific types metadata
 	switch req.Type {
 	case "anime":
 		_, err = tx.Exec(
@@ -123,10 +135,19 @@ func (h *Handler) Upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// return the id of the new item
 	utils.JSON(w, map[string]string{"id": mediaID}, http.StatusCreated)
 }
 
+/*
+	Function:	GetAll
+	Purpose:	Get all media items from the database
+	Params:
+		- w: http response writer to respond to the front end
+		- r: http request coming from the frontend
+*/
 func (h *Handler) GetAll(w http.ResponseWriter, r *http.Request) {
+	// get the medias type from the URL
 	mediaType := r.URL.Query().Get("type")
 
 	items := []MediaItem{}
@@ -143,6 +164,7 @@ func (h *Handler) GetAll(w http.ResponseWriter, r *http.Request) {
 	var rows *sql.Rows
 	var err error
 
+	// complete the query - if it has a media type, use it specifically or get everything of any type
 	if mediaType != "" {
 		rows, err = h.db.Query(queryString, mediaType)
 	} else {
@@ -154,6 +176,7 @@ func (h *Handler) GetAll(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rows.Close()
 
+	// map the rows to useable structs
 	for rows.Next() {
 		var item MediaItem
 		err := rows.Scan(
@@ -172,10 +195,19 @@ func (h *Handler) GetAll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// return the items
 	utils.JSON(w, items)
 }
 
+/*
+	Function:	GetSpecific
+	Purpose:	Get a specific media item from the database
+	Params:
+		- w: http response writer to respond to the front end
+		- r: http request coming from the frontend
+*/
 func (h *Handler) GetSpecific(w http.ResponseWriter, r *http.Request) {
+	// get the id from the URL
 	mediaId := chi.URLParam(r, "id")
 	item := MediaItem{}
 
@@ -184,6 +216,7 @@ func (h *Handler) GetSpecific(w http.ResponseWriter, r *http.Request) {
 		external_source, created_at 
 		FROM media_items WHERE id = $1`
 
+	// look for the meida item
 	err := h.db.QueryRow(queryString, mediaId).Scan(
 		&item.ID, &item.Type, &item.Title, &item.Description,
 		&item.CoverImageURL, &item.ReleaseDate, &item.ExternalID,
@@ -201,6 +234,7 @@ func (h *Handler) GetSpecific(w http.ResponseWriter, r *http.Request) {
 
 	var metadata any
 
+	// get the appropriate metadata for the media type
 	switch item.Type {
 	case "anime":
 		var meta AnimeMetadata
@@ -248,6 +282,7 @@ func (h *Handler) GetSpecific(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		// also get the chapters for the manga
 		rows, err := h.db.Query(
 			`SELECT chapter_number, title, file_path, page_count, created_at FROM manga_chapters
 			WHERE media_item_id = $1 ORDER BY chapter_number`,
@@ -258,6 +293,7 @@ func (h *Handler) GetSpecific(w http.ResponseWriter, r *http.Request) {
 		}
 		defer rows.Close()
 
+		// map those chapters to useable structs
 		for rows.Next() {
 			var chapter MangaChapter
 			err := rows.Scan(
@@ -273,19 +309,31 @@ func (h *Handler) GetSpecific(w http.ResponseWriter, r *http.Request) {
 		metadata = MangaDetail{MangaMetadata: meta, Chapters: chapters}
 	}
 
+	// return the item and its metadata
 	utils.JSON(w, MediaItemDetail{MediaItem: item, Metadata: metadata})
 }
 
+/*
+	Function:	MangaProgress
+	Purpose:	Add progress tracking for specific manga chapters
+	Params:
+		- w: http response writer to respond to the front end
+		- r: http request coming from the frontend
+*/
 func (h *Handler) MangaProgress(w http.ResponseWriter, r *http.Request) {
 	var req progressRequest
+	// get the chapter id from the URL parameters
 	chapterId := chi.URLParam(r, "chapterId")
+	// get the user info from the request
 	user := auth.GetUser(r)
 
+	// decode the incoming request, check that the structure is correct
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		utils.Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
+	// insert the progress
 	_, err := h.db.Exec(
 		`INSERT INTO manga_progress (user_id, chapter_id, media_item_id, last_page_read, completed, updated_at)
 		VALUES ($1, $2, (SELECT media_item_id FROM manga_chapters WHERE id = $2), $3, $4, NOW())
@@ -300,18 +348,29 @@ func (h *Handler) MangaProgress(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// return no content
 	w.WriteHeader(http.StatusNoContent)
 }
 
+/*
+	Function:	ServePage
+	Purpose:	Get a specific page for a manga chapter
+	Params:
+		- w: http response writer to respond to the front end
+		- r: http request coming from the frontend
+*/
 func (h *Handler) ServePage(w http.ResponseWriter, r *http.Request) {
 	var fPath string
+	// get the chapters id from the URL parameters
 	chapterId := chi.URLParam(r, "chapterId")
+	// get the page number from the URL parameters
 	pageNum, err := strconv.Atoi(chi.URLParam(r, "pageNum"))
 
 	if utils.InternalError(w, err) {
 		return
 	}
 
+	// find the file path for the page
 	err = h.db.QueryRow(
 		`SELECT file_path FROM manga_chapters WHERE id = $1`,
 		chapterId,
@@ -325,6 +384,7 @@ func (h *Handler) ServePage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// open the file for reading
 	reader, err := zip.OpenReader(fPath)
 	if utils.InternalError(w, err) {
 		return
@@ -335,11 +395,13 @@ func (h *Handler) ServePage(w http.ResponseWriter, r *http.Request) {
 		return reader.File[i].Name < reader.File[j].Name
 	})
 
+	// check that the page number is in bounds
 	if pageNum < 0 || pageNum >= len(reader.File) {
 		utils.Error(w, http.StatusNotFound, "page not found")
 		return
 	}
 
+	// read the page 
 	entry := reader.File[pageNum]
 
 	contentTypes := map[string]string{
@@ -349,6 +411,7 @@ func (h *Handler) ServePage(w http.ResponseWriter, r *http.Request) {
 		".webp": "image/webp",
 	}
 
+	// check that the content type of the file is actually allowed
 	ct, ok := contentTypes[strings.ToLower(filepath.Ext(entry.Name))]
 	if !ok {
 		ct = "application/octet-stream"

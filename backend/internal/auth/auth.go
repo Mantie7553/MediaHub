@@ -12,22 +12,46 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+/*
+	UserID: The id for the current user
+	Role: the role for the user
+*/
 type Claims struct {
 	UserID string `json:"user_id"`
 	Role   string `json:"role"`
 	jwt.RegisteredClaims
 }
 
+/*
+	Function:	HashPassword
+	Purpose:	Hash function for hashing a users password
+	Params:
+		- password: the password we are hashing
+*/
 func HashPassword(password string) (string, error) {
 	bytes, err := bcrypt.GenerateFromPassword([]byte(password), 14)
 	return string(bytes), err
 }
 
+/*
+	Function:	CheckPassword
+	Purpose:	Check the hashed password against the raw password
+	Params:
+		- password: the password we are checking against
+		- hash: the hash we are checking
+*/
 func CheckPassword(password, hash string) bool {
 	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
 	return err == nil
 }
 
+/*
+	Function:	GenerateToken
+	Purpose:	Create a JWT token for a user
+	Params:
+		- userID: the id of the current user
+		- role: the role of the current user
+*/
 func GenerateToken(userID, role string) (string, error) {
 	claims := Claims{
 		UserID: userID,
@@ -42,6 +66,12 @@ func GenerateToken(userID, role string) (string, error) {
 	return token.SignedString([]byte(os.Getenv("JWT_SECRET")))
 }
 
+/*
+	Function:	ValidateToken
+	Purpose:	Check that a token is valid
+	Params:
+		- tokenStr: the token we are checking
+*/
 func ValidateToken(tokenStr string) (*Claims, error) {
 	claims := &Claims{}
 	token, err := jwt.ParseWithClaims(tokenStr, claims, func(t *jwt.Token) (interface{}, error) {
@@ -53,11 +83,24 @@ func ValidateToken(tokenStr string) (*Claims, error) {
 	return claims, nil
 }
 
+/*
+	Function:	hashToken
+	Purpose:	Hash function for hashing a JWT token
+	Params:
+		- token: the token we are hashing
+*/
 func hashToken(token string) string {
 	sum := sha256.Sum256([]byte(token))
 	return hex.EncodeToString(sum[:])
 }
 
+/*
+	Function:	GenerateRefreshToken
+	Purpose:	Create a new token for a user
+	Params:
+		- db: a connection to the database
+		- userID: the id of the current user
+*/
 func GenerateRefreshToken(db *sql.DB, userID string) (string, error) {
 	raw := make([]byte, 32)
 	if _, err := rand.Read(raw); err != nil {

@@ -19,20 +19,30 @@ func NewHandler(db *sql.DB) *Handler {
 	return &Handler{db: db}
 }
 
+/*
+	Function:	Add
+	Purpose:	Add a new entry to the user_media_status table
+	Params:
+		- w: http response writer to respond to the front end
+		- r: http request coming from the frontend
+*/
 func (h *Handler) Add(w http.ResponseWriter, r *http.Request) {
 	var req rateRequest
 	user := auth.GetUser(r)
 
+	// decode the incoming request, check that the structure is correct
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		utils.Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
+	// confirm the media item id and status have been provided
 	if req.MediaItemId == "" || req.Status == "" {
 		utils.Error(w, http.StatusBadRequest, "status is required")
 		return
 	}
 
+	// add the new entry in the database
 	var statusId string
 	err := h.db.QueryRow(
 		`INSERT INTO user_media_status (user_id, media_item_id, status, rating, notes)
@@ -49,9 +59,17 @@ func (h *Handler) Add(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// return the id of the new entry
 	utils.JSON(w, map[string]string{"id": statusId}, http.StatusCreated)
 }
 
+/*
+	Function:	GetAll
+	Purpose:	Get all of the media currently in the database
+	Params:
+		- w: http response writer to respond to the front end
+		- r: http request coming from the frontend
+*/
 func (h *Handler) GetAll(w http.ResponseWriter, r *http.Request) {
 	user := auth.GetUser(r)
 
@@ -69,6 +87,7 @@ func (h *Handler) GetAll(w http.ResponseWriter, r *http.Request) {
 	LEFT JOIN anime_seasons ans ON ans.id = uap.season_id
 	WHERE ums.user_id = $1`
 
+	// run the query
 	rows, err := h.db.Query(queryString, user.UserID)
 
 	if utils.InternalError(w, err) {
@@ -76,6 +95,7 @@ func (h *Handler) GetAll(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rows.Close()
 
+	// go through each item, map it to a proper object
 	for rows.Next() {
 		var item UserMediaEntry
 		err := rows.Scan(
@@ -95,19 +115,30 @@ func (h *Handler) GetAll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// return the items from the database
 	utils.JSON(w, items)
 }
 
+/*
+	Function:	Update
+	Purpose:	Handle updating the status for a given media item for a specific user
+	Params:
+		- w: http response writer to respond to the front end
+		- r: http request coming from the frontend
+*/
 func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	var req updateRequest
+	// get the user information from the request
 	user := auth.GetUser(r)
+	// get the entries id from the URL parameters
 	entryID := chi.URLParam(r, "id")
-
+	// decode the incoming request, check that the structure is correct
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		utils.Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
+	// do the update
 	var mediaStatusId string
 	err := h.db.QueryRow(
 		`UPDATE user_media_status 
@@ -126,13 +157,24 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// return the id for the updated status
 	utils.JSON(w, map[string]string{"id": mediaStatusId})
 }
 
+/*
+	Function:	Delete
+	Purpose:	Remove a users status for a media item
+	Params:
+		- w: http response writer to respond to the front end
+		- r: http request coming from the frontend
+*/
 func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
+	// get the user information from the request
 	user := auth.GetUser(r)
+	// get the entries is from the URL parameters
 	entryID := chi.URLParam(r, "id")
 
+	// do the delete
 	result, err := h.db.Exec(
 		`DELETE FROM user_media_status WHERE id = $1 AND user_id = $2`,
 		entryID, user.UserID,
@@ -142,20 +184,32 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// check that it was actually deleted
 	rows, _ := result.RowsAffected()
 	if rows == 0 {
 		utils.Error(w, http.StatusNotFound, "not found")
 		return
 	}
 
+	// return no content
 	w.WriteHeader(http.StatusNoContent)
 }
 
+/*
+	Function:	UpdateProgress
+	Purpose:	Update a users progress for a specific piece of media
+	Params:
+		- w: http response writer to respond to the front end
+		- r: http request coming from the frontend
+*/
 func (h *Handler) UpdateProgress(w http.ResponseWriter, r *http.Request) {
 	var req progressRequest
+	// get the user info from the request
 	user := auth.GetUser(r)
+	// get the entries id from the URL parameters
 	entryID := chi.URLParam(r, "id")
 
+	// decode the incoming request, check that the structure is correct
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		utils.Error(w, http.StatusBadRequest, "invalid request body")
 		return
@@ -166,6 +220,7 @@ func (h *Handler) UpdateProgress(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// do the update
 	var progressID string
 	var episodesWatched int
 	err := h.db.QueryRow(
@@ -181,6 +236,7 @@ func (h *Handler) UpdateProgress(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// return the id and the new number of episodes watched
 	utils.JSON(w, map[string]any{
 		"id":               progressID,
 		"episodes_watched": episodesWatched,

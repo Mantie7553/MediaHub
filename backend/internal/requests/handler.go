@@ -20,22 +20,33 @@ func NewHandler(db *sql.DB) *Handler {
 	return &Handler{db: db}
 }
 
+/*
+	Function:	Add
+	Purpose:	add an entry to the database for a Download Request
+	Params:
+		- w: http response writer to respond to the front end
+		- r: http request coming from the frontend
+*/
 func (h *Handler) Add(w http.ResponseWriter, r *http.Request) {
 	var req createRequest
 	var downloadPermission string
 	var err error
+	// get the user info from the request
 	user := auth.GetUser(r)
 
+	// decode the incoming request, check that the structure is correct
 	if err = json.NewDecoder(r.Body).Decode(&req); err != nil {
 		utils.Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
+	// check that at least one of the item id or title override were provided
 	if req.MediaItemId == "" && req.TitleOverride == "" {
 		utils.Error(w, http.StatusBadRequest, "media_item_id or title_override is required")
 		return
 	}
 
+	// check if the user has permissions to download
 	err = h.db.QueryRow(
 		`SELECT download_permission FROM users WHERE id = $1`,
 		user.UserID,
@@ -44,6 +55,7 @@ func (h *Handler) Add(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// set the staus appropriately
 	status := "pending"
 	autoApproved := false
 	if downloadPermission == "auto_approved" {
@@ -51,6 +63,7 @@ func (h *Handler) Add(w http.ResponseWriter, r *http.Request) {
 		autoApproved = true
 	}
 
+	// add the new request
 	var requestId string
 	err = h.db.QueryRow(
 		`INSERT INTO download_requests 
@@ -71,10 +84,19 @@ func (h *Handler) Add(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// return the id of the new request
 	utils.JSON(w, map[string]string{"id": requestId}, http.StatusCreated)
 }
 
+/*
+	Function:	GetAll
+	Purpose:	get all download requests from the database for a specific user
+	Params:
+		- w: http response writer to respond to the front end
+		- r: http request coming from the frontend
+*/
 func (h *Handler) GetAll(w http.ResponseWriter, r *http.Request) {
+	// get user info from the request
 	user := auth.GetUser(r)
 
 	items := []downloadRequestResponse{}
@@ -85,6 +107,7 @@ func (h *Handler) GetAll(w http.ResponseWriter, r *http.Request) {
 	LEFT JOIN media_items mi ON mi.id = dr.media_item_id
 	WHERE dr.requested_by = $1`
 
+	// run the query
 	rows, err := h.db.Query(queryString, user.UserID)
 
 	if utils.InternalError(w, err) {
@@ -92,6 +115,7 @@ func (h *Handler) GetAll(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rows.Close()
 
+	// map rows to useable struct
 	for rows.Next() {
 		var item downloadRequestResponse
 		err := rows.Scan(
@@ -109,9 +133,17 @@ func (h *Handler) GetAll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// return the requests
 	utils.JSON(w, items)
 }
 
+/*
+	Function:	GetAllAdmin
+	Purpose:	get all download requests in the database
+	Params:
+		- w: http response writer to respond to the front end
+		- r: http request coming from the frontend
+*/
 func (h *Handler) GetAllAdmin(w http.ResponseWriter, r *http.Request) {
 	items := []downloadRequestResponse{}
 
@@ -121,6 +153,7 @@ func (h *Handler) GetAllAdmin(w http.ResponseWriter, r *http.Request) {
 	LEFT JOIN media_items mi ON mi.id = dr.media_item_id
 	JOIN users u ON u.id = dr.requested_by`
 
+	// run the query
 	rows, err := h.db.Query(queryString)
 
 	if utils.InternalError(w, err) {
@@ -128,6 +161,7 @@ func (h *Handler) GetAllAdmin(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rows.Close()
 
+	// map the rows to useable structs
 	for rows.Next() {
 		var item downloadRequestResponse
 		err := rows.Scan(
@@ -145,12 +179,22 @@ func (h *Handler) GetAllAdmin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// return the requests
 	utils.JSON(w, items)
 }
 
+/*
+	Function:	Approve
+	Purpose:	Approve a download request as an admin
+	Params:
+		- w: http response writer to respond to the front end
+		- r: http request coming from the frontend
+*/
 func (h *Handler) Approve(w http.ResponseWriter, r *http.Request) {
+	// get the request id from the URL parameters
 	requestId := chi.URLParam(r, "id")
 
+	// update the download request with status "approved" and the time it was updated
 	var requestThingId string
 	var mediaItemId string
 	var sourceURL string
@@ -171,6 +215,7 @@ func (h *Handler) Approve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// get the external id for the media item
 	var mediaType string
 	var externalID *string
 	err = h.db.QueryRow(
@@ -183,24 +228,36 @@ func (h *Handler) Approve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// start the download
 	_, err = downloader.Dispatch(h.db, requestThingId, mediaItemId, sourceURL, mediaType, externalID)
 
 	if utils.InternalError(w, err) {
 		return
 	}
 
+	// return the request id from the database
 	utils.JSON(w, map[string]string{"id": requestThingId})
 }
 
+/*
+	Function:	Reject
+	Purpose:	Reject a download request as an admin
+	Params:
+		- w: http response writer to respond to the front end
+		- r: http request coming from the frontend
+*/
 func (h *Handler) Reject(w http.ResponseWriter, r *http.Request) {
 	var req rejectRequest
+	// get the request ID from the url parameters
 	requestId := chi.URLParam(r, "id")
 
+	// decode the incoming request, check that the structure is correct
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		utils.Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
+	// update the download request with status "rejected" and the time it was updated
 	var requestThingId string
 	err := h.db.QueryRow(
 		`UPDATE download_requests
@@ -219,5 +276,6 @@ func (h *Handler) Reject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// return the  request id from the database
 	utils.JSON(w, map[string]string{"id": requestThingId})
 }

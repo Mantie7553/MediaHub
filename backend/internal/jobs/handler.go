@@ -19,8 +19,11 @@ func NewHandler(db *sql.DB) *Handler {
 }
 
 /*
-Function: GetMine
-Purpose: Get a list of all jobs
+	Function:	GetAll
+	Purpose:	Get a list of all jobs
+	Params:
+		- w: http response writer to respond to the front end
+		- r: http request coming from the frontend
 */
 func (h *Handler) GetAll(w http.ResponseWriter, r *http.Request) {
 	items := []JobResponse{}
@@ -63,8 +66,11 @@ func (h *Handler) GetAll(w http.ResponseWriter, r *http.Request) {
 }
 
 /*
-Function: GetMine
-Purpose: Get a list of jobs for a specific user
+	Function:	GetMine
+	Purpose:	Get a list of jobs for a specific user
+	Params:
+		- w: http response writer to respond to the front end
+		- r: http request coming from the frontend
 */
 func (h *Handler) GetMine(w http.ResponseWriter, r *http.Request) {
 	user := auth.GetUser(r)
@@ -108,8 +114,11 @@ func (h *Handler) GetMine(w http.ResponseWriter, r *http.Request) {
 }
 
 /*
-Function: Create
-Purpose: Create a new job
+	Function:	Create
+	Purpose:	Add a new job to the database and start the download
+	Params:
+		- w: http response writer to respond to the front end
+		- r: http request coming from the frontend
 */
 func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	var req JobRequest
@@ -143,11 +152,13 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// do the download
 	jobID, err = downloader.Dispatch(h.db, req.RequestID, itemID, req.SourceURL, mediaType, externalID)
 	if err != nil {
 		utils.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
+	// return the id of the new job
 	utils.JSON(w, map[string]string{"id": jobID})
 }
