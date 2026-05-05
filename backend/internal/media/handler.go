@@ -1,11 +1,19 @@
 package media
 
 import (
+	"archive/zip"
 	"database/sql"
 	"encoding/json"
+	"io"
 	"net/http"
+	"path/filepath"
+	"sort"
+	"strconv"
+	"strings"
 	"time"
 
+	"github.com/Mantie7553/MediaHub/backend/internal/auth"
+	"github.com/Mantie7553/MediaHub/backend/internal/utils"
 	"github.com/go-chi/chi/v5"
 	"github.com/lib/pq"
 )
@@ -18,64 +26,50 @@ func NewHandler(db *sql.DB) *Handler {
 	return &Handler{db: db}
 }
 
-type uploadRequest struct {
-	Type           string `json:"type"`
-	Title          string `json:"title"`
-	Description    string `json:"description"`
-	CoverImageURL  string `json:"cover_image_url"`
-	ReleaseDate    string `json:"release_date"`
-	ExternalID     string `json:"external_id"`
-	ExternalSource string `json:"external_source"`
-
-	// anime
-	Studio string   `json:"studio"`
-	Status string   `json:"status"`
-	Genres []string `json:"genres"`
-
-	// movie
-	RuntimeMins int    `json:"runtime_mins"`
-	Director    string `json:"director"`
-
-	// music_track
-	Artist      string `json:"artist"`
-	TrackNumber int    `json:"track_number"`
-	DurationSec int    `json:"duration_secs"`
-}
-
+/*
+	Function:	Upload
+	Purpose:	add a new media item
+	Params:
+		- w: http response writer to respond to the front end
+		- r: http request coming from the frontend
+*/
 func (h *Handler) Upload(w http.ResponseWriter, r *http.Request) {
 	var req uploadRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request body", http.StatusBadRequest)
+		utils.Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
+	// check that the type and title were actually provided
 	if req.Type == "" || req.Title == "" {
-		http.Error(w, "type and title are required", http.StatusBadRequest)
+		utils.Error(w, http.StatusBadRequest, "type and title are required")
 		return
 	}
 
+	// if adding music make sure an artist name was provided
 	if req.Type == "music_track" && req.Artist == "" {
-		http.Error(w, "artist is required for music_track", http.StatusBadRequest)
+		utils.Error(w, http.StatusBadRequest, "artist is required for music_track")
 		return
 	}
 
+	// confirm the release date is valid
 	var releaseDate *time.Time
 	if req.ReleaseDate != "" {
 		t, err := time.Parse("2006-01-02", req.ReleaseDate)
 		if err != nil {
-			http.Error(w, "invalid release_date format, use YYYY-MM-DD", http.StatusBadRequest)
+			utils.Error(w, http.StatusBadRequest, "invalid release_date format, use YYYY-MM-DD")
 			return
 		}
 		releaseDate = &t
 	}
 
 	tx, err := h.db.Begin()
-	if err != nil {
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+	if utils.InternalError(w, err) {
 		return
 	}
 	defer tx.Rollback()
 
+	// add the new item to the database
 	var mediaID string
 	err = tx.QueryRow(
 		`INSERT INTO media_items (type, title, description, cover_image_url, release_date, external_id, external_source)
@@ -83,29 +77,30 @@ func (h *Handler) Upload(w http.ResponseWriter, r *http.Request) {
 		 RETURNING id`,
 		req.Type,
 		req.Title,
-		nullString(req.Description),
-		nullString(req.CoverImageURL),
+		utils.NullString(req.Description),
+		utils.NullString(req.CoverImageURL),
 		releaseDate,
-		nullString(req.ExternalID),
-		nullString(req.ExternalSource),
+		utils.NullString(req.ExternalID),
+		utils.NullString(req.ExternalSource),
 	).Scan(&mediaID)
 	if err != nil {
 		if pqErr, ok := err.(*pq.Error); ok && pqErr.Code == "23505" {
-			http.Error(w, "media item already exists", http.StatusConflict)
+			utils.Error(w, http.StatusConflict, "media item already exists")
 			return
 		}
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		utils.Error(w, http.StatusInternalServerError, "internal server error")
 		return
 	}
 
+	// add in the specific types metadata
 	switch req.Type {
 	case "anime":
 		_, err = tx.Exec(
 			`INSERT INTO anime_metadata (media_item_id, studio, status, genres)
 			 VALUES ($1, $2, $3, $4)`,
 			mediaID,
-			nullString(req.Studio),
-			nullString(req.Status),
+			utils.NullString(req.Studio),
+			utils.NullString(req.Status),
 			pq.Array(req.Genres),
 		)
 	case "movie":
@@ -113,8 +108,8 @@ func (h *Handler) Upload(w http.ResponseWriter, r *http.Request) {
 			`INSERT INTO movie_metadata (media_item_id, runtime_mins, director, genres)
 			 VALUES ($1, $2, $3, $4)`,
 			mediaID,
-			nullInt(req.RuntimeMins),
-			nullString(req.Director),
+			utils.NullInt(req.RuntimeMins),
+			utils.NullString(req.Director),
 			pq.Array(req.Genres),
 		)
 	case "music_track":
@@ -123,84 +118,96 @@ func (h *Handler) Upload(w http.ResponseWriter, r *http.Request) {
 			 VALUES ($1, $2, $3, $4, $5)`,
 			mediaID,
 			req.Artist,
-			nullInt(req.TrackNumber),
-			nullInt(req.DurationSec),
+			utils.NullInt(req.TrackNumber),
+			utils.NullInt(req.DurationSec),
 			pq.Array(req.Genres),
 		)
 	default:
-		http.Error(w, "invalid media type, must be one of: anime, movie, music_track", http.StatusBadRequest)
+		utils.Error(w, http.StatusBadRequest, "invalid media type, must be one of: anime, movie, music_track")
 		return
 	}
 
-	if err != nil {
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+	if utils.InternalError(w, err) {
 		return
 	}
 
-	if err := tx.Commit(); err != nil {
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+	if utils.InternalError(w, tx.Commit()) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]string{"id": mediaID})
+	// return the id of the new item
+	utils.JSON(w, map[string]string{"id": mediaID}, http.StatusCreated)
 }
 
+/*
+	Function:	GetAll
+	Purpose:	Get all media items from the database
+	Params:
+		- w: http response writer to respond to the front end
+		- r: http request coming from the frontend
+*/
 func (h *Handler) GetAll(w http.ResponseWriter, r *http.Request) {
+	// get the medias type from the URL
 	mediaType := r.URL.Query().Get("type")
 
 	items := []MediaItem{}
 
-	var queryString string = `SELECT id, type, title, description, 
+	queryString := `SELECT id, type, title, description, 
 		cover_image_url, release_date, external_id, 
 		external_source, created_at 
-		FROM media_items` 
+		FROM media_items`
 
 	if mediaType != "" {
-		queryString += ` WHERE type = $1` 
+		queryString += ` WHERE type = $1`
 	}
 
 	var rows *sql.Rows
 	var err error
 
+	// complete the query - if it has a media type, use it specifically or get everything of any type
 	if mediaType != "" {
 		rows, err = h.db.Query(queryString, mediaType)
 	} else {
 		rows, err = h.db.Query(queryString)
 	}
 
-	if err != nil {
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+	if utils.InternalError(w, err) {
 		return
 	}
 	defer rows.Close()
 
+	// map the rows to useable structs
 	for rows.Next() {
 		var item MediaItem
-		err := rows.Scan (
+		err := rows.Scan(
 			&item.ID, &item.Type, &item.Title, &item.Description,
 			&item.CoverImageURL, &item.ReleaseDate, &item.ExternalID,
 			&item.ExternalSource, &item.CreatedAt,
 		)
 
-		if err != nil {
-			http.Error(w, "internal server error", http.StatusInternalServerError)
+		if utils.InternalError(w, err) {
 			return
 		}
 		items = append(items, item)
 	}
 
-	if err := rows.Err(); err != nil {
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+	if utils.InternalError(w, rows.Err()) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(items)
+	// return the items
+	utils.JSON(w, items)
 }
 
+/*
+	Function:	GetSpecific
+	Purpose:	Get a specific media item from the database
+	Params:
+		- w: http response writer to respond to the front end
+		- r: http request coming from the frontend
+*/
 func (h *Handler) GetSpecific(w http.ResponseWriter, r *http.Request) {
+	// get the id from the URL
 	mediaId := chi.URLParam(r, "id")
 	item := MediaItem{}
 
@@ -209,33 +216,34 @@ func (h *Handler) GetSpecific(w http.ResponseWriter, r *http.Request) {
 		external_source, created_at 
 		FROM media_items WHERE id = $1`
 
-	err := h.db.QueryRow(queryString, mediaId).Scan (
+	// look for the meida item
+	err := h.db.QueryRow(queryString, mediaId).Scan(
 		&item.ID, &item.Type, &item.Title, &item.Description,
 		&item.CoverImageURL, &item.ReleaseDate, &item.ExternalID,
 		&item.ExternalSource, &item.CreatedAt,
 	)
 
 	if err == sql.ErrNoRows {
-		http.Error(w, "not found", http.StatusNotFound)
+		utils.Error(w, http.StatusNotFound, "not found")
 		return
 	}
 
-	if err != nil {
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+	if utils.InternalError(w, err) {
 		return
 	}
 
 	var metadata any
 
+	// get the appropriate metadata for the media type
 	switch item.Type {
-	case "anime": 
+	case "anime":
 		var meta AnimeMetadata
 		err := h.db.QueryRow(
 			`SELECT studio, status, genres FROM anime_metadata WHERE media_item_id = $1`,
 			item.ID,
 		).Scan(&meta.Studio, &meta.Status, pq.Array(&meta.Genres))
 		if err != nil && err != sql.ErrNoRows {
-			http.Error(w, "internal server error", http.StatusInternalServerError)
+			utils.Error(w, http.StatusInternalServerError, "internal server error")
 			return
 		}
 		metadata = meta
@@ -246,7 +254,7 @@ func (h *Handler) GetSpecific(w http.ResponseWriter, r *http.Request) {
 			item.ID,
 		).Scan(&meta.RuntimeMins, &meta.Director, pq.Array(&meta.Genres))
 		if err != nil && err != sql.ErrNoRows {
-			http.Error(w, "internal server error", http.StatusInternalServerError)
+			utils.Error(w, http.StatusInternalServerError, "internal server error")
 			return
 		}
 		metadata = meta
@@ -258,29 +266,163 @@ func (h *Handler) GetSpecific(w http.ResponseWriter, r *http.Request) {
 			item.ID,
 		).Scan(&meta.Artist, &meta.TrackNumber, &meta.DurationSecs, pq.Array(&meta.Genres))
 		if err != nil && err != sql.ErrNoRows {
-			http.Error(w, "internal server error", http.StatusInternalServerError)
+			utils.Error(w, http.StatusInternalServerError, "internal server error")
 			return
 		}
 		metadata = meta
+	case "manga":
+		var meta MangaMetadata
+		var chapters []MangaChapter
+		err := h.db.QueryRow(
+			`SELECT total_chapters, genres, status FROM manga_metadata WHERE media_item_id = $1`,
+			item.ID,
+		).Scan(&meta.TotalChapters, pq.Array(&meta.Genres), &meta.Status)
+		if err != nil && err != sql.ErrNoRows {
+			utils.Error(w, http.StatusInternalServerError, "internal server error")
+			return
+		}
+
+		// also get the chapters for the manga
+		rows, err := h.db.Query(
+			`SELECT chapter_number, title, file_path, page_count, created_at FROM manga_chapters
+			WHERE media_item_id = $1 ORDER BY chapter_number`,
+			item.ID,
+		)
+		if utils.InternalError(w, err) {
+			return
+		}
+		defer rows.Close()
+
+		// map those chapters to useable structs
+		for rows.Next() {
+			var chapter MangaChapter
+			err := rows.Scan(
+				&chapter.ChapterNumber, &chapter.Title, &chapter.FilePath,
+				&chapter.PageCount, &chapter.CreatedAt,
+			)
+
+			if utils.InternalError(w, err) {
+				return
+			}
+			chapters = append(chapters, chapter)
+		}
+		metadata = MangaDetail{MangaMetadata: meta, Chapters: chapters}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(MediaItemDetail{MediaItem: item, Metadata: metadata})
-
+	// return the item and its metadata
+	utils.JSON(w, MediaItemDetail{MediaItem: item, Metadata: metadata})
 }
 
-// nullString returns nil for empty strings so Postgres stores NULL rather than "".
-func nullString(s string) interface{} {
-	if s == "" {
-		return nil
+/*
+	Function:	MangaProgress
+	Purpose:	Add progress tracking for specific manga chapters
+	Params:
+		- w: http response writer to respond to the front end
+		- r: http request coming from the frontend
+*/
+func (h *Handler) MangaProgress(w http.ResponseWriter, r *http.Request) {
+	var req progressRequest
+	// get the chapter id from the URL parameters
+	chapterId := chi.URLParam(r, "chapterId")
+	// get the user info from the request
+	user := auth.GetUser(r)
+
+	// decode the incoming request, check that the structure is correct
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utils.Error(w, http.StatusBadRequest, "invalid request body")
+		return
 	}
-	return s
+
+	// insert the progress
+	_, err := h.db.Exec(
+		`INSERT INTO manga_progress (user_id, chapter_id, media_item_id, last_page_read, completed, updated_at)
+		VALUES ($1, $2, (SELECT media_item_id FROM manga_chapters WHERE id = $2), $3, $4, NOW())
+		ON CONFLICT (user_id, chapter_id) DO UPDATE SET
+		last_page_read = EXCLUDED.last_page_read,
+		completed = EXCLUDED.completed,
+		updated_at = NOW()`,
+		user.UserID, chapterId, req.LastPageRead, req.Completed,
+	)
+
+	if utils.InternalError(w, err) {
+		return
+	}
+
+	// return no content
+	w.WriteHeader(http.StatusNoContent)
 }
 
-// nullInt returns nil for zero values so Postgres stores NULL rather than 0.
-func nullInt(i int) interface{} {
-	if i == 0 {
-		return nil
+/*
+	Function:	ServePage
+	Purpose:	Get a specific page for a manga chapter
+	Params:
+		- w: http response writer to respond to the front end
+		- r: http request coming from the frontend
+*/
+func (h *Handler) ServePage(w http.ResponseWriter, r *http.Request) {
+	var fPath string
+	// get the chapters id from the URL parameters
+	chapterId := chi.URLParam(r, "chapterId")
+	// get the page number from the URL parameters
+	pageNum, err := strconv.Atoi(chi.URLParam(r, "pageNum"))
+
+	if utils.InternalError(w, err) {
+		return
 	}
-	return i
+
+	// find the file path for the page
+	err = h.db.QueryRow(
+		`SELECT file_path FROM manga_chapters WHERE id = $1`,
+		chapterId,
+	).Scan(&fPath)
+
+	if err == sql.ErrNoRows {
+		utils.Error(w, http.StatusNotFound, "chapter not found")
+		return
+	}
+	if utils.InternalError(w, err) {
+		return
+	}
+
+	// open the file for reading
+	reader, err := zip.OpenReader(fPath)
+	if utils.InternalError(w, err) {
+		return
+	}
+	defer reader.Close()
+
+	sort.Slice(reader.File, func(i, j int) bool {
+		return reader.File[i].Name < reader.File[j].Name
+	})
+
+	// check that the page number is in bounds
+	if pageNum < 0 || pageNum >= len(reader.File) {
+		utils.Error(w, http.StatusNotFound, "page not found")
+		return
+	}
+
+	// read the page 
+	entry := reader.File[pageNum]
+
+	contentTypes := map[string]string{
+		".jpg":  "image/jpeg",
+		".jpeg": "image/jpeg",
+		".png":  "image/png",
+		".webp": "image/webp",
+	}
+
+	// check that the content type of the file is actually allowed
+	ct, ok := contentTypes[strings.ToLower(filepath.Ext(entry.Name))]
+	if !ok {
+		ct = "application/octet-stream"
+	}
+
+	f, err := entry.Open()
+	if utils.InternalError(w, err) {
+		return
+	}
+	defer f.Close()
+
+	w.Header().Set("Content-Type", ct)
+	io.Copy(w, f)
 }

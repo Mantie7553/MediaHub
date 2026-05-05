@@ -5,7 +5,7 @@ CREATE TABLE user_media_status (
     media_item_id UUID REFERENCES media_items(id) ON DELETE CASCADE,
     album_id UUID REFERENCES albums(id) ON DELETE CASCADE,
     status media_status NOT NULL,
-    rating INT CHECK (rating BETWEEN 1 AND 10),
+    rating INT CHECK (rating BETWEEN 1 AND 5),
     notes TEXT,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE(user_id, media_item_id),

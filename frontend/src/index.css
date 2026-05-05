@@ -1,0 +1,25 @@
+@import url('https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;600;700&family=Red+Hat+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+@plugin "../node_modules/daisyui";
+
+@plugin "../node_modules/daisyui/theme" {
+  name: "mediahub";
+  default: true;
+  --color-base-100: #211832;
+  --color-base-200: #261635;
+  --color-base-300: #2a1f42;
+  --color-base-content: #fcfcfc;
+  --color-primary: #f25912;
+  --color-primary-content: #fcfcfc;
+  --color-success: #6cb970;
+  --color-warning: #fac13d;
+  --color-error: #b03434;
+  --color-neutral: #3d2d5c;
+  --color-neutral-content: #9b8db5;
+  --font-sans: 'Prompt', sans-serif;
+  --font-mono: 'Red Hat Mono', monospace;
+}
+
+body {
+  font-family: 'Prompt', sans-serif;
+}
