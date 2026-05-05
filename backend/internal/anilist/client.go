@@ -33,7 +33,7 @@ Params:
 */
 func NewAnilistClient(urlEnvKey string) *AnilistClient {
 	baseURL := os.Getenv(urlEnvKey)
-	// Public endpoint is stable; fall back when the env var is blank rather than failing every call.
+	// Public endpoint is stable; fall back when the .env var is blank rather than failing every call.
 	if baseURL == "" {
 		baseURL = "https://graphql.anilist.co"
 	}

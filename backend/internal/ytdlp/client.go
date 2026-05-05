@@ -10,15 +10,15 @@ import (
 )
 
 /*
-	BaseURL: GraphQL endpoint for Anilist
+BaseURL: GraphQL endpoint for Anilist
 */
 type AnilistConfig struct {
 	BaseURL string
 }
 
 /*
-	config: BaseURL for the Anilist API
-	http: pointer to the http client
+config: BaseURL for the Anilist API
+http: pointer to the http client
 */
 type AnilistClient struct {
 	config AnilistConfig
@@ -26,14 +26,14 @@ type AnilistClient struct {
 }
 
 /*
-	Function:	NewAnilistClient
-	Purpose:	Connect with the Anilist GraphQL API
-	Params:
-		- urlEnvKey: environment variable key holding the Anilist URL
+Function:	NewAnilistClient
+Purpose:	Connect with the Anilist GraphQL API
+Params:
+  - urlEnvKey: environment variable key holding the Anilist URL
 */
 func NewAnilistClient(urlEnvKey string) *AnilistClient {
 	baseURL := os.Getenv(urlEnvKey)
-	// Public endpoint is stable; fall back when the env var is blank rather than failing every call.
+	// Public endpoint is stable; fall back when the .env var is blank rather than failing every call.
 	if baseURL == "" {
 		baseURL = "https://graphql.anilist.co"
 	}
@@ -88,12 +88,12 @@ const getByIDQuery = `query ($id: Int) {
 }`
 
 /*
-	Function:	Search
-	Purpose:	Search Anilist for media of a given type matching the query
-	Params:
-		- mediaType: "ANIME" or "MANGA". Empty string searches across both.
-		- query: free-text search term
-		- perPage: number of results to return; defaults to 10 when zero or negative
+Function:	Search
+Purpose:	Search Anilist for media of a given type matching the query
+Params:
+  - mediaType: "ANIME" or "MANGA". Empty string searches across both.
+  - query: free-text search term
+  - perPage: number of results to return; defaults to 10 when zero or negative
 */
 func (c *AnilistClient) Search(mediaType, query string, perPage int) ([]Media, error) {
 	if perPage <= 0 {
@@ -127,10 +127,10 @@ func (c *AnilistClient) Search(mediaType, query string, perPage int) ([]Media, e
 }
 
 /*
-	Function:	GetByID
-	Purpose:	Fetch a single Anilist media entry by its numeric ID
-	Params:
-		- id: Anilist's numeric ID for the media entry
+Function:	GetByID
+Purpose:	Fetch a single Anilist media entry by its numeric ID
+Params:
+  - id: Anilist's numeric ID for the media entry
 */
 func (c *AnilistClient) GetByID(id int) (*Media, error) {
 	vars := map[string]any{"id": id}
