@@ -1,211 +1,171 @@
-package anilist
+package ytdlp
 
 import (
-	"bytes"
+	"bufio"
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"os"
-	"time"
+	"os/exec"
+	"strconv"
+	"strings"
 )
 
 /*
-BaseURL: GraphQL endpoint for Anilist
+BinaryPath: path to the yt-dlp executable
+DownloadDir: root output directory; per-job subdirs are appended at runtime
 */
-type AnilistConfig struct {
-	BaseURL string
+type YtdlpConfig struct {
+	BinaryPath  string
+	DownloadDir string
 }
 
 /*
-config: BaseURL for the Anilist API
-http: pointer to the http client
+config: BinaryPath and DownloadDir for invoking yt-dlp
 */
-type AnilistClient struct {
-	config AnilistConfig
-	http   *http.Client
+type YtdlpClient struct {
+	config YtdlpConfig
 }
 
 /*
-Function:	NewAnilistClient
-Purpose:	Connect with the Anilist GraphQL API
+Function:	NewYtdlpClient
+Purpose:	Build a wrapper around the yt-dlp binary
 Params:
-  - urlEnvKey: environment variable key holding the Anilist URL
+  - binEnvKey: environment variable key holding the yt-dlp binary path
+  - dirEnvKey: environment variable key holding the download root
 */
-func NewAnilistClient(urlEnvKey string) *AnilistClient {
-	baseURL := os.Getenv(urlEnvKey)
-	// Public endpoint is stable; fall back when the .env var is blank rather than failing every call.
-	if baseURL == "" {
-		baseURL = "https://graphql.anilist.co"
+func NewYtdlpClient(binEnvKey string, dirEnvKey string) *YtdlpClient {
+	binaryPath := os.Getenv(binEnvKey)
+	// Fall back to the binary's name on PATH if no override was supplied.
+	if binaryPath == "" {
+		binaryPath = "yt-dlp"
 	}
-	return &AnilistClient{
-		config: AnilistConfig{
-			BaseURL: baseURL,
+	return &YtdlpClient{
+		config: YtdlpConfig{
+			BinaryPath:  binaryPath,
+			DownloadDir: os.Getenv(dirEnvKey),
 		},
-		http: &http.Client{Timeout: 10 * time.Second},
 	}
 }
 
-// searchQuery is the GraphQL document used by Search. Declared at package scope so the
-// raw multi-line string stays out of the method body.
-const searchQuery = `query ($search: String, $type: MediaType, $perPage: Int) {
-  Page(perPage: $perPage) {
-    media(search: $search, type: $type) {
-      id
-      type
-      format
-      status
-      title { romaji english native }
-      description
-      episodes
-      chapters
-      volumes
-      coverImage { large medium }
-      genres
-      studios { nodes { name } }
-      startDate { year month day }
-    }
-  }
-}`
-
-// getByIDQuery is the GraphQL document used by GetByID. Same fields as searchQuery,
-// but at the Media root instead of nested inside Page.
-const getByIDQuery = `query ($id: Int) {
-  Media(id: $id) {
-    id
-    type
-    format
-    status
-    title { romaji english native }
-    description
-    episodes
-    chapters
-    volumes
-    coverImage { large medium }
-    genres
-    studios { nodes { name } }
-    startDate { year month day }
-  }
-}`
+// ProgressFunc receives integer percent updates parsed from yt-dlp's stdout.
+type ProgressFunc func(percent int)
 
 /*
-Function:	Search
-Purpose:	Search Anilist for media of a given type matching the query
+Function:	Download
+Purpose:	Run yt-dlp to fetch a source URL, extract audio as mp3, and write
+
+	it to the given output template, reporting progress as it goes
+
 Params:
-  - mediaType: "ANIME" or "MANGA". Empty string searches across both.
+  - sourceURL: URL yt-dlp will download from
+  - outputTemplate: yt-dlp -o template, including any per-job subdirs
+  - onProgress: optional callback receiving integer percent updates
+*/
+func (c *YtdlpClient) Download(sourceURL, outputTemplate string, onProgress ProgressFunc) error {
+	cmd := c.command(
+		"-x",
+		"--audio-format", "mp3",
+		"--newline",
+		"-o", outputTemplate,
+		sourceURL,
+	)
+
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return err
+	}
+
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+
+	// yt-dlp emits lines like "[download]  12.3% of  4.5MiB at  1.2MiB/s ETA 00:08".
+	// We pull the percent from the second whitespace-delimited field.
+	scanner := bufio.NewScanner(stdout)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if onProgress != nil && strings.Contains(line, "[download]") && strings.Contains(line, "%") {
+			fields := strings.Fields(line)
+			if len(fields) >= 2 {
+				percentStr := strings.TrimSuffix(fields[1], "%")
+				if pct, err := strconv.ParseFloat(percentStr, 64); err == nil {
+					onProgress(int(pct))
+				}
+			}
+		}
+	}
+
+	if err := cmd.Wait(); err != nil {
+		return err
+	}
+
+	// Some lines may report 99% before completion; force a final 100 once the binary exits cleanly.
+	if onProgress != nil {
+		onProgress(100)
+	}
+	return nil
+}
+
+/*
+Function:	SearchMusic
+Purpose:	Run a YouTube Music search via yt-dlp's ytmsearch prefix and return
+
+	parsed candidates without downloading anything
+
+Params:
   - query: free-text search term
-  - perPage: number of results to return; defaults to 10 when zero or negative
+  - limit: number of results to return; defaults to 10 when zero or negative
 */
-func (c *AnilistClient) Search(mediaType, query string, perPage int) ([]Media, error) {
-	if perPage <= 0 {
-		perPage = 10
+func (c *YtdlpClient) SearchMusic(query string, limit int) ([]SearchResult, error) {
+	if limit <= 0 {
+		limit = 10
 	}
 
-	vars := map[string]any{
-		"search":  query,
-		"perPage": perPage,
-	}
-	// Omit type from the variables when empty so Anilist doesn't reject the value as invalid enum.
-	if mediaType != "" {
-		vars["type"] = mediaType
-	}
+	// ytmsearchN: tells yt-dlp to query YouTube Music for up to N results.
+	searchTerm := fmt.Sprintf("ytsearch%d:%s", limit, query)
 
-	var env struct {
-		Page struct {
-			Media []wireMedia `json:"media"`
-		} `json:"Page"`
-	}
-	if err := c.query(searchQuery, vars, &env); err != nil {
+	cmd := c.command(
+		"--dump-json",
+		"--no-warnings",
+		"--quiet",
+		searchTerm,
+	)
+
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
 		return nil, err
 	}
 
-	// Map each wire result into the public Media shape used everywhere else in the app.
-	out := make([]Media, 0, len(env.Page.Media))
-	for _, m := range env.Page.Media {
-		out = append(out, m.toDomain())
-	}
-	return out, nil
-}
-
-/*
-Function:	GetByID
-Purpose:	Fetch a single Anilist media entry by its numeric ID
-Params:
-  - id: Anilist's numeric ID for the media entry
-*/
-func (c *AnilistClient) GetByID(id int) (*Media, error) {
-	vars := map[string]any{"id": id}
-
-	var env struct {
-		Media *wireMedia `json:"Media"`
-	}
-	if err := c.query(getByIDQuery, vars, &env); err != nil {
+	if err := cmd.Start(); err != nil {
 		return nil, err
 	}
 
-	if env.Media == nil {
-		return nil, nil
+	results := []SearchResult{}
+	scanner := bufio.NewScanner(stdout)
+	// Per-result JSON can be very large (every available format, full description, etc.);
+	// the default 64KB scanner buffer overflows on many videos, so bump it to 1MB.
+	scanner.Buffer(make([]byte, 64*1024), 1024*1024)
+
+	for scanner.Scan() {
+		line := scanner.Bytes()
+		if len(line) == 0 {
+			continue
+		}
+		var w wireSearchResult
+		// Skip lines that aren't valid JSON rather than aborting the whole search.
+		if err := json.Unmarshal(line, &w); err != nil {
+			continue
+		}
+		results = append(results, w.toDomain())
 	}
-	domain := env.Media.toDomain()
-	return &domain, nil
+
+	if err := cmd.Wait(); err != nil {
+		return nil, err
+	}
+	return results, nil
 }
 
-// graphQLRequest is the JSON body sent to the GraphQL endpoint on every call.
-type graphQLRequest struct {
-	Query     string         `json:"query"`
-	Variables map[string]any `json:"variables,omitempty"`
-}
-
-// graphQLError mirrors a single entry in the errors array Anilist returns when
-// a query fails server-side. The full struct has more fields; we only need the message.
-type graphQLError struct {
-	Message string `json:"message"`
-}
-
-// graphQLResponse wraps the data and errors fields of any GraphQL response.
-// Data is held as RawMessage so the helper can defer decoding until after error checks pass.
-type graphQLResponse struct {
-	Data   json.RawMessage `json:"data"`
-	Errors []graphQLError  `json:"errors"`
-}
-
-// query executes a GraphQL request and decodes the data field into out.
-// Both transport-level errors (5xx, network failures) and GraphQL-level errors
-// (the errors array, which arrives with HTTP 200) are surfaced to the caller.
-func (c *AnilistClient) query(gql string, vars map[string]any, out any) error {
-	body, err := json.Marshal(graphQLRequest{Query: gql, Variables: vars})
-	if err != nil {
-		return err
-	}
-
-	req, err := http.NewRequest("POST", c.config.BaseURL, bytes.NewBuffer(body))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
-
-	resp, err := c.http.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 500 {
-		return fmt.Errorf("anilist returned %d", resp.StatusCode)
-	}
-
-	var envelope graphQLResponse
-	if err := json.NewDecoder(resp.Body).Decode(&envelope); err != nil {
-		return err
-	}
-
-	// GraphQL servers return 200 even on validation failures; the errors array tells the truth.
-	if len(envelope.Errors) > 0 {
-		return fmt.Errorf("anilist graphql error: %s", envelope.Errors[0].Message)
-	}
-
-	if out == nil || len(envelope.Data) == 0 {
-		return nil
-	}
-	return json.Unmarshal(envelope.Data, out)
+// command builds an exec.Cmd for the yt-dlp binary; isolated so tests can stub it.
+func (c *YtdlpClient) command(args ...string) *exec.Cmd {
+	return exec.Command(c.config.BinaryPath, args...)
 }

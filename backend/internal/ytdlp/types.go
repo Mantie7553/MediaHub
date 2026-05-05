@@ -1,95 +1,35 @@
-package anilist
+package ytdlp
 
-// Media is the public, domain-shaped representation of an Anilist entry.
-// JSON tags use snake_case to stay consistent with the rest of the API surface.
-// Format-specific fields (Episodes, Chapters, Volumes) are nil when not applicable.
-type Media struct {
-	ID          int        `json:"id"`
-	Type        string     `json:"type"`
-	Format      string     `json:"format"`
-	Status      string     `json:"status"`
-	Title       Title      `json:"title"`
-	Description *string    `json:"description"`
-	Episodes    *int       `json:"episodes"`
-	Chapters    *int       `json:"chapters"`
-	Volumes     *int       `json:"volumes"`
-	CoverImage  CoverImage `json:"cover_image"`
-	Genres      []string   `json:"genres"`
-	Studios     []string   `json:"studios"`
-	StartDate   FuzzyDate  `json:"start_date"`
+// SearchResult mirrors the subset of yt-dlp's --dump-json output used by MediaHub.
+// URL is the canonical source URL that should be persisted onto download_requests.
+type SearchResult struct {
+	ID           string `json:"id"`
+	Title        string `json:"title"`
+	Uploader     string `json:"uploader"`
+	DurationSecs int    `json:"duration_secs"`
+	URL          string `json:"url"`
+	Thumbnail    string `json:"thumbnail"`
 }
 
-// Title carries Anilist's three localised title variants. Any may be empty.
-// Field names already match Anilist's JSON keys, so the same struct serves both
-// inbound decoding and outbound encoding.
-type Title struct {
-	Romaji  string `json:"romaji"`
-	English string `json:"english"`
-	Native  string `json:"native"`
+// wireSearchResult mirrors yt-dlp's --dump-json output for a single search hit.
+// Duration arrives as a JSON number (sometimes int, sometimes float) so we decode
+// into float64 and round on conversion to keep parsing tolerant.
+type wireSearchResult struct {
+	ID         string  `json:"id"`
+	Title      string  `json:"title"`
+	Uploader   string  `json:"uploader"`
+	Duration   float64 `json:"duration"`
+	WebpageURL string  `json:"webpage_url"`
+	Thumbnail  string  `json:"thumbnail"`
 }
 
-type CoverImage struct {
-	Large  string `json:"large"`
-	Medium string `json:"medium"`
-}
-
-// FuzzyDate maps Anilist's partial-date type; any field may be nil when unknown.
-type FuzzyDate struct {
-	Year  *int `json:"year"`
-	Month *int `json:"month"`
-	Day   *int `json:"day"`
-}
-
-// wireMedia mirrors Anilist's GraphQL response field-for-field, including camelCase
-// keys and the nested studios.nodes shape. Unexported because callers should only
-// ever see the cleaned-up Media type, never the raw form.
-type wireMedia struct {
-	ID          int     `json:"id"`
-	Type        string  `json:"type"`
-	Format      string  `json:"format"`
-	Status      string  `json:"status"`
-	Title       Title   `json:"title"`
-	Description *string `json:"description"`
-	Episodes    *int    `json:"episodes"`
-	Chapters    *int    `json:"chapters"`
-	Volumes     *int    `json:"volumes"`
-	CoverImage  struct {
-		Large  string `json:"large"`
-		Medium string `json:"medium"`
-	} `json:"coverImage"`
-	Genres  []string `json:"genres"`
-	Studios struct {
-		Nodes []struct {
-			Name string `json:"name"`
-		} `json:"nodes"`
-	} `json:"studios"`
-	StartDate FuzzyDate `json:"startDate"`
-}
-
-/*
-	Function:	toDomain
-	Purpose:	Flatten a raw Anilist response entry into the public Media shape,
-				collapsing studios.nodes[].name into a flat []string and renaming
-				camelCase fields.
-*/
-func (w wireMedia) toDomain() Media {
-	studios := make([]string, 0, len(w.Studios.Nodes))
-	for _, s := range w.Studios.Nodes {
-		studios = append(studios, s.Name)
-	}
-	return Media{
-		ID:          w.ID,
-		Type:        w.Type,
-		Format:      w.Format,
-		Status:      w.Status,
-		Title:       w.Title,
-		Description: w.Description,
-		Episodes:    w.Episodes,
-		Chapters:    w.Chapters,
-		Volumes:     w.Volumes,
-		CoverImage:  CoverImage{Large: w.CoverImage.Large, Medium: w.CoverImage.Medium},
-		Genres:      w.Genres,
-		Studios:     studios,
-		StartDate:   w.StartDate,
+func (w wireSearchResult) toDomain() SearchResult {
+	return SearchResult{
+		ID:           w.ID,
+		Title:        w.Title,
+		Uploader:     w.Uploader,
+		DurationSecs: int(w.Duration),
+		URL:          w.WebpageURL,
+		Thumbnail:    w.Thumbnail,
 	}
 }
