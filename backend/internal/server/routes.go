@@ -7,7 +7,6 @@ import (
 
 	"github.com/Mantie7553/MediaHub/backend/internal/auth"
 	"github.com/Mantie7553/MediaHub/backend/internal/jobs"
-	"github.com/Mantie7553/MediaHub/backend/internal/clients"
 	"github.com/Mantie7553/MediaHub/backend/internal/lists"
 	"github.com/Mantie7553/MediaHub/backend/internal/media"
 	"github.com/Mantie7553/MediaHub/backend/internal/requests"
@@ -16,18 +15,14 @@ import (
 )
 
 type Server struct {
-	router  *chi.Mux
-	db      *sql.DB
-	clients *clients.Set
+	router *chi.Mux
+	db     *sql.DB
 }
 
-// New builds a Server with all dependencies wired in. The clients.Set is held on
-// the Server so handler constructors can pull only the clients they need.
-func New(db *sql.DB, clientSet *clients.Set) *Server {
+func New(db *sql.DB) *Server {
 	s := &Server{
-		router:  chi.NewRouter(),
-		db:      db,
-		clients: clientSet,
+		router: chi.NewRouter(),
+		db:     db,
 	}
 	s.routes()
 	return s
