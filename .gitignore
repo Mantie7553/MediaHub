@@ -66,7 +66,7 @@ web_modules/
 .yarn-integrity
 
 # dotenv environment variable files
-.env
+backend/.env
 .env.*
 !.env.example
 
@@ -148,6 +148,12 @@ postman/
 
 #VSCode
 .vscode
+
+#Environment files
+backend/.env
+
+#IDE files
+.idea
 
 dist-ssr
 *.local
