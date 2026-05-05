@@ -27,11 +27,11 @@ func NewHandler(db *sql.DB) *Handler {
 }
 
 /*
-	Function:	Upload
-	Purpose:	add a new media item
-	Params:
-		- w: http response writer to respond to the front end
-		- r: http request coming from the frontend
+Function:	Upload
+Purpose:	add a new media item
+Params:
+  - w: http response writer to respond to the front end
+  - r: http request coming from the frontend
 */
 func (h *Handler) Upload(w http.ResponseWriter, r *http.Request) {
 	var req uploadRequest
@@ -140,11 +140,11 @@ func (h *Handler) Upload(w http.ResponseWriter, r *http.Request) {
 }
 
 /*
-	Function:	GetAll
-	Purpose:	Get all media items from the database
-	Params:
-		- w: http response writer to respond to the front end
-		- r: http request coming from the frontend
+Function:	GetAll
+Purpose:	Get all media items from the database
+Params:
+  - w: http response writer to respond to the front end
+  - r: http request coming from the frontend
 */
 func (h *Handler) GetAll(w http.ResponseWriter, r *http.Request) {
 	// get the medias type from the URL
@@ -200,11 +200,11 @@ func (h *Handler) GetAll(w http.ResponseWriter, r *http.Request) {
 }
 
 /*
-	Function:	GetSpecific
-	Purpose:	Get a specific media item from the database
-	Params:
-		- w: http response writer to respond to the front end
-		- r: http request coming from the frontend
+Function:	GetSpecific
+Purpose:	Get a specific media item from the database
+Params:
+  - w: http response writer to respond to the front end
+  - r: http request coming from the frontend
 */
 func (h *Handler) GetSpecific(w http.ResponseWriter, r *http.Request) {
 	// get the id from the URL
@@ -284,7 +284,7 @@ func (h *Handler) GetSpecific(w http.ResponseWriter, r *http.Request) {
 
 		// also get the chapters for the manga
 		rows, err := h.db.Query(
-			`SELECT chapter_number, title, file_path, page_count, created_at FROM manga_chapters
+			`SELECT id, chapter_number, title, file_path, page_count, created_at FROM manga_chapters
 			WHERE media_item_id = $1 ORDER BY chapter_number`,
 			item.ID,
 		)
@@ -297,8 +297,8 @@ func (h *Handler) GetSpecific(w http.ResponseWriter, r *http.Request) {
 		for rows.Next() {
 			var chapter MangaChapter
 			err := rows.Scan(
-				&chapter.ChapterNumber, &chapter.Title, &chapter.FilePath,
-				&chapter.PageCount, &chapter.CreatedAt,
+				&chapter.ID, &chapter.ChapterNumber, &chapter.Title,
+				&chapter.FilePath, &chapter.PageCount, &chapter.CreatedAt,
 			)
 
 			if utils.InternalError(w, err) {
@@ -314,11 +314,11 @@ func (h *Handler) GetSpecific(w http.ResponseWriter, r *http.Request) {
 }
 
 /*
-	Function:	MangaProgress
-	Purpose:	Add progress tracking for specific manga chapters
-	Params:
-		- w: http response writer to respond to the front end
-		- r: http request coming from the frontend
+Function:	MangaProgress
+Purpose:	Add progress tracking for specific manga chapters
+Params:
+  - w: http response writer to respond to the front end
+  - r: http request coming from the frontend
 */
 func (h *Handler) MangaProgress(w http.ResponseWriter, r *http.Request) {
 	var req progressRequest
@@ -353,11 +353,11 @@ func (h *Handler) MangaProgress(w http.ResponseWriter, r *http.Request) {
 }
 
 /*
-	Function:	ServePage
-	Purpose:	Get a specific page for a manga chapter
-	Params:
-		- w: http response writer to respond to the front end
-		- r: http request coming from the frontend
+Function:	ServePage
+Purpose:	Get a specific page for a manga chapter
+Params:
+  - w: http response writer to respond to the front end
+  - r: http request coming from the frontend
 */
 func (h *Handler) ServePage(w http.ResponseWriter, r *http.Request) {
 	var fPath string
@@ -401,7 +401,7 @@ func (h *Handler) ServePage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// read the page 
+	// read the page
 	entry := reader.File[pageNum]
 
 	contentTypes := map[string]string{

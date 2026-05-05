@@ -21,11 +21,11 @@ func NewHandler(db *sql.DB) *Handler {
 }
 
 /*
-	Function:	Add
-	Purpose:	add an entry to the database for a Download Request
-	Params:
-		- w: http response writer to respond to the front end
-		- r: http request coming from the frontend
+Function:	Add
+Purpose:	add an entry to the database for a Download Request
+Params:
+  - w: http response writer to respond to the front end
+  - r: http request coming from the frontend
 */
 func (h *Handler) Add(w http.ResponseWriter, r *http.Request) {
 	var req createRequest
@@ -89,11 +89,11 @@ func (h *Handler) Add(w http.ResponseWriter, r *http.Request) {
 }
 
 /*
-	Function:	GetAll
-	Purpose:	get all download requests from the database for a specific user
-	Params:
-		- w: http response writer to respond to the front end
-		- r: http request coming from the frontend
+Function:	GetAll
+Purpose:	get all download requests from the database for a specific user
+Params:
+  - w: http response writer to respond to the front end
+  - r: http request coming from the frontend
 */
 func (h *Handler) GetAll(w http.ResponseWriter, r *http.Request) {
 	// get user info from the request
@@ -138,11 +138,11 @@ func (h *Handler) GetAll(w http.ResponseWriter, r *http.Request) {
 }
 
 /*
-	Function:	GetAllAdmin
-	Purpose:	get all download requests in the database
-	Params:
-		- w: http response writer to respond to the front end
-		- r: http request coming from the frontend
+Function:	GetAllAdmin
+Purpose:	get all download requests in the database
+Params:
+  - w: http response writer to respond to the front end
+  - r: http request coming from the frontend
 */
 func (h *Handler) GetAllAdmin(w http.ResponseWriter, r *http.Request) {
 	items := []downloadRequestResponse{}
@@ -184,11 +184,11 @@ func (h *Handler) GetAllAdmin(w http.ResponseWriter, r *http.Request) {
 }
 
 /*
-	Function:	Approve
-	Purpose:	Approve a download request as an admin
-	Params:
-		- w: http response writer to respond to the front end
-		- r: http request coming from the frontend
+Function:	Approve
+Purpose:	Approve a download request as an admin
+Params:
+  - w: http response writer to respond to the front end
+  - r: http request coming from the frontend
 */
 func (h *Handler) Approve(w http.ResponseWriter, r *http.Request) {
 	// get the request id from the URL parameters
@@ -196,8 +196,8 @@ func (h *Handler) Approve(w http.ResponseWriter, r *http.Request) {
 
 	// update the download request with status "approved" and the time it was updated
 	var requestThingId string
-	var mediaItemId string
-	var sourceURL string
+	var mediaItemId sql.NullString
+	var sourceURL sql.NullString
 	err := h.db.QueryRow(
 		`UPDATE download_requests
 		SET status = 'approved', resolved_at = NOW()
@@ -221,7 +221,7 @@ func (h *Handler) Approve(w http.ResponseWriter, r *http.Request) {
 	err = h.db.QueryRow(
 		`SELECT type, external_id FROM media_items
 		WHERE id = $1`,
-		mediaItemId,
+		mediaItemId.String,
 	).Scan(&mediaType, &externalID)
 
 	if utils.InternalError(w, err) {
@@ -229,7 +229,7 @@ func (h *Handler) Approve(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// start the download
-	_, err = downloader.Dispatch(h.db, requestThingId, mediaItemId, sourceURL, mediaType, externalID)
+	_, err = downloader.Dispatch(h.db, requestThingId, mediaItemId.String, sourceURL.String, mediaType, externalID)
 
 	if utils.InternalError(w, err) {
 		return
@@ -240,11 +240,11 @@ func (h *Handler) Approve(w http.ResponseWriter, r *http.Request) {
 }
 
 /*
-	Function:	Reject
-	Purpose:	Reject a download request as an admin
-	Params:
-		- w: http response writer to respond to the front end
-		- r: http request coming from the frontend
+Function:	Reject
+Purpose:	Reject a download request as an admin
+Params:
+  - w: http response writer to respond to the front end
+  - r: http request coming from the frontend
 */
 func (h *Handler) Reject(w http.ResponseWriter, r *http.Request) {
 	var req rejectRequest

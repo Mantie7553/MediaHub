@@ -3,7 +3,10 @@ package downloader
 import (
 	"bufio"
 	"database/sql"
+	"io/fs"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -94,6 +97,81 @@ func Run(db *sql.DB, jobID string, mediaItemID string) {
 	db.Exec(`UPDATE download_jobs 
         SET status = 'complete', progress_pct = 100, completed_at = NOW()
         WHERE id = $1`, jobID)
+}
+
+func RunMangal(db *sql.DB, jobID string, mediaItemID string, sourceURL string, dest string) {
+	row := db.QueryRow(`
+        UPDATE download_jobs 
+        SET status = 'downloading', started_at = NOW()
+        WHERE id = $1
+        RETURNING source_url, destination_path`,
+		jobID,
+	)
+
+	if row.Err() != nil {
+		markFailed(db, jobID, row.Err().Error())
+		return
+	}
+
+	var mangaTitle string
+	err := db.QueryRow(`SELECT title FROM media_items WHERE id = $1`, mediaItemID).Scan(&mangaTitle)
+
+	if err != nil {
+		markFailed(db, jobID, err.Error())
+		return
+	}
+
+	mangalPath := os.Getenv("MANGAL_PATH")
+	if mangalPath == "" {
+		mangalPath = "mangal"
+	}
+
+	cmd := exec.Command(mangalPath, "inline",
+		"-q", mangaTitle,
+		"-m", "0",
+		"-c", "all",
+		"-d",
+		"-S", "Mangadex",
+	)
+
+	cmd.Env = append(os.Environ(),
+		"MANGAL_DOWNLOADER_PATH="+dest,
+		"MANGAL_FORMATS_USE=cbz",
+	)
+
+	if err := cmd.Run(); err != nil {
+		markFailed(db, jobID, err.Error())
+		return
+	}
+
+	err = filepath.WalkDir(dest, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() || strings.ToLower(filepath.Ext(path)) != ".cbz" {
+			return nil
+		}
+
+		base := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
+		chapterNum, _ := strconv.ParseFloat(strings.TrimSpace(strings.ToLower(strings.ReplaceAll(base, "chapter", ""))), 64)
+
+		db.Exec(
+			`INSERT INTO manga_chapters (media_item_id, chapter_number, file_path)
+			VALUES ($1, $2, $3)
+			ON CONFLICT DO NOTHING`,
+			mediaItemID, chapterNum, path,
+		)
+		return nil
+	})
+
+	if err != nil {
+		markFailed(db, jobID, err.Error())
+		return
+	}
+
+	db.Exec(`UPDATE download_jobs 
+		SET status = 'complete', progress_pct = 100, completed_at = NOW()
+		WHERE id = $1`, jobID)
 }
 
 func markFailed(db *sql.DB, jobID string, message string) {

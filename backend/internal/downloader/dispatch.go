@@ -10,15 +10,15 @@ import (
 )
 
 /*
-	Function:	Dispatch
-	Purpose:	Handle where and how media will be downloaded
-	Params:
-		- db: a connection to the database
-		- requestID: the id from the incoming request
-		- mediaItemID: the id of the media to be downloaded
-		- sourceURL: the url the media is coming from
-		- mediaType: the type of media to download
-		- externalID: the id from the external API/database (optional)
+Function:	Dispatch
+Purpose:	Handle where and how media will be downloaded
+Params:
+  - db: a connection to the database
+  - requestID: the id from the incoming request
+  - mediaItemID: the id of the media to be downloaded
+  - sourceURL: the url the media is coming from
+  - mediaType: the type of media to download
+  - externalID: the id from the external API/database (optional)
 */
 func Dispatch(db *sql.DB, requestID string, mediaItemID string,
 	sourceURL string, mediaType string, externalID *string) (string, error) {
@@ -37,6 +37,9 @@ func Dispatch(db *sql.DB, requestID string, mediaItemID string,
 	case "music_track":
 		dest = mediaRoot + "/Music/"
 		handler = "ytdlp"
+	case "manga":
+		dest = mediaRoot + "/Manga/"
+		handler = "mangal"
 	default:
 		dest = mediaRoot + "/Downloads/"
 		handler = "ytdlp"
@@ -52,7 +55,7 @@ func Dispatch(db *sql.DB, requestID string, mediaItemID string,
 	).Scan(&jobID)
 
 	if err != nil {
-		return "", fmt.Errorf("internal server error")
+		return "", fmt.Errorf("insert job failed: %w", err)
 	}
 
 	// handle each of the different download clients
@@ -106,6 +109,9 @@ func Dispatch(db *sql.DB, requestID string, mediaItemID string,
 			VALUES ($1, $2)`,
 			mediaItemID, movieID,
 		)
+
+	case "mangal":
+		go RunMangal(db, jobID, mediaItemID, sourceURL, dest)
 
 	// if it is not any of the above try downloaing it with ytdlp
 	default:
