@@ -45,11 +45,14 @@ export default function MangaReader() {
         return () => { if (objectUrl) URL.revokeObjectURL(objectUrl) }
     }, [currentPage])
 
-
+    if (loading) return <div className="flex justify-center p-10"><span className="loading loading-spinner loading-lg"></span></div>
+    if (error) return <div className="alert alert-error">{error}</div>
+    
     return <div>
         <img src={imageSrc} />
         <div className="flex flex-gap-2">
         <button onClick={handlePageDown} disabled={currentPage === 0} className="btn btn-neutral">Prev</button>
+        <p className={currentPage !== totalPages ? "text-neutral-content" : ""}>{currentPage} / <strong>{totalPages}</strong></p>
         <button onClick={handlePageUp} disabled={currentPage >= totalPages - 1} className="btn btn-neutral">Next</button>
         </div>
     </div>
