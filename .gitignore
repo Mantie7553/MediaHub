@@ -67,6 +67,7 @@ web_modules/
 
 # dotenv environment variable files
 backend/.env
+*.env
 .env.*
 !.env.example
 
@@ -149,9 +150,6 @@ postman/
 #VSCode
 .vscode
 
-#Environment files
-backend/.env
-
 #IDE files
 .idea
 
@@ -161,7 +159,6 @@ dist-ssr
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
-.idea
 .DS_Store
 *.suo
 *.ntvs*
