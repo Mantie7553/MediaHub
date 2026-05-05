@@ -11,6 +11,15 @@ export default function MangaReader() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
 
+    function handlePageUp() {
+        setCurrentPage( currentPage - 1 > 0 ? currentPage - 1 : currentPage)
+    }
+
+    function handlePageDown() {
+        setCurrentPage( currentPage + 1 < totalPages ? currentPage + 1 : currentPage)
+    }
+
+    // get the chapter
     useEffect(() => {
         setLoading(true)
         api.get(`/media/${id}`)
@@ -24,6 +33,7 @@ export default function MangaReader() {
         .finally(() => setLoading(false))
     }, [])
 
+    // get the specific page
     useEffect(() => {
         let objectUrl = null;
         api.get(`/manga/${id}/chapters/${chapterId}/pages/${currentPage}`, { responseType: 'blob' })
@@ -38,7 +48,9 @@ export default function MangaReader() {
 
     return <div>
         <img src={imageSrc} />
-        <button onClick={() => setCurrentPage(p => p - 1)} disabled={currentPage === 0}>Prev</button>
-        <button onClick={() => setCurrentPage(p => p + 1)} disabled={currentPage >= totalPages - 1}>Next</button>
+        <div className="flex flex-gap-2">
+        <button onClick={handlePageDown} disabled={currentPage === 0} className="btn btn-neutral">Prev</button>
+        <button onClick={handlePageUp} disabled={currentPage >= totalPages - 1} className="btn btn-neutral">Next</button>
+        </div>
     </div>
 }
