@@ -26,6 +26,9 @@ type uploadRequest struct {
 	Artist      string `json:"artist"`
 	TrackNumber *int   `json:"track_number"`
 	DurationSec *int   `json:"duration_secs"`
+
+	// manga
+	TotalChapters *int `json:"total_chapters"`
 }
 
 type progressRequest struct {

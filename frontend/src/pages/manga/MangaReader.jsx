@@ -12,11 +12,11 @@ export default function MangaReader() {
     const [error, setError] = useState("");
 
     function handlePageUp() {
-        setCurrentPage( currentPage - 1 > 0 ? currentPage - 1 : currentPage)
+        setCurrentPage(prev => prev + 1 < totalPages ? prev + 1 : prev)
     }
 
     function handlePageDown() {
-        setCurrentPage( currentPage + 1 < totalPages ? currentPage + 1 : currentPage)
+        setCurrentPage(prev => prev - 1 >= 0 ? prev - 1 : prev)
     }
 
     // get the chapter
@@ -52,7 +52,7 @@ export default function MangaReader() {
         <img src={imageSrc} />
         <div className="flex flex-gap-2">
         <button onClick={handlePageDown} disabled={currentPage === 0} className="btn btn-neutral">Prev</button>
-        <p className={currentPage !== totalPages ? "text-neutral-content" : ""}>{currentPage} / <strong>{totalPages}</strong></p>
+        <p className={currentPage !== totalPages ? "text-neutral-content" : ""}>{currentPage + 1} / <strong>{totalPages}</strong></p>
         <button onClick={handlePageUp} disabled={currentPage >= totalPages - 1} className="btn btn-neutral">Next</button>
         </div>
     </div>

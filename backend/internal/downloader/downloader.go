@@ -1,6 +1,7 @@
 package downloader
 
 import (
+	"archive/zip"
 	"bufio"
 	"database/sql"
 	"io/fs"
@@ -139,12 +140,36 @@ func RunMangal(db *sql.DB, jobID string, mediaItemID string, sourceURL string, d
 		"MANGAL_FORMATS_USE=cbz",
 	)
 
-	if err := cmd.Run(); err != nil {
+	_, err = cmd.CombinedOutput()
+	if err != nil {
 		markFailed(db, jobID, err.Error())
 		return
 	}
 
-	err = filepath.WalkDir(dest, func(path string, d fs.DirEntry, err error) error {
+	// find the most recently modified directory
+	entries, _ := os.ReadDir(dest)
+	var mangaDir string
+	var newestTime int64
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		info, err := e.Info()
+		if err != nil {
+			continue
+		}
+		if info.ModTime().UnixNano() > newestTime {
+			newestTime = info.ModTime().UnixNano()
+			mangaDir = filepath.Join(dest, e.Name())
+		}
+	}
+
+	if mangaDir == "" {
+		markFailed(db, jobID, "could not find downloaded manga directory")
+		return
+	}
+
+	err = filepath.WalkDir(mangaDir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -153,13 +178,31 @@ func RunMangal(db *sql.DB, jobID string, mediaItemID string, sourceURL string, d
 		}
 
 		base := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
-		chapterNum, _ := strconv.ParseFloat(strings.TrimSpace(strings.ToLower(strings.ReplaceAll(base, "chapter", ""))), 64)
+		chapterNum := 0.0
+		if strings.HasPrefix(base, "[") {
+			end := strings.Index(base, "]")
+			if end > 1 {
+				chapterNum, _ = strconv.ParseFloat(strings.TrimSpace(base[1:end]), 64)
+			}
+		}
+
+		r, err := zip.OpenReader(path)
+		pageCount := 0
+		if err == nil {
+			for _, f := range r.File {
+				ext := strings.ToLower(filepath.Ext(f.Name))
+				if ext == ".jpg" || ext == ".jpeg" || ext == ".png" || ext == ".webp" {
+					pageCount++
+				}
+			}
+			r.Close()
+		}
 
 		db.Exec(
-			`INSERT INTO manga_chapters (media_item_id, chapter_number, file_path)
-			VALUES ($1, $2, $3)
+			`INSERT INTO manga_chapters (media_item_id, chapter_number, file_path, page_count)
+			VALUES ($1, $2, $3, $4)
 			ON CONFLICT DO NOTHING`,
-			mediaItemID, chapterNum, path,
+			mediaItemID, chapterNum, path, pageCount,
 		)
 		return nil
 	})

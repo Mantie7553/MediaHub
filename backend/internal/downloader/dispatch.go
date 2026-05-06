@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 
 	"github.com/Mantie7553/MediaHub/backend/internal/arr"
@@ -29,19 +30,19 @@ func Dispatch(db *sql.DB, requestID string, mediaItemID string,
 	// set where to install media to and what will handle the downloading
 	switch mediaType {
 	case "anime":
-		dest = mediaRoot + "/TV Shows/"
+		dest = filepath.Join(mediaRoot, "TV Shows")
 		handler = "sonarr"
 	case "movie":
-		dest = mediaRoot + "/Movies/"
+		dest = filepath.Join(mediaRoot, "Movies")
 		handler = "radarr"
 	case "music_track":
-		dest = mediaRoot + "/Music/"
+		dest = filepath.Join(mediaRoot, "Music")
 		handler = "ytdlp"
 	case "manga":
-		dest = mediaRoot + "/Manga/"
+		dest = filepath.Join(mediaRoot, "Manga")
 		handler = "mangal"
 	default:
-		dest = mediaRoot + "/Downloads/"
+		dest = filepath.Join(mediaRoot, "Downloads")
 		handler = "ytdlp"
 	}
 

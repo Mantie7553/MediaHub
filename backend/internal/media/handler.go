@@ -122,6 +122,15 @@ func (h *Handler) Upload(w http.ResponseWriter, r *http.Request) {
 			utils.NullInt(req.DurationSec),
 			pq.Array(req.Genres),
 		)
+	case "manga":
+		_, err = tx.Exec(
+			`INSERT INTO manga_metadata (media_item_id, total_chapters, genres, status)
+         VALUES ($1, $2, $3, $4)`,
+			mediaID,
+			utils.NullInt(req.TotalChapters),
+			pq.Array(req.Genres),
+			utils.NullString(req.Status),
+		)
 	default:
 		utils.Error(w, http.StatusBadRequest, "invalid media type, must be one of: anime, movie, music_track")
 		return

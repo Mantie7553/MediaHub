@@ -84,6 +84,18 @@ func (h *Handler) Add(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if autoApproved {
+		var mediaType string
+		var externalID *string
+		err = h.db.QueryRow(
+			`SELECT type, external_id FROM media_items WHERE id = $1`,
+			req.MediaItemId,
+		).Scan(&mediaType, &externalID)
+		if err == nil {
+			downloader.Dispatch(h.db, requestId, req.MediaItemId, req.SourceUrl, mediaType, externalID)
+		}
+	}
+
 	// return the id of the new request
 	utils.JSON(w, map[string]string{"id": requestId}, http.StatusCreated)
 }
