@@ -41,3 +41,11 @@ export function mediaStatusBadge(status) {
         default: return "badge-neutral"
     }
 }
+
+export function mangaStatus(status) {
+    switch(status) {
+        case "ongoing": return "status-info"
+        case "completed": return "status-success"
+        case "hiatus": return "status-warning"
+    }
+}
