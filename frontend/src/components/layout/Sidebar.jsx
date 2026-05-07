@@ -24,7 +24,7 @@ export default function Sidebar() {
             <ul className="menu flex-1">
                 <NavItem path="/" title="Dashboard"/>
                 <NavItem path="/downloads" title="Downloads"/>
-                <NavItem path="/media" title="Media"/>
+                <NavItem path="/discover" title="Discover"/>
                 <NavItem path="/manga" title="Manga" />
                 <NavItem path="/settings" title="Settings"/>
             </ul>

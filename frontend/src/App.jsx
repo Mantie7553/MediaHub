@@ -6,6 +6,7 @@ import LoginPage from './pages/login/LoginPage'
 import ProtectedRoute from './components/layout/ProtectedRoute'
 import SettingsPage from './pages/settings/SettingsPage'
 import { MangaLibraryPage, MangaViewPage, MangaReader } from './pages/manga'
+import Discover from './pages/discover/Discover'
 
 function App() {
   return (
@@ -15,7 +16,7 @@ function App() {
         <Route element={<ProtectedRoute><Layout><Outlet /></Layout></ProtectedRoute>}>
           <Route path="/" element={<DashboardPage/>} />
           <Route path="/downloads" element={<DownloadsPage />} />
-          <Route path="/media" element={<div>Media</div>} />
+          <Route path="/discover" element={<Discover />} />
           <Route path="/manga" element={<MangaLibraryPage/>}/>
           <Route path="/manga/:id" element={<MangaViewPage/>}/>
           <Route path='manga/:id/chapters/:chapterId/read' element={<MangaReader/>} />
