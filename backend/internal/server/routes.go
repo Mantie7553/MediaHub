@@ -10,6 +10,7 @@ import (
 	"github.com/Mantie7553/MediaHub/backend/internal/lists"
 	"github.com/Mantie7553/MediaHub/backend/internal/media"
 	"github.com/Mantie7553/MediaHub/backend/internal/requests"
+	"github.com/Mantie7553/MediaHub/backend/internal/search"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
 )
@@ -34,10 +35,11 @@ func (s *Server) Start(addr string) error {
 
 func (s *Server) routes() {
 	authHandler := auth.NewHandler(s.db)
-	mediaHandler := media.NewHandler(s.db)
-	listsHandler := lists.NewHandler(s.db)
-	requestsHandler := requests.NewHandler(s.db)
 	jobsHandler := jobs.NewHandler(s.db)
+	listsHandler := lists.NewHandler(s.db)
+	mediaHandler := media.NewHandler(s.db)
+	requestsHandler := requests.NewHandler(s.db)
+	searchHandler := search.NewHandler(s.db)
 
 	s.router.Use(cors.Handler(cors.Options{
 		AllowedOrigins: []string{"http://localhost:5173"},
@@ -78,6 +80,10 @@ func (s *Server) routes() {
 
 		// Job Handler endpoints
 		r.Get("/me/jobs", jobsHandler.GetMine)
+
+		// Search Handler endpoints
+		r.Get("/search", searchHandler.Search)
+		r.Post("/search/save", searchHandler.Save)
 
 	})
 
