@@ -1,15 +1,17 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom"
 import api from "../../services/api";
+import { useMangas, usePages } from "../../hooks";
+import Loading from "../../components/states/Loading";
 
+/**
+ * This page displays a given mangas pages for reading
+ * @returns 
+ */
 export default function MangaReader() {
     const { id, chapterId } = useParams();
-    const [imageSrc, setImageSrc] = useState("");
-    const [currentPage, setCurrentPage] = useState(0);
-    const [totalPages, setTotalPages] = useState(0);
-    const [chapter, setChapter] = useState(null);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState("");
+    const { manga, totalPages, loading: mangaLoading, error: mangaError } = useMangas(id, chapterId);
+    const { currentPage, setCurrentPage, imageSrc, loading: pageLoading, error: pageError } = usePages(id, chapterId);
 
     function handlePageUp() {
         setCurrentPage(prev => prev + 1 < totalPages ? prev + 1 : prev)
@@ -19,41 +21,29 @@ export default function MangaReader() {
         setCurrentPage(prev => prev - 1 >= 0 ? prev - 1 : prev)
     }
 
-    // get the chapter
+    // allow for changing pages with key presses
     useEffect(() => {
-        setLoading(true)
-        api.get(`/media/${id}`)
-        .then(resp => {
-            setChapter(resp.data);
-            const match = resp.data.metadata.chapters?.find(c => c.id === chapterId);
-            if (match) setTotalPages(match.page_count);
+        function handleKeyDown(e) {
+            if (e.key === "ArrowRight") setCurrentPage(prev => prev + 1 < totalPages ? prev + 1 : prev);
+            if (e.key === "ArrowLeft") setCurrentPage(prev => prev - 1 >= 0 ? prev - 1 : prev);
+        }
+        window.addEventListener("keydown", handleKeyDown);
+        return () => window.removeEventListener("keydown", handleKeyDown);
+    }, [totalPages]);
 
-        })
-        .catch(err => setError(err.message))
-        .finally(() => setLoading(false))
-    }, [])
-
-    // get the specific page
-    useEffect(() => {
-        let objectUrl = null;
-        api.get(`/manga/${id}/chapters/${chapterId}/pages/${currentPage}`, { responseType: 'blob' })
-        .then(resp => {
-            objectUrl = URL.createObjectURL(resp.data);
-            setImageSrc(objectUrl);
-        })
-        .catch(err => setError(err.message));
-        return () => { if (objectUrl) URL.revokeObjectURL(objectUrl) }
-    }, [currentPage])
-
-    if (loading) return <div className="flex justify-center p-10"><span className="loading loading-spinner loading-lg"></span></div>
-    if (error) return <div className="alert alert-error">{error}</div>
+    if (mangaLoading || pageLoading) return <Loading />
+    if (mangaError || pageError) return <Error error={mangaError || pageError} />
     
-    return <div className="flex flex-col gap-4 mx-auto">
-        <img src={imageSrc} />
-        <div className="flex flex-gap-2">
-        <button onClick={handlePageDown} disabled={currentPage === 0} className="btn">Prev</button>
-        <p className={currentPage !== totalPages ? "text-neutral-content" : ""}>{currentPage + 1} / <strong>{totalPages}</strong></p>
-        <button onClick={handlePageUp} disabled={currentPage >= totalPages - 1} className="btn">Next</button>
+    return <div className="flex flex-col items-center">
+        <div className="flex-1 overflow-hidden relative">
+            <img src={imageSrc}/>
+            <div className="absolute inset-y-0 left-0 w-1/2 cursor-pointer hover:bg-black/10" onClick={handlePageDown}></div>
+            <div className="absolute inset-y-0 right-0 w-1/2 cursor-pointer hover:bg-black/10" onClick={handlePageUp}></div>
+        </div>
+        <div className="flex gap-2 items-center">
+            <button onClick={handlePageDown} disabled={currentPage === 0} className="btn">Prev</button>
+            <p className={currentPage !== totalPages ? "text-neutral-content" : ""}>{currentPage + 1} / <strong>{totalPages}</strong></p>
+            <button onClick={handlePageUp} disabled={currentPage >= totalPages - 1} className="btn">Next</button>
         </div>
     </div>
 }

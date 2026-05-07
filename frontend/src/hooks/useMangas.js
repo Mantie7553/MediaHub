@@ -7,7 +7,7 @@ import api from '../services/api'
  *  loading: if the page is loading or not, error: the error message to be displayed, refetch: function for getting the
  * data again
  */
-export default function usePages() {
+export default function useMangas(id, chapterId) {
     const [manga, setManga] = useState([]);
     const [totalPages, setTotalPages] = useState(0);
     const [loading, setLoading] = useState(true);
@@ -27,7 +27,7 @@ export default function usePages() {
 
     useEffect(() => {
         fetch(true);
-    }, [currentPage])
+    }, [])
 
     return { manga, totalPages, loading, error, refetch: fetch }
 }

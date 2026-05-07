@@ -32,8 +32,8 @@ export default function DisplayPage() {
         .finally(() => setRequesting(false))
     }
 
-    if (loading) return <div className="flex justify-center p-10"><span className="loading loading-spinner loading-lg"></span></div>
-    if (error) return <div className="alert alert-error">{error}</div>
+    if (loading) return <loading />
+    if (error) return <Error error={error} />
     if (!manga) return null
 
     return <div className="flex flex-col gap-2">
@@ -51,7 +51,7 @@ export default function DisplayPage() {
 
         <div>
             <button className="btn btn-primary" onClick={handleRequest} disabled={requesting}>
-                {requesting ? <span className="loading loading-spinner loading-sm"></span> : "Request Download"}
+                {requesting ? <loading /> : "Request Download"}
             </button>
             {requestMsg && <p className="mt-2 text-sm">{requestMsg}</p>}
         </div>

@@ -24,9 +24,9 @@ export default function DownloadsPage() {
         rejectRequest(id, notes).then(() => refetchRequests())
     }
 
-    if (rLoading || jLoading) return <div className="flex justify-center p-10"><span className="loading loading-spinner loading-lg"></span></div>
+    if (rLoading || jLoading) return <loading />
 
-    if (rError || jError) return <div className="alert alert-error">Failed to load data</div>
+    if (rError || jError) return <Error error={rError || jError} />
 
     return<div className="flex gap-10 justify-center">
         <section className="card">

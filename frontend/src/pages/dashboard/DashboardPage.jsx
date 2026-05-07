@@ -20,6 +20,8 @@ export default function DashboardPage() {
     const movies = content.filter(item => item.media_type === "movie");
     const music = content.filter(item => item.media_type === "music_track");
 
+    if (error) return <Error error={error} />
+
     return <section>
         {anime.length > 0 && <ContentList items={anime} heading="Anime" />}
         {movies.length > 0 && <ContentList items={movies} heading="Movies" />}
