@@ -12,7 +12,9 @@ type MangaAttributes struct {
 }
 
 type Title struct {
-	En string `json:"en"`
+	En   string `json:"en"`
+	JaRo string `json:"ja-ro"`
+	Ja   string `json:"ja"`
 }
 
 type MangaRelations struct {

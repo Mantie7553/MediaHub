@@ -2,7 +2,7 @@
 CREATE TYPE user_role AS ENUM ('admin', 'user');
 CREATE TYPE download_permission AS ENUM ('vetted', 'auto_approved');
 CREATE TYPE media_type AS ENUM ('anime', 'movie', 'manga', 'music_track');
-CREATE TYPE external_source AS ENUM ('anilist', 'tmdb', 'musicbrainz', 'manual');
+CREATE TYPE external_source AS ENUM ('anilist', 'tmdb', 'musicbrainz', 'manual', 'mangadex');
 CREATE TYPE anime_status AS ENUM ('airing', 'finished', 'upcoming');
 CREATE TYPE media_status AS ENUM ('watching', 'completed', 'wishlist', 'dropped', 'plan_to_watch', 'listening', 'manga_reading');
 CREATE TYPE request_status AS ENUM ('pending', 'approved', 'rejected', 'queued', 'downloading', 'complete', 'failed');

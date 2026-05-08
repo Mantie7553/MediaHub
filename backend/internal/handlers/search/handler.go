@@ -107,10 +107,17 @@ func (h *Handler) Search(w http.ResponseWriter, r *http.Request) {
 			}
 			// format entries to return
 			coverURL := fmt.Sprintf("https://uploads.mangadex.org/covers/%s/%s", m.ID, fileName)
+			title := m.Attributes.Title.En
+			if title == "" {
+				title = m.Attributes.Title.JaRo
+			}
+			if title == "" {
+				title = m.Attributes.Title.Ja
+			}
 			out = append(out, SearchResult{
 				ExternalID:     m.ID,
 				ExternalSource: "mangadex",
-				Title:          m.Attributes.Title.En,
+				Title:          title,
 				CoverImageURL:  coverURL,
 				Type:           "manga",
 			})
