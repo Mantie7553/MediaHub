@@ -59,11 +59,11 @@ Purpose:	if a string is empty change it to a nil or return the existing string
 Params:
   - s: the string we are checking
 */
-func NullString(s string) interface{} {
+func NullString(s string) *string {
 	if s == "" {
 		return nil
 	}
-	return s
+	return &s
 }
 
 /*
@@ -72,9 +72,9 @@ Purpose:	if the pointer is pointing to a null value return nil else return the v
 Params:
   - i: an int pointer for the number we are checking
 */
-func NullInt(i *int) interface{} {
+func NullInt(i *int) *int {
 	if i == nil {
 		return nil
 	}
-	return *i
+	return i
 }

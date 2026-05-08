@@ -7,6 +7,7 @@ import (
 
 	"github.com/Mantie7553/MediaHub/backend/internal/downloader"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/auth"
+	"github.com/Mantie7553/MediaHub/backend/internal/platform/logger"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/utils"
 	"github.com/go-chi/chi/v5"
 	"github.com/lib/pq"
@@ -92,7 +93,11 @@ func (h *Handler) Add(w http.ResponseWriter, r *http.Request) {
 			req.MediaItemId,
 		).Scan(&mediaType, &externalID)
 		if err == nil {
-			downloader.Dispatch(h.db, requestId, req.MediaItemId, req.SourceUrl, mediaType, externalID)
+			if _, err := downloader.Dispatch(
+				h.db, requestId, req.MediaItemId, req.SourceUrl, mediaType, externalID,
+			); err != nil {
+				logger.Error("auto-dispatch failed for REQ-%s: %s", requestId, err.Error())
+			}
 		}
 	}
 

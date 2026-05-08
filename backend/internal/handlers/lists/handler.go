@@ -55,7 +55,7 @@ func (h *Handler) Add(w http.ResponseWriter, r *http.Request) {
 			utils.Error(w, http.StatusConflict, "status already exists")
 			return
 		}
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		utils.InternalError(w, err)
 		return
 	}
 

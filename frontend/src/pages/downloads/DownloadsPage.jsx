@@ -4,6 +4,7 @@ import useRequests from "../../hooks/useRequests"
 import { approveRequest, rejectRequest } from "../../services/requestsService";
 import Format from "../../utils/format";
 import { statusBadge, statusColor } from "../../utils/status";
+import Loading from "../../components/states/Loading"
 
 /**
  * Downloads and requests page layout
@@ -24,7 +25,7 @@ export default function DownloadsPage() {
         rejectRequest(id, notes).then(() => refetchRequests())
     }
 
-    if (rLoading || jLoading) return <loading />
+    if (rLoading || jLoading) return <Loading />
 
     if (rError || jError) return <Error error={rError || jError} />
 
