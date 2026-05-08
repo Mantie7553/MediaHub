@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"io"
+	"log"
 	"net/http"
 	"path/filepath"
 	"sort"
@@ -12,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Mantie7553/MediaHub/backend/internal/clients/mangadex"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/auth"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/utils"
 	"github.com/go-chi/chi/v5"
@@ -123,14 +125,39 @@ func (h *Handler) Upload(w http.ResponseWriter, r *http.Request) {
 			pq.Array(req.Genres),
 		)
 	case "manga":
+		var (
+			status        string
+			genres        []string
+			totalChapters int
+		)
+
+		if req.ExternalID != "" {
+			client := mangadex.NewMangaDexClient("")
+			manga, err := client.GetByID(req.ExternalID)
+			if err != nil {
+				log.Printf("failed to fetch mangadex metadata for %s: %v", req.ExternalID, err)
+			} else {
+				status = manga.Attributes.Status
+				for _, tag := range manga.Attributes.Tags {
+					if tag.Attributes.Group == "genre" {
+						genres = append(genres, tag.Attributes.Name.En)
+					}
+				}
+				if n, err := strconv.Atoi(manga.Attributes.LastChapter); err == nil {
+					totalChapters = n
+				}
+			}
+		}
+
 		_, err = tx.Exec(
 			`INSERT INTO manga_metadata (media_item_id, total_chapters, genres, status)
-         VALUES ($1, $2, $3, $4)`,
+			VALUES ($1, $2, $3, $4)`,
 			mediaID,
-			utils.NullInt(req.TotalChapters),
-			pq.Array(req.Genres),
-			utils.NullString(req.Status),
+			utils.NullInt(&totalChapters),
+			pq.Array(genres),
+			utils.NullString(status),
 		)
+
 	default:
 		utils.Error(w, http.StatusBadRequest, "invalid media type, must be one of: anime, movie, music_track")
 		return

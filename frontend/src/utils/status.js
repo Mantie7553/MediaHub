@@ -42,10 +42,10 @@ export function mediaStatusBadge(status) {
     }
 }
 
-export function mangaStatus(status) {
+export function mangaBadge(status) {
     switch(status) {
-        case "ongoing": return "status-info"
-        case "completed": return "status-success"
-        case "hiatus": return "status-warning"
+        case "ongoing": return "badge-info"
+        case "completed": return "badge-success"
+        case "hiatus": return "badge-warning"
     }
 }

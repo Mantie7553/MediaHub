@@ -7,8 +7,10 @@ type Manga struct {
 }
 
 type MangaAttributes struct {
-	Title  Title  `json:"title"`
-	Status string `json:"status"`
+	Title       Title  `json:"title"`
+	Status      string `json:"status"`
+	Tags        []Tag  `json:"tags"`
+	LastChapter string `json:"lastChapter"`
 }
 
 type Title struct {
@@ -24,4 +26,17 @@ type MangaRelations struct {
 
 type RelationAttributes struct {
 	FileName string `json:"fileName"`
+}
+
+type Tag struct {
+	Attributes TagAttributes `json:"attributes"`
+}
+
+type TagAttributes struct {
+	Name  Name   `json:"name"`
+	Group string `json:"group"`
+}
+
+type Name struct {
+	En string `json:"en"`
 }

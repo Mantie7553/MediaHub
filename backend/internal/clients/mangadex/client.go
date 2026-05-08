@@ -56,6 +56,7 @@ func (c *MangaDexClient) Search(query string) ([]Manga, error) {
 	params.Set("title", query)
 	params.Set("limit", "20")
 	params.Add("includes[]", "cover_art")
+	params.Add("includes[]", "tag")
 
 	req, err := http.NewRequest("GET", c.config.BaseURL+"/manga?"+params.Encode(), nil)
 	if err != nil {
@@ -92,6 +93,7 @@ func (c *MangaDexClient) Trending() ([]Manga, error) {
 	params.Add("order[followedCount]", "desc")
 	params.Set("limit", "20")
 	params.Add("includes[]", "cover_art")
+	params.Add("includes[]", "tag")
 
 	req, err := http.NewRequest("GET", c.config.BaseURL+"/manga?"+params.Encode(), nil)
 	if err != nil {
@@ -117,4 +119,38 @@ func (c *MangaDexClient) Trending() ([]Manga, error) {
 	}
 
 	return result.Data, nil
+}
+
+/*
+Function:	GetByID
+Purpose:	Fetch a single MangaDex entry by its external (MangaDex) id
+Params:
+  - id: MangaDex's ID for the manga entry
+*/
+func (c *MangaDexClient) GetByID(id string) (*Manga, error) {
+	req, err := http.NewRequest("GET", c.config.BaseURL+"/manga/"+id+"?includes[]=tag", nil)
+
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		return nil, fmt.Errorf("mangadex returned %d", resp.StatusCode)
+	}
+
+	var result struct {
+		Data Manga `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	return &result.Data, nil
 }

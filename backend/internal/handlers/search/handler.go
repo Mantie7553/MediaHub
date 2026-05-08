@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/Mantie7553/MediaHub/backend/internal/clients/mangadex"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/auth"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/utils"
+	"github.com/lib/pq"
 )
 
 type Handler struct {
@@ -172,6 +174,46 @@ func (h *Handler) Save(w http.ResponseWriter, r *http.Request) {
 	).Scan(&mediaItemID)
 	if utils.InternalError(w, err) {
 		return
+	}
+
+	if req.Type == "manga" && req.ExternalSource == "mangadex" {
+		var (
+			status        string
+			genres        []string
+			totalChapters int
+		)
+
+		client := mangadex.NewMangaDexClient("")
+		manga, err := client.GetByID(req.ExternalID)
+		if err != nil {
+			log.Printf("failed to fetch mangadex metadata for %s: %v", req.ExternalID, err)
+		} else {
+			status = manga.Attributes.Status
+			for _, tag := range manga.Attributes.Tags {
+				if tag.Attributes.Group == "genre" {
+					genres = append(genres, tag.Attributes.Name.En)
+				}
+			}
+			if n, err := strconv.Atoi(manga.Attributes.LastChapter); err == nil {
+				totalChapters = n
+			}
+		}
+
+		_, err = h.db.Exec(
+			`INSERT INTO manga_metadata (media_item_id, total_chapters, genres, status)
+			VALUES ($1, $2, $3, $4)
+			ON CONFLICT (media_item_id) DO UPDATE SET
+			total_chapters = EXCLUDED.total_chapters,
+			genres = EXCLUDED.genres,
+			status = EXCLUDED.status`,
+			mediaItemID,
+			utils.NullInt(&totalChapters),
+			pq.Array(genres),
+			utils.NullString(status),
+		)
+		if utils.InternalError(w, err) {
+			return
+		}
 	}
 
 	// add to the user's list if requested
