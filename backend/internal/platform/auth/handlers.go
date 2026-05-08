@@ -6,30 +6,30 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/Mantie7553/MediaHub/backend/internal/utils"
+	"github.com/Mantie7553/MediaHub/backend/internal/platform/utils"
 )
 
 /*
-	db: A connection to the database
+db: A connection to the database
 */
 type Handler struct {
 	db *sql.DB
 }
 
 /*
-	Function:	NewHandler
-	Purpose:	Create a new handler for auth endpoints
-	Params:
-		- db: a connection to the database
+Function:	NewHandler
+Purpose:	Create a new handler for auth endpoints
+Params:
+  - db: a connection to the database
 */
 func NewHandler(db *sql.DB) *Handler {
 	return &Handler{db: db}
 }
 
 /*
-	Username: the new user name
-	Email: an email
-	Password: raw password
+Username: the new user name
+Email: an email
+Password: raw password
 */
 type registerRequest struct {
 	Username string `json:"username"`
@@ -38,8 +38,8 @@ type registerRequest struct {
 }
 
 /*
-	Email: hopefully an existing email
-	Password: raw password
+Email: hopefully an existing email
+Password: raw password
 */
 type loginRequest struct {
 	Email    string `json:"email"`
@@ -47,8 +47,8 @@ type loginRequest struct {
 }
 
 /*
-	Token: JWT token used for authorization
-	RefreshToken: Token used to refresh a JWT when it times out
+Token: JWT token used for authorization
+RefreshToken: Token used to refresh a JWT when it times out
 */
 type authResponse struct {
 	Token        string `json:"token"`
@@ -56,11 +56,11 @@ type authResponse struct {
 }
 
 /*
-	Function:	Register
-	Purpose:	Handle new user registration
-	Params:
-		- w: http response writer to respond to the front end
-		- r: http request coming from the frontend
+Function:	Register
+Purpose:	Handle new user registration
+Params:
+  - w: http response writer to respond to the front end
+  - r: http request coming from the frontend
 */
 func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	// Decode the incoming request, check that the structure is correct
@@ -95,7 +95,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// set the JWT 
+	// set the JWT
 	token, err := GenerateToken(userID, "user")
 	if utils.InternalError(w, err) {
 		return
@@ -112,11 +112,11 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 }
 
 /*
-	Function:	Login
-	Purpose:	Handle user login
-	Params:
-		- w: http response writer to respond to the front end
-		- r: http request coming from the frontend
+Function:	Login
+Purpose:	Handle user login
+Params:
+  - w: http response writer to respond to the front end
+  - r: http request coming from the frontend
 */
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	// decode the incoming request, check that the structure is correct
@@ -160,11 +160,11 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 }
 
 /*
-	Function:	Refresh
-	Purpose:	Handle refreshing the JWT
-	Params:
-		- w: http response writer to respond to the front end
-		- r: http request coming from the frontend
+Function:	Refresh
+Purpose:	Handle refreshing the JWT
+Params:
+  - w: http response writer to respond to the front end
+  - r: http request coming from the frontend
 */
 func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 	var req struct {
@@ -216,11 +216,11 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 }
 
 /*
-	Function:	Logout
-	Purpose:	Handle logging out a user (removing tokens)
-	Params:
-		- w: http response writer to respond to the front end
-		- r: http request coming from the frontend
+Function:	Logout
+Purpose:	Handle logging out a user (removing tokens)
+Params:
+  - w: http response writer to respond to the front end
+  - r: http request coming from the frontend
 */
 func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 	var req struct {
@@ -246,11 +246,11 @@ func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 }
 
 /*
-	Function:	Me
-	Purpose:	Get the current users information from the database
-	Params:
-		- w: http response writer to respond to the front end
-		- r: http request coming from the frontend
+Function:	Me
+Purpose:	Get the current users information from the database
+Params:
+  - w: http response writer to respond to the front end
+  - r: http request coming from the frontend
 */
 func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
 	// get the user information from the request
@@ -267,7 +267,7 @@ func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// return the user information 
+	// return the user information
 	utils.JSON(w, map[string]string{
 		"id":       user.UserID,
 		"username": username,

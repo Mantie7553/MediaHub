@@ -7,10 +7,10 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/Mantie7553/MediaHub/backend/internal/anilist"
-	"github.com/Mantie7553/MediaHub/backend/internal/auth"
-	"github.com/Mantie7553/MediaHub/backend/internal/mangadex"
-	"github.com/Mantie7553/MediaHub/backend/internal/utils"
+	"github.com/Mantie7553/MediaHub/backend/internal/clients/anilist"
+	"github.com/Mantie7553/MediaHub/backend/internal/clients/mangadex"
+	"github.com/Mantie7553/MediaHub/backend/internal/platform/auth"
+	"github.com/Mantie7553/MediaHub/backend/internal/platform/utils"
 )
 
 type Handler struct {

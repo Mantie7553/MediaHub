@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/Mantie7553/MediaHub/backend/internal/auth"
 	"github.com/Mantie7553/MediaHub/backend/internal/downloader"
-	"github.com/Mantie7553/MediaHub/backend/internal/utils"
+	"github.com/Mantie7553/MediaHub/backend/internal/platform/auth"
+	"github.com/Mantie7553/MediaHub/backend/internal/platform/utils"
 )
 
 type Handler struct {
@@ -19,11 +19,11 @@ func NewHandler(db *sql.DB) *Handler {
 }
 
 /*
-	Function:	GetAll
-	Purpose:	Get a list of all jobs
-	Params:
-		- w: http response writer to respond to the front end
-		- r: http request coming from the frontend
+Function:	GetAll
+Purpose:	Get a list of all jobs
+Params:
+  - w: http response writer to respond to the front end
+  - r: http request coming from the frontend
 */
 func (h *Handler) GetAll(w http.ResponseWriter, r *http.Request) {
 	items := []JobResponse{}
@@ -66,11 +66,11 @@ func (h *Handler) GetAll(w http.ResponseWriter, r *http.Request) {
 }
 
 /*
-	Function:	GetMine
-	Purpose:	Get a list of jobs for a specific user
-	Params:
-		- w: http response writer to respond to the front end
-		- r: http request coming from the frontend
+Function:	GetMine
+Purpose:	Get a list of jobs for a specific user
+Params:
+  - w: http response writer to respond to the front end
+  - r: http request coming from the frontend
 */
 func (h *Handler) GetMine(w http.ResponseWriter, r *http.Request) {
 	user := auth.GetUser(r)
@@ -114,11 +114,11 @@ func (h *Handler) GetMine(w http.ResponseWriter, r *http.Request) {
 }
 
 /*
-	Function:	Create
-	Purpose:	Add a new job to the database and start the download
-	Params:
-		- w: http response writer to respond to the front end
-		- r: http request coming from the frontend
+Function:	Create
+Purpose:	Add a new job to the database and start the download
+Params:
+  - w: http response writer to respond to the front end
+  - r: http request coming from the frontend
 */
 func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	var req JobRequest

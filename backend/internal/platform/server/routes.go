@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/Mantie7553/MediaHub/backend/internal/auth"
-	"github.com/Mantie7553/MediaHub/backend/internal/jobs"
-	"github.com/Mantie7553/MediaHub/backend/internal/lists"
-	"github.com/Mantie7553/MediaHub/backend/internal/media"
-	"github.com/Mantie7553/MediaHub/backend/internal/requests"
-	"github.com/Mantie7553/MediaHub/backend/internal/search"
+	"github.com/Mantie7553/MediaHub/backend/internal/handlers/jobs"
+	"github.com/Mantie7553/MediaHub/backend/internal/handlers/lists"
+	"github.com/Mantie7553/MediaHub/backend/internal/handlers/media"
+	"github.com/Mantie7553/MediaHub/backend/internal/handlers/requests"
+	"github.com/Mantie7553/MediaHub/backend/internal/handlers/search"
+	"github.com/Mantie7553/MediaHub/backend/internal/platform/auth"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
 )

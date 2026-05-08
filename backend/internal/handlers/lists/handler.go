@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/Mantie7553/MediaHub/backend/internal/auth"
-	"github.com/Mantie7553/MediaHub/backend/internal/utils"
+	"github.com/Mantie7553/MediaHub/backend/internal/platform/auth"
+	"github.com/Mantie7553/MediaHub/backend/internal/platform/utils"
 	"github.com/go-chi/chi/v5"
 	"github.com/lib/pq"
 )
@@ -20,11 +20,11 @@ func NewHandler(db *sql.DB) *Handler {
 }
 
 /*
-	Function:	Add
-	Purpose:	Add a new entry to the user_media_status table
-	Params:
-		- w: http response writer to respond to the front end
-		- r: http request coming from the frontend
+Function:	Add
+Purpose:	Add a new entry to the user_media_status table
+Params:
+  - w: http response writer to respond to the front end
+  - r: http request coming from the frontend
 */
 func (h *Handler) Add(w http.ResponseWriter, r *http.Request) {
 	var req rateRequest
@@ -64,11 +64,11 @@ func (h *Handler) Add(w http.ResponseWriter, r *http.Request) {
 }
 
 /*
-	Function:	GetAll
-	Purpose:	Get all of the media currently in the database
-	Params:
-		- w: http response writer to respond to the front end
-		- r: http request coming from the frontend
+Function:	GetAll
+Purpose:	Get all of the media currently in the database
+Params:
+  - w: http response writer to respond to the front end
+  - r: http request coming from the frontend
 */
 func (h *Handler) GetAll(w http.ResponseWriter, r *http.Request) {
 	user := auth.GetUser(r)
@@ -120,11 +120,11 @@ func (h *Handler) GetAll(w http.ResponseWriter, r *http.Request) {
 }
 
 /*
-	Function:	Update
-	Purpose:	Handle updating the status for a given media item for a specific user
-	Params:
-		- w: http response writer to respond to the front end
-		- r: http request coming from the frontend
+Function:	Update
+Purpose:	Handle updating the status for a given media item for a specific user
+Params:
+  - w: http response writer to respond to the front end
+  - r: http request coming from the frontend
 */
 func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	var req updateRequest
@@ -162,11 +162,11 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 }
 
 /*
-	Function:	Delete
-	Purpose:	Remove a users status for a media item
-	Params:
-		- w: http response writer to respond to the front end
-		- r: http request coming from the frontend
+Function:	Delete
+Purpose:	Remove a users status for a media item
+Params:
+  - w: http response writer to respond to the front end
+  - r: http request coming from the frontend
 */
 func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 	// get the user information from the request
@@ -196,11 +196,11 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 }
 
 /*
-	Function:	UpdateProgress
-	Purpose:	Update a users progress for a specific piece of media
-	Params:
-		- w: http response writer to respond to the front end
-		- r: http request coming from the frontend
+Function:	UpdateProgress
+Purpose:	Update a users progress for a specific piece of media
+Params:
+  - w: http response writer to respond to the front end
+  - r: http request coming from the frontend
 */
 func (h *Handler) UpdateProgress(w http.ResponseWriter, r *http.Request) {
 	var req progressRequest

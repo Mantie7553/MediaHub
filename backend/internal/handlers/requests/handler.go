@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/Mantie7553/MediaHub/backend/internal/auth"
 	"github.com/Mantie7553/MediaHub/backend/internal/downloader"
-	"github.com/Mantie7553/MediaHub/backend/internal/utils"
+	"github.com/Mantie7553/MediaHub/backend/internal/platform/auth"
+	"github.com/Mantie7553/MediaHub/backend/internal/platform/utils"
 	"github.com/go-chi/chi/v5"
 	"github.com/lib/pq"
 )

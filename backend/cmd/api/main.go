@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/Mantie7553/MediaHub/backend/internal/database"
-	"github.com/Mantie7553/MediaHub/backend/internal/server"
+	"github.com/Mantie7553/MediaHub/backend/internal/platform/database"
+	"github.com/Mantie7553/MediaHub/backend/internal/platform/server"
 	"github.com/joho/godotenv"
 )
 

@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"github.com/Mantie7553/MediaHub/backend/internal/arr"
+	"github.com/Mantie7553/MediaHub/backend/internal/clients/arr"
 )
 
 /*
