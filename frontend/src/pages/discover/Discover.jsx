@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import Loading from "../../components/states/Loading";
 import api from "../../services/api";
 import { SearchCard } from "../../components/cards";
@@ -14,11 +14,18 @@ export default function Discover() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
 
+    useEffect(() => {
+        api.get(`/search?type=${activeTab}`)
+        .then(resp => setResults(resp.data))
+        .catch(err => setError(err));
+    }, [activeTab])
+
     /**
      * Make an API request to search for some content
      * @returns 
      */
     function handleSearch() {
+        setResults([]);
         if (!query.trim()) return;
         setLoading(true);
         setError("");

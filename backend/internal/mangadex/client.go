@@ -82,3 +82,39 @@ func (c *MangaDexClient) Search(query string) ([]Manga, error) {
 
 	return result.Data, nil
 }
+
+/*
+Function:	Trending
+Purpose:	Search MangaDex for Trending Manga
+*/
+func (c *MangaDexClient) Trending() ([]Manga, error) {
+	params := url.Values{}
+	params.Add("order[followedCount]", "desc")
+	params.Set("limit", "20")
+	params.Add("includes[]", "cover_art")
+
+	req, err := http.NewRequest("GET", c.config.BaseURL+"/manga?"+params.Encode(), nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		return nil, fmt.Errorf("mangadex returned %d", resp.StatusCode)
+	}
+
+	var result struct {
+		Data []Manga `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	return result.Data, nil
+}

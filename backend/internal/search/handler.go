@@ -49,16 +49,17 @@ func (h *Handler) Search(w http.ResponseWriter, r *http.Request) {
 	mediaType := r.URL.Query().Get("type")
 	q := r.URL.Query().Get("q")
 
-	if q == "" {
-		utils.Error(w, http.StatusBadRequest, "q is required")
-		return
-	}
-
 	switch mediaType {
 	case "anime":
 		// query anilist
+		var results []anilist.Media
+		var err error
 		client := anilist.NewAnilistClient("")
-		results, err := client.Search("ANIME", q, 20)
+		if q == "" {
+			results, err = client.Trending("ANIME", 20)
+		} else {
+			results, err = client.Search("ANIME", q, 20)
+		}
 		if err != nil {
 			utils.Error(w, http.StatusInternalServerError, "search failed")
 			return
@@ -84,7 +85,13 @@ func (h *Handler) Search(w http.ResponseWriter, r *http.Request) {
 	case "manga":
 		// query mangadex
 		client := mangadex.NewMangaDexClient("")
-		results, err := client.Search(q)
+		var results []mangadex.Manga
+		var err error
+		if q == "" {
+			results, err = client.Trending()
+		} else {
+			results, err = client.Search(q)
+		}
 		if utils.InternalError(w, err) {
 			return
 		}
