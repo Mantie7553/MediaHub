@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	"github.com/Mantie7553/MediaHub/backend/internal/clients/arr"
+	"github.com/Mantie7553/MediaHub/backend/internal/platform/logger"
 )
 
 /*
@@ -58,17 +59,20 @@ func Dispatch(db *sql.DB, requestID string, mediaItemID string,
 	if err != nil {
 		return "", fmt.Errorf("insert job failed: %w", err)
 	}
+	logger.Info("Dispatched %s of type %s. Handled by %s", requestID, mediaType, handler)
 
 	// handle each of the different download clients
 	switch handler {
 	case "sonarr":
 		// needs external ID
 		if externalID == nil {
+			logger.Error("External ID is null")
 			return "", fmt.Errorf("media item has no external_id")
 		}
 
 		extIDInt, err := strconv.Atoi(*externalID)
 		if err != nil {
+			logger.Error("External ID is not a number")
 			return "", fmt.Errorf("invalid external_id")
 		}
 		// connect to sonarr and start downloading
@@ -76,6 +80,7 @@ func Dispatch(db *sql.DB, requestID string, mediaItemID string,
 		seriesID, err := sClient.AddSeries(extIDInt, 1, dest)
 
 		if err != nil {
+			logger.Error("Sonarr: %s", err.Error())
 			return "", fmt.Errorf("internal server error")
 		}
 
@@ -89,11 +94,13 @@ func Dispatch(db *sql.DB, requestID string, mediaItemID string,
 	case "radarr":
 		// needs external ID
 		if externalID == nil {
+			logger.Error("External ID is null")
 			return "", fmt.Errorf("media item has no external_id")
 		}
 
 		extIDInt, err := strconv.Atoi(*externalID)
 		if err != nil {
+			logger.Error("External ID is not a number")
 			return "", fmt.Errorf("invalid external_id")
 		}
 		// connect to radarr and start downloading
@@ -101,6 +108,7 @@ func Dispatch(db *sql.DB, requestID string, mediaItemID string,
 		movieID, err := rClient.AddMovie(extIDInt, 1, dest)
 
 		if err != nil {
+			logger.Error("Radarr: %s", err.Error())
 			return "", fmt.Errorf("internal server error")
 		}
 
@@ -114,7 +122,7 @@ func Dispatch(db *sql.DB, requestID string, mediaItemID string,
 	case "mangal":
 		go RunMangal(db, jobID, mediaItemID, sourceURL, dest)
 
-	// if it is not any of the above try downloaing it with ytdlp
+	// if it is not any of the above try downloading it with ytdlp
 	default:
 		go Run(db, jobID, mediaItemID)
 	}

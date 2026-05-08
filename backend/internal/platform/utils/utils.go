@@ -2,9 +2,9 @@ package utils
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
-	"runtime"
+
+	"github.com/Mantie7553/MediaHub/backend/internal/platform/logger"
 )
 
 /*
@@ -33,7 +33,7 @@ Params:
   - message: the message to display with the error
 */
 func Error(w http.ResponseWriter, status int, message string) {
-	fmt.Println("other error:", message)
+	logger.WarnDepth(3, "http %d: %s", status, message)
 	http.Error(w, message, status)
 }
 
@@ -46,8 +46,7 @@ Params:
 */
 func InternalError(w http.ResponseWriter, err error) bool {
 	if err != nil {
-		_, file, line, _ := runtime.Caller(1)
-		fmt.Printf("internal error at %s:%d: %v\n", file, line, err)
+		logger.ErrorDepth(3, err.Error())
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return true
 	}

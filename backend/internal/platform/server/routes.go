@@ -92,9 +92,6 @@ func (s *Server) routes() {
 		r.Use(auth.Middleware)
 		r.Use(auth.RequireAdmin)
 		r.Post("/media", mediaHandler.Upload)
-		r.Get("/admin/test", func(w http.ResponseWriter, r *http.Request) {
-			fmt.Fprintln(w, "admin only")
-		})
 		// Request Handler endpoints
 		r.Get("/requests/all", requestsHandler.GetAllAdmin)
 		r.Put("/requests/{id}/approve", requestsHandler.Approve)

@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/Mantie7553/MediaHub/backend/internal/platform/logger"
 )
 
 /*
@@ -21,6 +23,7 @@ Params:
 */
 func Run(db *sql.DB, jobID string, mediaItemID string) {
 	// 1. Mark as downloading and get source/destination
+	logger.Info("Starting job %s", jobID)
 	var sourceURL, destinationPath string
 	err := db.QueryRow(`
         UPDATE download_jobs 
@@ -49,6 +52,7 @@ func Run(db *sql.DB, jobID string, mediaItemID string) {
 	if artist != "" {
 		outputTemplate = destinationPath + "/" + artist + "/" + album + "/%(title)s.%(ext)s"
 	} else {
+		logger.Warn("Job %s missing artist information", jobID)
 		outputTemplate = destinationPath + "/%(title)s.%(ext)s"
 	}
 
@@ -95,12 +99,14 @@ func Run(db *sql.DB, jobID string, mediaItemID string) {
 		return
 	}
 
+	logger.Info("Job %s completed!", jobID)
 	db.Exec(`UPDATE download_jobs 
         SET status = 'complete', progress_pct = 100, completed_at = NOW()
         WHERE id = $1`, jobID)
 }
 
 func RunMangal(db *sql.DB, jobID string, mediaItemID string, sourceURL string, dest string) {
+	logger.Info("Mangal running job %s", jobID)
 	row := db.QueryRow(`
         UPDATE download_jobs 
         SET status = 'downloading', started_at = NOW()
@@ -171,6 +177,7 @@ func RunMangal(db *sql.DB, jobID string, mediaItemID string, sourceURL string, d
 
 	err = filepath.WalkDir(mangaDir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
+			logger.Error("WalkDir failed at %s: %s", path, err.Error())
 			return err
 		}
 		if d.IsDir() || strings.ToLower(filepath.Ext(path)) != ".cbz" {
@@ -215,9 +222,11 @@ func RunMangal(db *sql.DB, jobID string, mediaItemID string, sourceURL string, d
 	db.Exec(`UPDATE download_jobs 
 		SET status = 'complete', progress_pct = 100, completed_at = NOW()
 		WHERE id = $1`, jobID)
+	logger.Info("Mangal completed job %s", jobID)
 }
 
 func markFailed(db *sql.DB, jobID string, message string) {
+	logger.Error("JOB-%s failed: %s", jobID, message)
 	db.Exec(`UPDATE download_jobs 
         SET status = 'failed', error_message = $1, completed_at = NOW()
         WHERE id = $2`, message, jobID)
