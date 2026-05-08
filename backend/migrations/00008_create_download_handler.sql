@@ -1,7 +1,7 @@
 -- +goose NO TRANSACTION
 
 -- +goose Up
-CREATE TYPE download_handler AS ENUM ('sonarr', 'radarr', 'ytdlp');
+CREATE TYPE download_handler AS ENUM ('sonarr', 'radarr', 'mangal', 'ytdlp');
 
 ALTER TABLE download_jobs
 ADD COLUMN handler download_handler NOT NULL DEFAULT 'ytdlp';

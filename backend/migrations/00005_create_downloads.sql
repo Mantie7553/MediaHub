@@ -15,7 +15,8 @@ CREATE TABLE download_requests (
         (media_item_id IS NOT NULL AND album_id IS NULL) OR
         (album_id IS NOT NULL AND media_item_id IS NULL) OR
         (media_item_id IS NULL AND album_id IS NULL AND title_override IS NOT NULL)
-    )
+    ),
+    UNIQUE (requested_by, media_item_id)
 );
 
 CREATE TABLE download_jobs (

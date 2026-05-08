@@ -12,6 +12,8 @@ CREATE TABLE media_items (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE UNIQUE INDEX uq_media_items_external ON media_items (external_id, external_source);
+
 CREATE TABLE anime_metadata (
     media_item_id UUID PRIMARY KEY REFERENCES media_items(id) ON DELETE CASCADE,
     studio TEXT,
@@ -58,6 +60,7 @@ CREATE TABLE music_metadata (
 );
 
 -- +goose Down
+DROP INDEX uq_media_items_external;
 DROP TABLE music_metadata;
 DROP TABLE albums;
 DROP TABLE movie_metadata;

@@ -171,7 +171,7 @@ func (h *Handler) Save(w http.ResponseWriter, r *http.Request) {
 	if req.Action == "list" || req.Action == "both" {
 		_, err = h.db.Exec(
 			`INSERT INTO user_media_status (user_id, media_item_id, status)
-			VALUES ($1, $2, 'planned')
+			VALUES ($1, $2, 'plan_to_watch')
 			ON CONFLICT (user_id, media_item_id) DO NOTHING`,
 			user.UserID, mediaItemID,
 		)
@@ -185,7 +185,7 @@ func (h *Handler) Save(w http.ResponseWriter, r *http.Request) {
 		_, err = h.db.Exec(
 			`INSERT INTO download_requests (requested_by, media_item_id, status, auto_approved)
 			VALUES ($1, $2, 'pending', false)
-			ON CONFLICT DO NOTHING`,
+			ON CONFLICT (requested_by, media_item_id) DO NOTHING`,
 			user.UserID, mediaItemID,
 		)
 		if utils.InternalError(w, err) {

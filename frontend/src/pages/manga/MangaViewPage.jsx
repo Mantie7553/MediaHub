@@ -2,6 +2,7 @@ import { useEffect, useState} from "react";
 import { NavLink, useParams} from "react-router-dom";
 import api from "../../services/api";
 import { mangaStatus } from "../../utils/status";
+import Loading from "../../components/states/Loading";
 
 /**
  * Manga view page layout
@@ -32,7 +33,7 @@ export default function DisplayPage() {
         .finally(() => setRequesting(false))
     }
 
-    if (loading) return <loading />
+    if (loading) return <Loading />
     if (error) return <Error error={error} />
     if (!manga) return null
 
@@ -51,7 +52,7 @@ export default function DisplayPage() {
 
         <div>
             <button className="btn btn-primary" onClick={handleRequest} disabled={requesting}>
-                {requesting ? <loading /> : "Request Download"}
+                {requesting ? <Loading /> : "Request Download"}
             </button>
             {requestMsg && <p className="mt-2 text-sm">{requestMsg}</p>}
         </div>
