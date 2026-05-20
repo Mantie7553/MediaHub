@@ -1,79 +1,89 @@
-package musicbrainz
+package plex
 
 import (
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 	"time"
 )
 
-/*
-BaseURL: REST endpoint for MusicBrainz
-UserAgent: identifying string required by MusicBrainz etiquette
-*/
-type MusicBrainzConfig struct {
+type PlexConfig struct {
 	BaseURL   string
-	UserAgent string
+	Token     string
+	MachineID string
 }
 
-/*
-config: BaseURL and UserAgent for the MusicBrainz API
-http: pointer to the http client
-*/
-type MusicBrainzClient struct {
-	config MusicBrainzConfig
+type PlexClient struct {
+	config PlexConfig
 	http   *http.Client
 }
 
-/*
-Function:	NewMusicBrainzClient
-Purpose:	Connect with the MusicBrainz REST API
-Params:
-  - urlEnvKey: environment variable key holding the MusicBrainz URL
-  - agentEnvKey: environment variable key holding the User-Agent string
-*/
-func NewMusicBrainzClient(urlEnvKey string, agentEnvKey string) *MusicBrainzClient {
-	baseURL := os.Getenv(urlEnvKey)
-	// Public endpoint is stable; fall back when the .env var is blank.
-	if baseURL == "" {
-		baseURL = "https://musicbrainz.org/ws/2"
-	}
-	return &MusicBrainzClient{
-		config: MusicBrainzConfig{
-			BaseURL:   baseURL,
-			UserAgent: os.Getenv(agentEnvKey),
+func NewPlexClient(urlEnvKey, tokenEnvKey string) *PlexClient {
+	return &PlexClient{
+		config: PlexConfig{
+			BaseURL:   os.Getenv(urlEnvKey),
+			Token:     os.Getenv(tokenEnvKey),
+			MachineID: os.Getenv("PLEX_MACHINE_ID"),
 		},
-		http: &http.Client{Timeout: 10 * time.Second},
+		http: &http.Client{Timeout: 30 * time.Second},
 	}
 }
 
-/*
-Function:	SearchArtist
-Purpose:	Search MusicBrainz artists by name, ordered by relevance score
-Params:
-  - query: free-text artist name
-  - limit: number of results to return
-*/
-func (c *MusicBrainzClient) SearchArtist(query string, limit int) ([]Artist, error) {
-	return nil, nil
+func (c *PlexClient) GetLibraries() ([]Directory, error) {
+	req, err := http.NewRequest("GET", c.config.BaseURL+"/library/sections", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("X-Plex-Token", c.config.Token)
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var result PlexResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	return result.MediaContainer.Directory, nil
 }
 
-/*
-Function:	SearchRelease
-Purpose:	Search MusicBrainz releases (albums) by title
-Params:
-  - query: free-text release title
-  - limit: number of results to return
-*/
-func (c *MusicBrainzClient) SearchRelease(query string, limit int) ([]Release, error) {
-	return nil, nil
+func (c *PlexClient) GetPartKey(ratingKey string) (string, error) {
+	req, err := http.NewRequest("GET", c.config.BaseURL+"/library/metadata/"+ratingKey, nil)
+	if err != nil {
+		return "", err
+	}
+
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("X-Plex-Token", c.config.Token)
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	var result PlexResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", err
+	}
+
+	md := result.MediaContainer.Metadata
+	if len(md) == 0 || len(md[0].Media) == 0 || len(md[0].Media[0].Part) == 0 {
+		return "", fmt.Errorf("no part found for rating key %s", ratingKey)
+	}
+
+	return md[0].Media[0].Part[0].Key, nil
 }
 
-/*
-Function:	GetReleaseByMBID
-Purpose:	Fetch a single release with its full track listing expanded
-Params:
-  - mbid: MusicBrainz Identifier for the release
-*/
-func (c *MusicBrainzClient) GetReleaseByMBID(mbid string) (*Release, error) {
-	return nil, nil
+func (c *PlexClient) StreamURL(ratingKey string) string {
+	return fmt.Sprintf(
+		"%s/web/index.html#!/server/%s/details?key=%%2Flibrary%%2Fmetadata%%2F%s",
+		c.config.BaseURL, c.config.MachineID, ratingKey,
+	)
 }

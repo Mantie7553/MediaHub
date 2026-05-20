@@ -13,6 +13,7 @@
     "@tailwindcss/vite": "^4.2.4",
     "axios": "^1.16.0",
     "daisyui": "^5.5.19",
+    "hls.js": "^1.6.16",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
     "react-router-dom": "^7.14.2",

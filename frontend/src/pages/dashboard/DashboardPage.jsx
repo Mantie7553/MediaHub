@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import api from "../../services/api"
-import { TVCard, MovieCard, MusicCard } from "../../components/cards"
+import { TVCard, MovieCard, MusicCard, MangaCard } from "../../components/cards"
 
 /**
  * Dashboard page layout
@@ -19,13 +19,15 @@ export default function DashboardPage() {
     const anime = content.filter(item => item.media_type === "anime");
     const movies = content.filter(item => item.media_type === "movie");
     const music = content.filter(item => item.media_type === "music_track");
+    const manga = content.filter(item => item.media_type === "manga")
 
     if (error) return <Error error={error} />
 
     return <section>
-        {anime.length > 0 && <ContentList items={anime} heading="Anime" />}
-        {movies.length > 0 && <ContentList items={movies} heading="Movies" />}
-        {music.length > 0 && <ContentList items={music} heading="Music" />}
+        <ContentList items={anime} heading="Anime" />
+        <ContentList items={movies} heading="Movies" />
+        <ContentList items={manga} heading="Manga"/>
+        <ContentList items={music} heading="Music" />
     </section>
 }
 
@@ -48,6 +50,8 @@ function ContentList({items, heading}) {
                     <TVCard key={item.id} item={item} />
                     : item.media_type === "movie" ? 
                     <MovieCard key={item.id} item={item} />
+                    : item.media_type === "manga" ?
+                    <MangaCard key={item.id} item={item} />
                     : <MusicCard key={item.id} item={item} />
             })}
         </ul>

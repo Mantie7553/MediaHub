@@ -7,12 +7,16 @@ import ProtectedRoute from './components/layout/ProtectedRoute'
 import SettingsPage from './pages/settings/SettingsPage'
 import { MangaLibraryPage, MangaViewPage, MangaReader } from './pages/manga'
 import Discover from './pages/discover/Discover'
+import PlayerPage from './pages/player/PlayerPage'
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+        <Route element={<ProtectedRoute><Outlet/></ProtectedRoute>}>
+          <Route path='/watch/:id' element={<PlayerPage/>} />
+        </Route>
         <Route element={<ProtectedRoute><Layout><Outlet /></Layout></ProtectedRoute>}>
           <Route path="/" element={<DashboardPage/>} />
           <Route path="/downloads" element={<DownloadsPage />} />
