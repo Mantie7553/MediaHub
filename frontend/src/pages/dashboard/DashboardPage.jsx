@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import api from "../../services/api"
-import { TVCard, MovieCard, MusicCard, MangaCard } from "../../components/cards"
+import { Card } from "../../components/cards"
 
 /**
  * Dashboard page layout
@@ -46,13 +46,7 @@ function ContentList({items, heading}) {
         </div>
         <ul className="flex gap-2 overflow-x-auto flex-nowrap">
             {items.slice(0,10).map(item => {
-                return item.media_type === "anime" ? 
-                    <TVCard key={item.id} item={item} />
-                    : item.media_type === "movie" ? 
-                    <MovieCard key={item.id} item={item} />
-                    : item.media_type === "manga" ?
-                    <MangaCard key={item.id} item={item} />
-                    : <MusicCard key={item.id} item={item} />
+                return <Card key={item.id} item={item}/>
             })}
         </ul>
     </div>

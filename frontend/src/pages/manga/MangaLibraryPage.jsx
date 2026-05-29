@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import api from "../../services/api"
-import { MangaCard } from "../../components/cards"
+import { Card } from "../../components/cards"
 import Error from "../../components/states/Error"
 import Loading from "../../components/states/Loading"
 
@@ -27,6 +27,6 @@ export default function LibraryPage() {
     if (error) return <Error error={error} />
 
     return <ul className="flex flex-wrap gap-4 p-4">
-        {content.map(item => <MangaCard key={item.id} item={item} />)}
+        {content.map(item => <Card key={item.id} item={item} />)}
     </ul>
 }
