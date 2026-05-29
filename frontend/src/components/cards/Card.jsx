@@ -20,7 +20,7 @@ export default function Card({item}) {
                     <span>{progressLabel}</span>
                     <progress className="progress" value={progressPct} max="100"></progress>
                 </>
-            path = "/watch/"
+            path = "/anime/"
             break
         case "movie":
             info = <>

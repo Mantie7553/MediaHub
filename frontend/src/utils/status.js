@@ -49,3 +49,11 @@ export function mangaBadge(status) {
         case "hiatus": return "badge-warning"
     }
 }
+
+export function animeBadge(status) {
+    switch(status) {
+        case "airing": return "badge-info"
+        case "finished": return "badge-success"
+        case "upcoming": return "badge-warning"
+    }
+}

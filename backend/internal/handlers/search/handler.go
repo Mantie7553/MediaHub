@@ -176,6 +176,56 @@ func (h *Handler) Save(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if req.Type == "anime" && req.ExternalSource == "anilist" {
+		var (
+			studio string
+			status string
+			genres []string
+		)
+
+		client := anilist.NewAnilistClient("")
+		anilistID, convErr := strconv.Atoi(req.ExternalID)
+		if convErr != nil {
+			log.Printf("invalid anilist external_id %s: %v", req.ExternalID, convErr)
+		} else {
+			anime, fetchErr := client.GetByID(anilistID)
+			if fetchErr != nil {
+				log.Printf("failed to fetch anilist metadata for %s: %v", req.ExternalID, fetchErr)
+			} else {
+				switch anime.Status {
+				case "RELEASING":
+					status = "airing"
+				case "FINISHED":
+					status = "finished"
+				case "NOT_YET_RELEASED":
+					status = "upcoming"
+				default:
+					status = ""
+				}
+				genres = append(genres, anime.Genres...)
+				if len(anime.Studios) > 0 {
+					studio = anime.Studios[0]
+				}
+			}
+		}
+
+		_, err = h.db.Exec(
+			`INSERT INTO anime_metadata (media_item_id, studio, status, genres)
+			VALUES ($1, $2, $3, $4)
+			ON CONFLICT (media_item_id) DO UPDATE SET
+			studio = EXCLUDED.studio,
+			genres = EXCLUDED.genres,
+			status = EXCLUDED.status`,
+			mediaItemID,
+			utils.NullString(studio),
+			utils.NullString(status),
+			pq.Array(genres),
+		)
+		if utils.InternalError(w, err) {
+			return
+		}
+	}
+
 	if req.Type == "manga" && req.ExternalSource == "mangadex" {
 		var (
 			status        string
