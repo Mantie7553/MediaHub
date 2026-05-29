@@ -4,6 +4,7 @@ import (
 	"time"
 )
 
+// GENERAL
 type uploadRequest struct {
 	Type           string `json:"type"`
 	Title          string `json:"title"`
@@ -48,25 +49,19 @@ type MediaItem struct {
 	CreatedAt      time.Time  `json:"created_at"`
 }
 
+type MediaItemDetail struct {
+	MediaItem
+	Metadata any `json:"metadata"`
+}
+
+// ANIME
 type AnimeMetadata struct {
 	Studio *string  `json:"studio"`
 	Status *string  `json:"status"`
 	Genres []string `json:"genres"`
 }
 
-type MovieMetadata struct {
-	RuntimeMins *int     `json:"runtime_mins"`
-	Director    *string  `json:"director"`
-	Genres      []string `json:"genres"`
-}
-
-type MusicMetadata struct {
-	Artist       string   `json:"artist"`
-	TrackNumber  *int     `json:"track_number"`
-	DurationSecs *int     `json:"duration_secs"`
-	Genres       []string `json:"genres"`
-}
-
+// MANGA
 type MangaMetadata struct {
 	MediaItemID   string   `json:"media_item_id"`
 	TotalChapters *int     `json:"total_chapters"`
@@ -98,7 +93,17 @@ type MangaDetail struct {
 	Chapters []MangaChapter `json:"chapters"`
 }
 
-type MediaItemDetail struct {
-	MediaItem
-	Metadata any `json:"metadata"`
+// MOVIE
+type MovieMetadata struct {
+	RuntimeMins *int     `json:"runtime_mins"`
+	Director    *string  `json:"director"`
+	Genres      []string `json:"genres"`
+}
+
+// MUSIC
+type MusicMetadata struct {
+	Artist       string   `json:"artist"`
+	TrackNumber  *int     `json:"track_number"`
+	DurationSecs *int     `json:"duration_secs"`
+	Genres       []string `json:"genres"`
 }
