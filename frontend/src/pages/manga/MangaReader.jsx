@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useParams } from "react-router-dom"
-import api from "../../services/api";
-import { useMangas, usePages } from "../../hooks";
+import { useMediaItem, usePages } from "../../hooks";
 import Loading from "../../components/states/Loading";
+import Error from "../../components/states/Error";
 
 /**
  * This page displays a given mangas pages for reading
@@ -10,8 +10,9 @@ import Loading from "../../components/states/Loading";
  */
 export default function MangaReader() {
     const { id, chapterId } = useParams();
-    const { manga, totalPages, loading: mangaLoading, error: mangaError } = useMangas(id, chapterId);
+    const { item, loading: mangaLoading, error: mangaError } = useMediaItem(id);
     const { currentPage, setCurrentPage, imageSrc, loading: pageLoading, error: pageError } = usePages(id, chapterId);
+    const totalPages = item?.metadata?.chapters?.find(c => c.id === chapterId)?.page_count ?? 0;
 
     function handlePageUp() {
         setCurrentPage(prev => prev + 1 < totalPages ? prev + 1 : prev)

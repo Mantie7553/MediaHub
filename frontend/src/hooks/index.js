@@ -1,4 +1,5 @@
 export { default as useJobs} from './useJobs'
-export { default as useMangas } from './useMangas'
+export { default as useMediaItem } from './useMediaItem'
 export { default as usePages } from './usePages'
 export { default as useRequests } from './useRequests'
+export { default as useCreateRequest } from './useCreateRequest'
