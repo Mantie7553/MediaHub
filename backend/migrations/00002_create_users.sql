@@ -18,6 +18,9 @@ CREATE TABLE refresh_tokens (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+INSERT INTO users (username, email, password_hash, role, download_permission)
+VALUES ('admin', 'admin@example.com', '$2a$10$hP.c96FjCVog/ktlMbje.OLhbNDt1hmwbor41Ou6fLLSGchF5SRpi', 'admin', 'auto_approved');
+
 -- +goose Down
 DROP TABLE refresh_tokens;
 DROP TABLE users;

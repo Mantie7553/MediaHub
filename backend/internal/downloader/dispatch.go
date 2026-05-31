@@ -85,11 +85,13 @@ func Dispatch(db *sql.DB, requestID string, mediaItemID string,
 		}
 
 		// save the new content as a sonarr item in the database
-		db.Exec(
+		if _, err := db.Exec(
 			`INSERT INTO sonarr_items (media_item_id, sonarr_series_id) 
 			VALUES ($1, $2)`,
 			mediaItemID, seriesID,
-		)
+		); err != nil {
+			logger.Error("failed to save sonarr_id %s", err.Error())
+		}
 
 	case "radarr":
 		// needs external ID
@@ -113,11 +115,13 @@ func Dispatch(db *sql.DB, requestID string, mediaItemID string,
 		}
 
 		// save the content as a radarr item in the database
-		db.Exec(
+		if _, err := db.Exec(
 			`INSERT INTO radarr_items (media_item_id, radarr_movie_id) 
 			VALUES ($1, $2)`,
 			mediaItemID, movieID,
-		)
+		); err != nil {
+			logger.Error("failed to save radarr_id %s", err.Error())
+		}
 
 	case "mangal":
 		go RunMangal(db, jobID, mediaItemID, sourceURL, dest)
