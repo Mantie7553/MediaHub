@@ -11,10 +11,12 @@ export default function DashboardPage() {
     const [error, setError] = useState("");
 
     useEffect(() => {
-        api.get("me/media")
+        api.get("/me/media")
         .then(resp => setContent(resp.data))
         .catch(err => setError(err.message ?? "Unable to retrieve media"));
     }, [])
+
+    console.log(content)
 
     const anime = content.filter(item => item.media_type === "anime");
     const movies = content.filter(item => item.media_type === "movie");

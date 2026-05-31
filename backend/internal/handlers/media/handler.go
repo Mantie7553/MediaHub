@@ -462,3 +462,35 @@ func (h *Handler) ServePage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", ct)
 	io.Copy(w, f)
 }
+
+func (h *Handler) GetEpisodes(w http.ResponseWriter, r *http.Request) {
+	mediaID := chi.URLParam(r, "id")
+	episodes := []Episode{}
+
+	rows, err := h.db.Query(
+		`SELECT id, season_number, episode_number, title 
+        FROM episodes 
+        WHERE media_item_id = $1 
+        ORDER BY season_number, episode_number`,
+		mediaID,
+	)
+	if utils.InternalError(w, err) {
+		return
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var ep Episode
+		if err := rows.Scan(&ep.ID, &ep.SeasonNumber, &ep.EpisodeNumber, &ep.Title); err != nil {
+			utils.InternalError(w, err)
+			return
+		}
+		episodes = append(episodes, ep)
+	}
+
+	if utils.InternalError(w, rows.Err()) {
+		return
+	}
+
+	utils.JSON(w, episodes)
+}

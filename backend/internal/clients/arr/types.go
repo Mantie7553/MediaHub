@@ -8,3 +8,8 @@ type SonarrEpisode struct {
 	EpisodeFileID int    `json:"episodeFileId"`
 	HasFile       bool   `json:"hasFile"`
 }
+
+type SonarrSeries struct {
+	ID    int    `json:"id"`
+	Title string `json:"title"`
+}

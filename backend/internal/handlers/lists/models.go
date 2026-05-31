@@ -29,8 +29,6 @@ type UserMediaEntry struct {
 	Artist          *string    `json:"artist"`
 	EpisodesWatched *int       `json:"episodes_watched"`
 	SeasonID        *string    `json:"season_id"`
-	SeasonNumber    *int       `json:"season_number"`
-	TotalEpisodes   *int       `json:"episode_count"`
 }
 
 type progressRequest struct {

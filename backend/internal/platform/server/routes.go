@@ -11,6 +11,7 @@ import (
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/requests"
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/search"
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/stream"
+	"github.com/Mantie7553/MediaHub/backend/internal/handlers/sync"
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/webhooks"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/auth"
 	"github.com/go-chi/chi/v5"
@@ -43,6 +44,7 @@ func (s *Server) routes() {
 	requestsHandler := requests.NewHandler(s.db)
 	searchHandler := search.NewHandler(s.db)
 	streamHandler := stream.NewHandler(s.db)
+	syncHandler := sync.NewHandler(s.db)
 	webhooksHandler := webhooks.NewHandler(s.db)
 
 	s.router.Use(cors.Handler(cors.Options{
@@ -76,6 +78,7 @@ func (s *Server) routes() {
 		r.Get("/media/{id}", mediaHandler.GetSpecific)
 		r.Get("/manga/{id}/chapters/{chapterId}/pages/{pageNum}", mediaHandler.ServePage)
 		r.Put("/manga/{id}/chapters/{chapterId}/progress", mediaHandler.MangaProgress)
+		r.Get("/media/{id}/episodes", mediaHandler.GetEpisodes)
 
 		// List Handler endpoints
 		r.Post("/me/media", listsHandler.Add)
@@ -111,5 +114,7 @@ func (s *Server) routes() {
 		r.Get("/admin/jobs", jobsHandler.GetAll)
 		r.Post("/admin/jobs", jobsHandler.Create)
 
+		// Sync Handler endpoints
+		r.Post("/admin/sync/sonarr", syncHandler.SyncSonar)
 	})
 }

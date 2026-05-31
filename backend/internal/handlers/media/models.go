@@ -61,6 +61,13 @@ type AnimeMetadata struct {
 	Genres []string `json:"genres"`
 }
 
+type Episode struct {
+	ID            string  `json:"id"`
+	SeasonNumber  int     `json:"season_number"`
+	EpisodeNumber int     `json:"episode_number"`
+	Title         *string `json:"title"`
+}
+
 // MANGA
 type MangaMetadata struct {
 	MediaItemID   string   `json:"media_item_id"`
