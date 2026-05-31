@@ -10,6 +10,7 @@ import (
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/media"
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/requests"
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/search"
+	"github.com/Mantie7553/MediaHub/backend/internal/handlers/stream"
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/webhooks"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/auth"
 	"github.com/go-chi/chi/v5"
@@ -41,6 +42,7 @@ func (s *Server) routes() {
 	mediaHandler := media.NewHandler(s.db)
 	requestsHandler := requests.NewHandler(s.db)
 	searchHandler := search.NewHandler(s.db)
+	streamHandler := stream.NewHandler(s.db)
 	webhooksHandler := webhooks.NewHandler(s.db)
 
 	s.router.Use(cors.Handler(cors.Options{
@@ -59,6 +61,10 @@ func (s *Server) routes() {
 	s.router.Post("/auth/refresh", authHandler.Refresh)
 
 	s.router.Post("/webhooks/sonarr", webhooksHandler.SonarrWebhook)
+
+	// Media streaming endpoints
+	s.router.Get("/stream/episodes/{id}", streamHandler.StreamEpisode)
+	s.router.Get("/stream/segments/{id}/{file}", streamHandler.ServeSegment)
 
 	// Endpoints for all authenticated users
 	s.router.Group(func(r chi.Router) {
