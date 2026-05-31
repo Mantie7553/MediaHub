@@ -15,7 +15,6 @@ This is my attempt at a self hosted media management platform. This handles the 
 | **Radarr** | Handles downloading and library organization of Movies |
 | **yt-dlp** | Handles downloading and library organization of Music |
 | **mangal** | Handles downloading and library organization of Manga |
-| **Plex** | Video Playback |
 | **postgres** | Database |
 
 ## Prerequisites
@@ -24,7 +23,6 @@ Ensure the following are installed before starting:
 - **Go**
 - **PostgreSQL**
 - **Goose**
-- **Plex Media Server**
 - **Sonarr**
 - **Radarr**
 - **yt-dlp**

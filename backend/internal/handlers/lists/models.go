@@ -31,7 +31,6 @@ type UserMediaEntry struct {
 	SeasonID        *string    `json:"season_id"`
 	SeasonNumber    *int       `json:"season_number"`
 	TotalEpisodes   *int       `json:"episode_count"`
-	PlexRatingKey   *string    `json:"plex_rating_key"`
 }
 
 type progressRequest struct {

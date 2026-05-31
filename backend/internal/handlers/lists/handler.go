@@ -79,14 +79,12 @@ func (h *Handler) GetAll(w http.ResponseWriter, r *http.Request) {
 	mi.id, mi.type, mi.title, mi.cover_image_url, mi.release_date,
     mm.artist,
 	uap.episodes_watched, uap.season_id,
-	ans.season_number, ans.episode_count,
-	pi.plex_rating_key
+	ans.season_number, ans.episode_count
 	FROM user_media_status ums
 	JOIN media_items mi ON mi.id = ums.media_item_id
 	LEFT JOIN music_metadata mm ON mm.media_item_id = mi.id
 	LEFT JOIN user_anime_progress uap ON uap.media_item_id = mi.id AND uap.user_id = ums.user_id
 	LEFT JOIN anime_seasons ans ON ans.id = uap.season_id
-	LEFT JOIN plex_items pi ON pi.media_item_id = mi.id
 	WHERE ums.user_id = $1`
 
 	// run the query
@@ -104,7 +102,7 @@ func (h *Handler) GetAll(w http.ResponseWriter, r *http.Request) {
 			&item.ID, &item.Status, &item.Rating, &item.Notes, &item.UpdatedAt,
 			&item.MediaItemID, &item.MediaType, &item.MediaTitle, &item.CoverImageURL,
 			&item.ReleaseDate, &item.Artist, &item.EpisodesWatched, &item.SeasonID,
-			&item.SeasonNumber, &item.TotalEpisodes, &item.PlexRatingKey,
+			&item.SeasonNumber, &item.TotalEpisodes,
 		)
 
 		if utils.InternalError(w, err) {

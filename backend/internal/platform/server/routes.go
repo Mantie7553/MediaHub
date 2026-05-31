@@ -8,9 +8,9 @@ import (
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/jobs"
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/lists"
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/media"
-	"github.com/Mantie7553/MediaHub/backend/internal/handlers/plex"
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/requests"
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/search"
+	"github.com/Mantie7553/MediaHub/backend/internal/handlers/webhooks"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/auth"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
@@ -41,7 +41,7 @@ func (s *Server) routes() {
 	mediaHandler := media.NewHandler(s.db)
 	requestsHandler := requests.NewHandler(s.db)
 	searchHandler := search.NewHandler(s.db)
-	plexHandler := plex.NewHandler(s.db)
+	webhooksHandler := webhooks.NewHandler(s.db)
 
 	s.router.Use(cors.Handler(cors.Options{
 		AllowedOrigins: []string{"http://localhost:5173"},
@@ -57,6 +57,8 @@ func (s *Server) routes() {
 	s.router.Post("/auth/login", authHandler.Login)
 	s.router.Delete("/auth/logout", authHandler.Logout)
 	s.router.Post("/auth/refresh", authHandler.Refresh)
+
+	s.router.Post("/webhooks/sonarr", webhooksHandler.SonarrWebhook)
 
 	// Endpoints for all authenticated users
 	s.router.Group(func(r chi.Router) {
@@ -87,9 +89,6 @@ func (s *Server) routes() {
 		r.Get("/search", searchHandler.Search)
 		r.Post("/search/save", searchHandler.Save)
 
-		// Plex Handler endpoints
-		r.Get("/plex/stream/{id}", plexHandler.GetStreamURL)
-
 	})
 
 	// Endpoints for admin users
@@ -106,8 +105,5 @@ func (s *Server) routes() {
 		r.Get("/admin/jobs", jobsHandler.GetAll)
 		r.Post("/admin/jobs", jobsHandler.Create)
 
-		// Plex Handler endpoints
-		r.Get("/plex/libraries", plexHandler.GetLibraries)
-		r.Post("/plex/link/{id}", plexHandler.Link)
 	})
 }
