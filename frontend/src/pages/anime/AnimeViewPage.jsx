@@ -65,7 +65,7 @@ export default function AnimeViewPage() {
                                         </span>
                                         <button
                                             className="btn btn-sm btn-primary"
-                                            onClick={() => navigate(`/watch/${ep.id}`)}
+                                            onClick={() => navigate(`/watch/episode/${ep.id}`)}
                                         >
                                             Watch
                                         </button>

@@ -21,20 +21,33 @@ func NewHandler(db *sql.DB) *Handler {
 }
 
 /*
-Function:	StreamEpisode
+Function:	StreamMedia
 Purpose:	Start transcoding of an episode
 Params:
   - w: http response writer to respond to the front end
   - r: http request coming from the frontend
 */
-func (h *Handler) StreamEpisode(w http.ResponseWriter, r *http.Request) {
-	episodeID := chi.URLParam(r, "id")
+func (h *Handler) StreamMedia(w http.ResponseWriter, r *http.Request) {
+	mediaType := chi.URLParam(r, "type")
+	mediaID := chi.URLParam(r, "id")
 	var filePath string
+	var err error
 
-	err := h.db.QueryRow(
-		`SELECT file_path FROM episodes WHERE id = $1`,
-		episodeID,
-	).Scan(&filePath)
+	switch mediaType {
+	case "episode":
+		err = h.db.QueryRow(
+			`SELECT file_path FROM episodes WHERE id = $1`,
+			mediaID,
+		).Scan(&filePath)
+	case "movie":
+		err = h.db.QueryRow(
+			`SELECT file_path FROM movie_metadata WHERE media_item_id = $1`,
+			mediaID,
+		).Scan(&filePath)
+	default:
+		utils.Error(w, http.StatusBadRequest, "invalid media type")
+		return
+	}
 
 	if err == sql.ErrNoRows {
 		utils.Error(w, http.StatusNotFound, "episode not found")
@@ -45,10 +58,13 @@ func (h *Handler) StreamEpisode(w http.ResponseWriter, r *http.Request) {
 	}
 
 	mediaRoot := os.Getenv("MEDIA_ROOT")
-	tempDir := filepath.Join(mediaRoot, "temp", episodeID)
+	tempDir := filepath.Join(mediaRoot, "temp", mediaType+"-"+mediaID)
 
 	if _, err := os.Stat(tempDir); err == nil {
-		utils.JSON(w, map[string]string{"playlist": "/stream/segments/" + episodeID + "/playlist.m3u8"})
+		utils.JSON(w, map[string]string{
+			"playlist":  "/stream/segments/" + mediaType + "/" + mediaID + "/playlist.m3u8",
+			"subtitles": "/stream/segments/" + mediaType + "/" + mediaID + "/subs.vtt",
+		})
 		return
 	}
 
@@ -78,6 +94,17 @@ func (h *Handler) StreamEpisode(w http.ResponseWriter, r *http.Request) {
 	}
 	go cmd.Wait()
 
+	subsPath := filepath.Join(tempDir, "subs.vtt")
+	subCmd := exec.Command("ffmpeg",
+		"-i", filePath,
+		"-map", "0:s:0",
+		"-c:s", "webvtt",
+		subsPath,
+	)
+
+	subCmd.Start()
+	go subCmd.Wait()
+
 	for i := 0; i < 30; i++ {
 		if _, err := os.Stat(playlistPath); err == nil {
 			break
@@ -90,7 +117,10 @@ func (h *Handler) StreamEpisode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	utils.JSON(w, map[string]string{"playlist": "/stream/segments/" + episodeID + "/playlist.m3u8"})
+	utils.JSON(w, map[string]string{
+		"playlist":  "/stream/segments/" + mediaType + "/" + mediaID + "/playlist.m3u8",
+		"subtitles": "/stream/segments/" + mediaType + "/" + mediaID + "/subs.vtt",
+	})
 }
 
 /*
@@ -101,11 +131,12 @@ Params:
   - r: http request coming from the frontend
 */
 func (h *Handler) ServeSegment(w http.ResponseWriter, r *http.Request) {
-	episodeID := chi.URLParam(r, "id")
+	mediaType := chi.URLParam(r, "type")
+	mediaID := chi.URLParam(r, "id")
 	file := chi.URLParam(r, "file")
 
 	mediaRoot := os.Getenv("MEDIA_ROOT")
-	filePath := filepath.Join(mediaRoot, "temp", episodeID, file)
+	filePath := filepath.Join(mediaRoot, "temp", mediaType+"-"+mediaID, file)
 
 	http.ServeFile(w, r, filePath)
 }

@@ -65,8 +65,8 @@ func (s *Server) routes() {
 	s.router.Post("/webhooks/sonarr", webhooksHandler.SonarrWebhook)
 
 	// Media streaming endpoints
-	s.router.Get("/stream/episodes/{id}", streamHandler.StreamEpisode)
-	s.router.Get("/stream/segments/{id}/{file}", streamHandler.ServeSegment)
+	s.router.Get("/stream/media/{type}/{id}", streamHandler.StreamMedia)
+	s.router.Get("/stream/segments/{type}/{id}/{file}", streamHandler.ServeSegment)
 
 	// Endpoints for all authenticated users
 	s.router.Group(func(r chi.Router) {
@@ -116,5 +116,6 @@ func (s *Server) routes() {
 
 		// Sync Handler endpoints
 		r.Post("/admin/sync/sonarr", syncHandler.SyncSonar)
+		r.Post("/admin/sync/radarr", syncHandler.SyncRadarr)
 	})
 }

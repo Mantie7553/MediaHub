@@ -13,3 +13,12 @@ type SonarrSeries struct {
 	ID    int    `json:"id"`
 	Title string `json:"title"`
 }
+
+type RadarrMovie struct {
+	ID        int    `json:"id"`
+	Title     string `json:"title"`
+	HasFile   bool   `json:"hasFile"`
+	MovieFile struct {
+		Path string `json:"path"`
+	} `json:"movieFile"`
+}

@@ -6,7 +6,7 @@ import Loading from "../../components/states/Loading"
 import Error from "../../components/states/Error"
 
 export default function PlayerPage() {
-    const { id } = useParams()
+    const { type, id } = useParams()
     const videoRef = useRef(null)
     const [playlistUrl, setPlaylistUrl] = useState(null)
     const [loading, setLoading] = useState(true)
@@ -15,7 +15,7 @@ export default function PlayerPage() {
     const baseURL = import.meta.env.VITE_API_URL
 
     useEffect(() => {
-        api.get(`/stream/episodes/${id}`)
+        api.get(`/stream/media/${type}/${id}`)
             .then(res => setPlaylistUrl(`${baseURL}${res.data.playlist}`))
             .catch(err => setError(err.message))
             .finally(() => setLoading(false))
@@ -43,8 +43,19 @@ export default function PlayerPage() {
                 ref={videoRef}
                 controls
                 autoPlay
+                crossOrigin="anonymous"
                 className="w-full max-w-6xl"
-            />
+            >
+                {playlistUrl && (
+                    <track
+                        kind="subtitles"
+                        src={`${baseURL}/stream/segments/${type}/${id}/subs.vtt`}
+                        srcLang="en"
+                        label="English"
+                        default
+                    />
+                )}
+            </video>
         </div>
     )
 }

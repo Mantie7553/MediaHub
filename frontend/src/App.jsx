@@ -16,7 +16,7 @@ function App() {
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route element={<ProtectedRoute><Outlet/></ProtectedRoute>}>
-          <Route path='/watch/:id' element={<PlayerPage/>} />
+          <Route path='/watch/:type/:id' element={<PlayerPage/>} />
         </Route>
         <Route element={<ProtectedRoute><Layout><Outlet /></Layout></ProtectedRoute>}>
           <Route path="/" element={<DashboardPage/>} />

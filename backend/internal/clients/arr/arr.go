@@ -221,3 +221,27 @@ func (c *ArrClient) AddMovie(tmdbID int, qualityProfileID int, rootFolderPath st
 
 	return result.ID, nil
 }
+
+func (c *ArrClient) GetAllMovies() ([]RadarrMovie, error) {
+	var result []RadarrMovie
+	req, err := http.NewRequest("GET", c.config.BaseURL+"/api/v3/movie", nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("X-Api-Key", c.config.APIKey)
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("Radarr returned %d", err.Error())
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("Radarr returned %d", resp.StatusCode)
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}

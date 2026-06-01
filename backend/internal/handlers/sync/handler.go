@@ -12,12 +12,14 @@ import (
 type Handler struct {
 	db     *sql.DB
 	sonarr *arr.ArrClient
+	radarr *arr.ArrClient
 }
 
 func NewHandler(db *sql.DB) *Handler {
 	return &Handler{
 		db:     db,
 		sonarr: arr.NewArrClient("SONARR_URL", "SONARR_API_KEY"),
+		radarr: arr.NewArrClient("RADARR_URL", "RADARR_API_KEY"),
 	}
 }
 
@@ -35,7 +37,16 @@ func (h *Handler) SyncSonar(w http.ResponseWriter, r *http.Request) {
 		).Scan(&mediaItemID)
 
 		if err == sql.ErrNoRows {
-			continue
+			err = h.db.QueryRow(
+				`INSERT INTO media_items (type, title)
+    			VALUES ('anime', $1)
+    			RETURNING id`,
+				s.Title,
+			).Scan(&mediaItemID)
+			if err != nil {
+				logger.Error("failed to create media item for %s: %s", s.Title, err.Error())
+				continue
+			}
 		}
 		if err != nil {
 			logger.Error("failed to find media item for %s : %s", s.Title, err.Error())
@@ -83,6 +94,67 @@ func (h *Handler) SyncSonar(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				logger.Error("failed to update or insert episode %d : %s", ep.ID, err.Error())
 			}
+		}
+	}
+	w.WriteHeader(http.StatusOK)
+}
+
+func (h *Handler) SyncRadarr(w http.ResponseWriter, r *http.Request) {
+	movies, err := h.radarr.GetAllMovies()
+	if utils.InternalError(w, err) {
+		return
+	}
+
+	for _, m := range movies {
+		var mediaItemID string
+		err := h.db.QueryRow(
+			`SELECT id FROM media_items WHERE title = $1 AND type = 'movie'`,
+			m.Title,
+		).Scan(&mediaItemID)
+
+		if err == sql.ErrNoRows {
+			err = h.db.QueryRow(
+				`INSERT INTO media_items (type, title)
+    			VALUES ('movie', $1)
+    			RETURNING id`,
+				m.Title,
+			).Scan(&mediaItemID)
+			if err != nil {
+				logger.Error("failed to create media item for %s: %s", m.Title, err.Error())
+				continue
+			}
+			_, err = h.db.Exec(
+				`INSERT INTO movie_metadata (media_item_id) VALUES ($1)`,
+				mediaItemID,
+			)
+			if err != nil {
+				logger.Error("failed to create movie metadata for %s: %s", m.Title, err.Error())
+				continue
+			}
+		}
+		if !m.HasFile {
+			continue
+		}
+
+		_, err = h.db.Exec(
+			`INSERT INTO radarr_items (media_item_id, radarr_movie_id) 
+			VALUES ($1, $2)
+			ON CONFLICT (media_item_id) DO UPDATE SET
+			radarr_movie_id = EXCLUDED.radarr_movie_id,
+			last_synced_at = NOW()`,
+			mediaItemID, m.ID,
+		)
+		if err != nil {
+			logger.Error("failed to update or insert sonarr_items for %s : %s", m.Title, err.Error())
+			continue
+		}
+
+		_, err = h.db.Exec(
+			`UPDATE movie_metadata SET file_path = $1 WHERE media_item_id = $2`,
+			m.MovieFile.Path, mediaItemID,
+		)
+		if err != nil {
+			logger.Error("failed to update file path for %s: %s", m.Title, err.Error())
 		}
 	}
 	w.WriteHeader(http.StatusOK)
