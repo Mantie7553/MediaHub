@@ -3,7 +3,9 @@ package main
 import (
 	"fmt"
 	"log"
+	"os"
 
+	"github.com/Mantie7553/MediaHub/backend/internal/cleanup"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/database"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/server"
 	"github.com/joho/godotenv"
@@ -23,6 +25,7 @@ func main() {
 	fmt.Println("Database connected successfully")
 
 	s := server.New(db)
+	cleanup.Start(os.Getenv("MEDIA_ROOT"))
 	fmt.Println("MediaHub API starting on port 9090...")
 	if err := s.Start(":9090"); err != nil {
 		log.Fatal(err)
