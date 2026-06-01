@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -185,27 +186,29 @@ Params:
 func (h *Handler) GetAll(w http.ResponseWriter, r *http.Request) {
 	// get the medias type from the URL
 	mediaType := r.URL.Query().Get("type")
+	available := r.URL.Query().Get("available")
 
+	conditions := []string{}
+	args := []any{}
 	items := []MediaItem{}
 
-	queryString := `SELECT id, type, title, description, 
-		cover_image_url, release_date, external_id, 
-		external_source, created_at 
-		FROM media_items`
-
 	if mediaType != "" {
-		queryString += ` WHERE type = $1`
+		conditions = append(conditions, fmt.Sprintf("type = $%d", len(args)+1))
+		args = append(args, mediaType)
 	}
 
-	var rows *sql.Rows
-	var err error
-
-	// complete the query - if it has a media type, use it specifically or get everything of any type
-	if mediaType != "" {
-		rows, err = h.db.Query(queryString, mediaType)
-	} else {
-		rows, err = h.db.Query(queryString)
+	if available == "true" {
+		conditions = append(conditions, `(EXISTS (SELECT 1 FROM sonarr_items WHERE media_item_id = mi.id)
+		OR EXISTS (SELECT 1 FROM radarr_items WHERE media_item_id = mi.id))`)
 	}
+
+	queryString := `SELECT id, type, title, description, cover_image_url, release_date, external_id, external_source, created_at FROM media_items mi`
+
+	if len(conditions) > 0 {
+		queryString += " WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	rows, err := h.db.Query(queryString, args...)
 
 	if utils.InternalError(w, err) {
 		return

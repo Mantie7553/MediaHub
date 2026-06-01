@@ -10,15 +10,41 @@ type SonarrEpisode struct {
 }
 
 type SonarrSeries struct {
-	ID    int    `json:"id"`
-	Title string `json:"title"`
+	ID     int    `json:"id"`
+	Title  string `json:"title"`
+	Images []struct {
+		CoverType string `json:"coverType"`
+		RemoteURL string `json:"remoteUrl"`
+	} `json:"images"`
+}
+
+func (s SonarrSeries) PosterURL() string {
+	for _, img := range s.Images {
+		if img.CoverType == "poster" {
+			return img.RemoteURL
+		}
+	}
+	return ""
 }
 
 type RadarrMovie struct {
-	ID        int    `json:"id"`
-	Title     string `json:"title"`
-	HasFile   bool   `json:"hasFile"`
+	ID      int    `json:"id"`
+	Title   string `json:"title"`
+	HasFile bool   `json:"hasFile"`
+	Images  []struct {
+		CoverType string `json:"coverType"`
+		RemoteURL string `json:"remoteUrl"`
+	} `json:"images"`
 	MovieFile struct {
 		Path string `json:"path"`
 	} `json:"movieFile"`
+}
+
+func (m RadarrMovie) PosterURL() string {
+	for _, img := range m.Images {
+		if img.CoverType == "poster" {
+			return img.RemoteURL
+		}
+	}
+	return ""
 }

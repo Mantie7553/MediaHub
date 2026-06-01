@@ -16,8 +16,6 @@ export default function DashboardPage() {
         .catch(err => setError(err.message ?? "Unable to retrieve media"));
     }, [])
 
-    console.log(content)
-
     const anime = content.filter(item => item.media_type === "anime");
     const movies = content.filter(item => item.media_type === "movie");
     const music = content.filter(item => item.media_type === "music_track");

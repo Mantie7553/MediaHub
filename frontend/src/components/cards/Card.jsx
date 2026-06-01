@@ -11,10 +11,12 @@ export default function Card({item}) {
     switch(item.media_type) {
         case "anime": 
             const season = item.season_number ? `S${item.season_number}` : null
-            const episodes = item.episodes_watched ?? 0
             const total = item.episode_count
+            const episodes = item.episodes_watched ?? null
+            const progressLabel = episodes !== null 
+                ? [season, `E${episodes}${total ? ` / ${total}` : ""}`].filter(Boolean).join(" · ")
+                : null
             const progressPct = total ? Math.round((episodes / total) * 100) : 0
-            const progressLabel = [season, `E${episodes}${total ? ` / ${total}` : ""}`].filter(Boolean).join(" · ")
 
             info = <>
                     <span>{progressLabel}</span>

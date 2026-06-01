@@ -37,11 +37,12 @@ func (h *Handler) SyncSonar(w http.ResponseWriter, r *http.Request) {
 		).Scan(&mediaItemID)
 
 		if err == sql.ErrNoRows {
+			posterURL := s.PosterURL()
 			err = h.db.QueryRow(
-				`INSERT INTO media_items (type, title)
-    			VALUES ('anime', $1)
+				`INSERT INTO media_items (type, title, cover_image_url)
+    			VALUES ('anime', $1, $2)
     			RETURNING id`,
-				s.Title,
+				s.Title, posterURL,
 			).Scan(&mediaItemID)
 			if err != nil {
 				logger.Error("failed to create media item for %s: %s", s.Title, err.Error())
@@ -50,6 +51,14 @@ func (h *Handler) SyncSonar(w http.ResponseWriter, r *http.Request) {
 		}
 		if err != nil {
 			logger.Error("failed to find media item for %s : %s", s.Title, err.Error())
+		}
+
+		_, err = h.db.Exec(
+			`UPDATE media_items SET cover_image_url = $1 WHERE id = $2`,
+			utils.NullString(s.PosterURL()), mediaItemID,
+		)
+		if err != nil {
+			logger.Error("failed to update cover image for %s: %s", s.Title, err.Error())
 		}
 
 		_, err = h.db.Exec(
@@ -113,11 +122,12 @@ func (h *Handler) SyncRadarr(w http.ResponseWriter, r *http.Request) {
 		).Scan(&mediaItemID)
 
 		if err == sql.ErrNoRows {
+			posterURL := m.PosterURL()
 			err = h.db.QueryRow(
-				`INSERT INTO media_items (type, title)
-    			VALUES ('movie', $1)
+				`INSERT INTO media_items (type, title, cover_image_url)
+    			VALUES ('movie', $1, $2)
     			RETURNING id`,
-				m.Title,
+				m.Title, utils.NullString(posterURL),
 			).Scan(&mediaItemID)
 			if err != nil {
 				logger.Error("failed to create media item for %s: %s", m.Title, err.Error())
@@ -131,6 +141,13 @@ func (h *Handler) SyncRadarr(w http.ResponseWriter, r *http.Request) {
 				logger.Error("failed to create movie metadata for %s: %s", m.Title, err.Error())
 				continue
 			}
+		}
+		_, err = h.db.Exec(
+			`UPDATE media_items SET cover_image_url = $1 WHERE id = $2`,
+			utils.NullString(m.PosterURL()), mediaItemID,
+		)
+		if err != nil {
+			logger.Error("failed to update cover image for %s: %s", m.Title, err.Error())
 		}
 		if !m.HasFile {
 			continue
