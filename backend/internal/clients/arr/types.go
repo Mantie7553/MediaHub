@@ -28,10 +28,12 @@ func (s SonarrSeries) PosterURL() string {
 }
 
 type RadarrMovie struct {
-	ID      int    `json:"id"`
-	Title   string `json:"title"`
-	HasFile bool   `json:"hasFile"`
-	Images  []struct {
+	ID              int    `json:"id"`
+	Title           string `json:"title"`
+	HasFile         bool   `json:"hasFile"`
+	DigitalRelease  string `json:"digitalRelease"`
+	PhysicalRelease string `json:"physicalRelease"`
+	Images          []struct {
 		CoverType string `json:"coverType"`
 		RemoteURL string `json:"remoteUrl"`
 	} `json:"images"`
@@ -45,6 +47,16 @@ func (m RadarrMovie) PosterURL() string {
 		if img.CoverType == "poster" {
 			return img.RemoteURL
 		}
+	}
+	return ""
+}
+
+func (m RadarrMovie) ReleaseDate() string {
+	if m.DigitalRelease != "" {
+		return m.DigitalRelease
+	}
+	if m.PhysicalRelease != "" {
+		return m.PhysicalRelease
 	}
 	return ""
 }

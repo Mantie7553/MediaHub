@@ -149,6 +149,15 @@ func (h *Handler) SyncRadarr(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			logger.Error("failed to update cover image for %s: %s", m.Title, err.Error())
 		}
+		if date := m.ReleaseDate(); date != "" {
+			_, err = h.db.Exec(
+				`UPDATE media_items SET release_date = $1 WHERE id = $2`,
+				date, mediaItemID,
+			)
+			if err != nil {
+				logger.Error("failed to update release_date for %s: %s", m.Title, err.Error())
+			}
+		}
 		if !m.HasFile {
 			continue
 		}
