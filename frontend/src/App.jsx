@@ -5,7 +5,7 @@ import Layout from './components/layout/Layout'
 import LoginPage from './pages/login/LoginPage'
 import ProtectedRoute from './components/layout/ProtectedRoute'
 import SettingsPage from './pages/settings/SettingsPage'
-import { MangaLibraryPage, MangaViewPage, MangaReader } from './pages/manga'
+import { MangaViewPage, MangaReader } from './pages/manga'
 import Discover from './pages/discover/Discover'
 import PlayerPage from './pages/player/PlayerPage'
 import AnimeViewPage from './pages/anime/AnimeViewPage'
@@ -25,7 +25,6 @@ function App() {
           <Route path="/discover" element={<Discover />} />
           <Route path="/library" element={<Library/>}/>
           <Route path="/anime/:id" element={<AnimeViewPage/>} />
-          <Route path="/manga" element={<MangaLibraryPage/>}/>
           <Route path="/manga/:id" element={<MangaViewPage/>}/>
           <Route path='manga/:id/chapters/:chapterId/read' element={<MangaReader/>} />
           <Route path="/settings" element={<SettingsPage/>} />

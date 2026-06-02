@@ -25,7 +25,6 @@ export default function Sidebar() {
                 <NavItem path="/" title="Dashboard"/>
                 <NavItem path="/downloads" title="Downloads"/>
                 <NavItem path="/discover" title="Discover"/>
-                <NavItem path="/manga" title="Manga" />
                 <NavItem path="/settings" title="Settings"/>
             </ul>
             <button className="btn btn-ghost text-error justify-start" onClick={handleLogout}>Log Out</button>

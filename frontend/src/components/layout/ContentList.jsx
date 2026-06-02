@@ -14,15 +14,16 @@ export default function ContentList({items, heading}) {
         navigate("/library", { state: {items, heading}});
     }
 
-    return <div className="my-4 max-w-fit">
+    return <div className="my-4">
         <div className="flex justify-between items-center mb-2">
             {items.length > 0 && <h2 className="font-bold">{heading}</h2> }
-            { items.length > 10 && <button className="link" onClick={handleShowAll}>Show All</button> }
+            { items.length > 8 && <button className="link" onClick={handleShowAll}>Show All</button> }
         </div>
         <ul className="flex gap-4 overflow-x-auto flex-nowrap">
             {items.slice(0,8).map(item => {
                 return <Card key={item.id} item={item} />
             })}
         </ul>
+        {items.length > 0 && <div className="divider"></div> }
     </div>
 }
