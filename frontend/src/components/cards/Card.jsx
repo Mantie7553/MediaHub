@@ -55,7 +55,7 @@ function mediaInfo(item) {
             info = <>
                 <span>{Format.year(item.release_date)}</span>
             </>
-            path = "/watch/"
+            path = "/watch/movie/"
             break
         case "manga":
             // info = <>

@@ -79,6 +79,7 @@ func (h *Handler) StreamMedia(w http.ResponseWriter, r *http.Request) {
 		"-i", filePath,
 		"-map", "0:v:0",
 		"-map", "0:a:0",
+		"-vf", "format=yuv420p",
 		"-c:v", "h264_amf",
 		"-c:a", "aac",
 		"-b:a", "192k",
