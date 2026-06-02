@@ -38,6 +38,9 @@ type saveRequest struct {
 	CoverImageURL  string `json:"cover_image_url"`
 	Type           string `json:"type"`
 	Action         string `json:"action"`
+	Status         string `json:"status"`
+	Score          *int   `json:"rating"`
+	Progress       *int   `json:"progress"`
 }
 
 /*
@@ -269,13 +272,34 @@ func (h *Handler) Save(w http.ResponseWriter, r *http.Request) {
 	// add to the user's list if requested
 	if req.Action == "list" || req.Action == "both" {
 		_, err = h.db.Exec(
-			`INSERT INTO user_media_status (user_id, media_item_id, status)
-			VALUES ($1, $2, 'plan_to_watch')
+			`INSERT INTO user_media_status (user_id, media_item_id, status, rating)
+			VALUES ($1, $2, $3, $4)
 			ON CONFLICT (user_id, media_item_id) DO NOTHING`,
-			user.UserID, mediaItemID,
+			user.UserID, mediaItemID, req.Status, req.Score,
 		)
 		if utils.InternalError(w, err) {
 			return
+		}
+		if req.Progress != nil && *req.Progress > 0 {
+			switch req.Type {
+			case "anime":
+				_, err = h.db.Exec(
+					`INSERT INTO user_anime_progress (user_id, media_item_id, episodes_watched)
+					VALUES ($1, $2, $3)
+					ON CONFLICT (user_id, media_item_id) DO UPDATE SET episodes_watched = EXCLUDED.episodes_watched`,
+					user.UserID, mediaItemID, req.Progress,
+				)
+			case "manga":
+				_, err = h.db.Exec(
+					`INSERT INTO user_manga_progress (user_id, media_item_id, chapters_read)
+					VALUES ($1, $2, $3)
+					ON CONFLICT (user_id, media_item_id) DO UPDATE SET chapters_read = EXCLUDED.chapters_read`,
+					user.UserID, mediaItemID, req.Progress,
+				)
+			}
+			if utils.InternalError(w, err) {
+				return
+			}
 		}
 	}
 

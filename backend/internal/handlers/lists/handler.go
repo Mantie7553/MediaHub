@@ -75,10 +75,10 @@ func (h *Handler) GetAll(w http.ResponseWriter, r *http.Request) {
 
 	items := []UserMediaEntry{}
 
-	queryString := `SELECT ums.id, ums.status, ums.rating, ums.notes, ums.updated_at,
+	queryString := `SELECT ums.id, ums.status, ums.rating, ums.updated_at,
 	mi.id, mi.type, mi.title, mi.cover_image_url, mi.release_date,
 	mm.artist,
-	uap.episodes_watched, uap.season_id
+	uap.episodes_watched
 	FROM user_media_status ums
 	JOIN media_items mi ON mi.id = ums.media_item_id
 	LEFT JOIN music_metadata mm ON mm.media_item_id = mi.id
@@ -97,9 +97,9 @@ func (h *Handler) GetAll(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var item UserMediaEntry
 		err := rows.Scan(
-			&item.ID, &item.Status, &item.Rating, &item.Notes, &item.UpdatedAt,
+			&item.ID, &item.Status, &item.Rating, &item.UpdatedAt,
 			&item.MediaItemID, &item.MediaType, &item.MediaTitle, &item.CoverImageURL,
-			&item.ReleaseDate, &item.Artist, &item.EpisodesWatched, &item.SeasonID,
+			&item.ReleaseDate, &item.Artist, &item.EpisodesWatched,
 		)
 
 		if utils.InternalError(w, err) {

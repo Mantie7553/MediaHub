@@ -5,8 +5,7 @@ CREATE TABLE user_media_status (
     media_item_id UUID REFERENCES media_items(id) ON DELETE CASCADE,
     album_id UUID REFERENCES albums(id) ON DELETE CASCADE,
     status media_status NOT NULL,
-    rating INT CHECK (rating BETWEEN 1 AND 5),
-    notes TEXT,
+    rating INT CHECK (rating BETWEEN 1 AND 10),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE(user_id, media_item_id),
     UNIQUE(user_id, album_id),
@@ -20,12 +19,21 @@ CREATE TABLE user_anime_progress (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     media_item_id UUID NOT NULL REFERENCES media_items(id) ON DELETE CASCADE,
-    season_id UUID REFERENCES anime_seasons(id) ON DELETE CASCADE,
     episodes_watched INT NOT NULL DEFAULT 0,
     last_watched_at TIMESTAMPTZ,
-    UNIQUE(user_id, media_item_id, season_id)
+    UNIQUE(user_id, media_item_id)
+);
+
+CREATE TABLE user_manga_progress (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    media_item_id UUID NOT NULL REFERENCES media_items(id) ON DELETE CASCADE,
+    chapters_read INT NOT NULL DEFAULT 0,
+    last_read_at TIMESTAMPTZ,
+    UNIQUE(user_id, media_item_id)
 );
 
 -- +goose Down
 DROP TABLE user_anime_progress;
+DROP TABLE user_manga_progress;
 DROP TABLE user_media_status;
