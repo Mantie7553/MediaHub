@@ -16,14 +16,22 @@ export default function ContentList({items, heading}) {
 
     return <div className="my-4">
         <div className="flex justify-between items-center mb-2">
-            {items.length > 0 && <h2 className="font-bold">{heading}</h2> }
+            <h2 className="font-bold">{heading}</h2>
             { items.length > 8 && <button className="link" onClick={handleShowAll}>Show All</button> }
         </div>
-        <ul className="flex gap-4 overflow-x-auto flex-nowrap">
-            {items.slice(0,8).map(item => {
-                return <Card key={item.id} item={item} />
-            })}
-        </ul>
-        {items.length > 0 && <div className="divider"></div> }
+        {items.length === 0 ? (
+            <div className="flex items-center justify-center h-32 w-full border border-dashed border-base-300 rounded-lg">
+                <p className="text-base-content/50 text-sm pl-2">Nothing here yet</p>
+            </div>
+        ) : (
+            <>
+                <ul className="flex gap-4 overflow-x-auto flex-nowrap">
+                    {items.slice(0,8).map(item => {
+                        return <Card key={item.id} item={item} />
+                    })}
+                </ul>
+                <div className="divider"></div>
+            </>
+        )}
     </div>
 }
