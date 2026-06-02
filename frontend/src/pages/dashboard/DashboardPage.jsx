@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import api from "../../services/api"
 import { Card } from "../../components/cards"
+import ContentList from "../../components/layout/ContentList";
 
 /**
  * Dashboard page layout
@@ -29,25 +30,4 @@ export default function DashboardPage() {
         <ContentList items={manga} heading="Manga"/>
         <ContentList items={music} heading="Music" />
     </section>
-}
-
-/**
- * A list of some content type
- * @param {any} items the items this list will contain
- * @param {any} heading the heading for this list
- * @returns
- */
-function ContentList({items, heading}) {
-
-    return <div className="my-4 max-w-fit">
-        <div className="flex justify-between items-center mb-2">
-            <h2 className="font-bold">{heading}</h2>
-            <button className="link">Show all</button>
-        </div>
-        <ul className="flex gap-2 overflow-x-auto flex-nowrap">
-            {items.slice(0,10).map(item => {
-                return <Card key={item.id} item={item}/>
-            })}
-        </ul>
-    </div>
 }

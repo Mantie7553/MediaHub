@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react"
 import Loading from "../../components/states/Loading";
 import api from "../../services/api";
-import { Card, SearchCard } from "../../components/cards";
+import { Card } from "../../components/cards";
+import ContentList from "../../components/layout/ContentList";
+import ContentGrid from "../../components/layout/ContentGrid";
 
 /**
  * Discover page layout
@@ -68,31 +70,13 @@ return <div className="flex flex-col gap-6">
         </div>
 
         {/* Available Now */}
-        {library.length > 0 && (
-            <div>
-                <h2 className="font-bold text-lg mb-3">Available Now</h2>
-                <ul className="flex gap-2 overflow-x-auto flex-nowrap pb-2">
-                    {library.map(item => (
-                        <Card key={item.id} item={{
-                            ...item,
-                            media_type: item.type,
-                            media_title: item.title,
-                            media_item_id: item.id,
-                        }} />
-                    ))}
-                </ul>
-            </div>
-        )}
+        <ContentList items={library} heading="Available Now" />
 
         {/* Search Results */}
         <div>
             {loading && <Loading />}
             {error && <Error error={error}/>}
-            {results.length > 0 && (
-                <ul className="flex flex-wrap gap-4">
-                    {results.map(item => <SearchCard key={item.external_id} item={item} />)}
-                </ul>
-            )}
+            <ContentGrid items={results} heading="Trending Now" showActions={true} />
         </div>
     </div>
 }

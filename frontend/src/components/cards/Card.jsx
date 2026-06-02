@@ -1,14 +1,41 @@
 import { Link } from "react-router-dom";
 import Format from "../../utils/format";
-import Rating from "../Rating";
 import { mediaStatusBadge } from "../../utils/status";
+import { useRef, useState } from "react";
+import api from "../../services/api";
+import AddToListModal from "../modals/AddToListModal";
 
-export default function Card({item}) {
+export default function Card({item, showActions=false}) {
+    let {infoSection, path} = mediaInfo(item);
 
-    let info;
+    const card = (
+        <li className="card border border-base-300 w-48 shrink-0">
+            <figure className="relative">
+                {item.status && 
+                    <span className={`badge ${mediaStatusBadge(item.status)} absolute top-2 left-2 z-10 text-xs p-1`}>
+                        {Format.cleanString(item.status)}
+                    </span>}
+                {item.cover_image_url ? (
+                    <img src={item.cover_image_url} className="w-full h-48"/>
+                ) : (
+                    <div className="skeleton h-48 w-full"></div>
+                )}
+            </figure>
+            <div  className="card-body">
+                <h3 className="card-title text-sm">{item.media_title ?? item.title}</h3>
+                {infoSection}
+                <ActionButtons item={item} isVisible={showActions}/>
+            </div>
+        </li>
+    )
+
+    return <Link to={`${path}${item.media_item_id || item.id}`} className="h-fit">{card}</Link>
+}
+
+function mediaInfo(item) {
     let path = "";
-
-    switch(item.media_type) {
+    let info = null;
+    switch(item.media_type ?? item.type) {
         case "anime": 
             const season = item.season_number ? `S${item.season_number}` : null
             const total = item.episode_count
@@ -43,28 +70,71 @@ export default function Card({item}) {
             break
 
         default: break
+    }   
+
+    return {infoSection: info, path: path}
+}
+
+function ActionButtons({item, isVisible}) {
+    const [msg, setMsg] = useState("");
+    const [loading, setLoading] = useState(false);
+    const dialogRef = useRef(null);
+
+    function handleOpenModal(e) {
+        e.stopPropagation();
+        e.preventDefault();
+        dialogRef.current.showModal();
     }
 
-    const card = (
-        <li className="card border border-base-300 w-48 shrink-0">
-            <figure className="relative">
-                {item.status && 
-                    <span className={`badge ${mediaStatusBadge(item.status)} absolute top-2 left-2 z-10 text-xs p-1`}>
-                        {Format.cleanString(item.status)}
-                    </span>}
-                {item.cover_image_url ? (
-                    <img src={item.cover_image_url} className="w-full h-48"/>
-                ) : (
-                    <div className="skeleton h-48 w-full"></div>
-                )}
-            </figure>
-            <div  className="card-body">
-                <h3 className="card-title text-sm">{item.media_title ?? item.title}</h3>
-                {info}
-                <Rating selected={item.rating} id={item.id} />
-            </div>
-        </li>
-    )
+    function handleConfirm({ status, score, progress }) {
+        setLoading(true);
+        setMsg("");
+        api.post("/search/save", {
+            external_id: item.external_id,
+            external_source: item.external_source,
+            title: item.title,
+            cover_image_url: item.cover_image_url,
+            type: item.type,
+            action: "list",
+            status,
+            rating: score === 0 ? null : score,
+            progress,
+        })
+        .then(() => setMsg("Added to list!"))
+        .catch(err => setMsg(err.response?.data?.error ?? err.message))
+        .finally(() => setLoading(false))
+    }
 
-    return <Link to={`${path}${item.media_item_id || item.id}`}>{card}</Link>
+    function handleDownload(e) {
+        e.stopPropagation();
+        e.preventDefault();
+        setLoading(true);
+        setMsg("");
+        api.post("/search/save", {
+            external_id: item.external_id,
+            external_source: item.external_source,
+            title: item.title,
+            cover_image_url: item.cover_image_url,
+            type: item.type,
+            action: "download",
+        })
+        .then(() => setMsg("Download requested!"))
+        .catch(err => setMsg(err.response?.data?.error ?? err.message))
+        .finally(() => setLoading(false))
+    }
+
+    return isVisible ?
+    <>
+        <AddToListModal item={item} onConfirm={handleConfirm} dialogRef={dialogRef} />
+        <div className="flex flex-col gap-1">
+            <button className="btn btn-sm btn-primary" onClick={handleOpenModal} disabled={loading}>
+                + Add to List
+            </button>
+            <button className="btn btn-sm btn-outline" onClick={handleDownload} disabled={loading}>
+                Request Download
+            </button>
+        </div>
+        {msg && <p className="text-xs mt-1">{msg}</p>}
+    </> :
+    <></>
 }
