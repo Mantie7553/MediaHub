@@ -13,7 +13,8 @@ CREATE TABLE manga_chapters (
     title TEXT,
     file_path TEXT,
     page_count INT,
-    created_at TIMESTAMPTZ
+    created_at TIMESTAMPTZ,
+    UNIQUE(media_item_id, chapter_number)
 );
 
 CREATE TABLE manga_progress (

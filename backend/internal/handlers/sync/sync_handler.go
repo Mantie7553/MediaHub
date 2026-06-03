@@ -1,9 +1,14 @@
 package sync
 
 import (
+	"archive/zip"
 	"database/sql"
+	"io/fs"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/Mantie7553/MediaHub/backend/internal/clients/anilist"
@@ -207,5 +212,75 @@ func (h *Handler) SyncRadarr(w http.ResponseWriter, r *http.Request) {
 			logger.Error("failed to update file path for %s: %s", m.Title, err.Error())
 		}
 	}
+	w.WriteHeader(http.StatusOK)
+}
+
+func (h *Handler) SyncManga(w http.ResponseWriter, r *http.Request) {
+	mediaRoot := os.Getenv("MEDIA_ROOT")
+	mangaRoot := filepath.Join(mediaRoot, "Manga")
+
+	rows, err := h.db.Query(`SELECT id, title FROM media_items WHERE type = 'manga'`)
+	if utils.InternalError(w, err) {
+		return
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var mediaItemID, title string
+		if err := rows.Scan(&mediaItemID, &title); err != nil {
+			logger.Error("failed to scan manga row: %s", err.Error())
+			continue
+		}
+
+		folderName := strings.ReplaceAll(strings.ReplaceAll(title, ": ", "_"), " ", "_")
+		mangaDir := filepath.Join(mangaRoot, folderName)
+		if _, err := os.Stat(mangaDir); os.IsNotExist(err) {
+			logger.Warn("manga directory not found for %s, skipping", title)
+			continue
+		}
+
+		err = filepath.WalkDir(mangaDir, func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if d.IsDir() || strings.ToLower(filepath.Ext(path)) != ".cbz" {
+				return nil
+			}
+
+			base := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
+			chapterNum := 0.0
+			if strings.HasPrefix(base, "[") {
+				end := strings.Index(base, "]")
+				if end > 1 {
+					chapterNum, _ = strconv.ParseFloat(strings.TrimSpace(base[1:end]), 64)
+				}
+			}
+
+			r, err := zip.OpenReader(path)
+			pageCount := 0
+			if err == nil {
+				for _, f := range r.File {
+					ext := strings.ToLower(filepath.Ext(f.Name))
+					if ext == ".jpg" || ext == ".jpeg" || ext == ".png" || ext == ".webp" {
+						pageCount++
+					}
+				}
+				r.Close()
+			}
+
+			h.db.Exec(
+				`INSERT INTO manga_chapters (media_item_id, chapter_number, file_path, page_count)
+				VALUES ($1, $2, $3, $4)
+				ON CONFLICT DO NOTHING`,
+				mediaItemID, chapterNum, path, pageCount,
+			)
+			return nil
+		})
+
+		if err != nil {
+			logger.Error("failed to walk manga directory for %s: %s", title, err.Error())
+		}
+	}
+
 	w.WriteHeader(http.StatusOK)
 }

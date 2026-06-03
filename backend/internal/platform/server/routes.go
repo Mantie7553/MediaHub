@@ -117,5 +117,6 @@ func (s *Server) routes() {
 		// Sync Handler endpoints
 		r.Post("/admin/sync/sonarr", syncHandler.SyncSonar)
 		r.Post("/admin/sync/radarr", syncHandler.SyncRadarr)
+		r.Post("/admin/sync/manga", syncHandler.SyncManga)
 	})
 }

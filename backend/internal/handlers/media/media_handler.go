@@ -199,7 +199,8 @@ func (h *Handler) GetAll(w http.ResponseWriter, r *http.Request) {
 
 	if available == "true" {
 		conditions = append(conditions, `(EXISTS (SELECT 1 FROM sonarr_items WHERE media_item_id = mi.id)
-		OR EXISTS (SELECT 1 FROM radarr_items WHERE media_item_id = mi.id))`)
+		OR EXISTS (SELECT 1 FROM radarr_items WHERE media_item_id = mi.id))
+		OR EXISTS (SELECT 1 FROM manga_chapters WHERE media_item_id = mi.id AND file_path IS NOT NULL)`)
 	}
 
 	queryString := `SELECT id, type, title, description, cover_image_url, release_date, external_id, external_source, created_at FROM media_items mi`

@@ -51,8 +51,8 @@ CREATE TABLE music_metadata (
 
 -- +goose Down
 DROP INDEX uq_media_items_external;
-DROP TABLE music_metadata;
-DROP TABLE albums;
-DROP TABLE movie_metadata;
-DROP TABLE anime_metadata;
-DROP TABLE media_items;
+DROP TABLE music_metadata CASCADE;
+DROP TABLE albums CASCADE;
+DROP TABLE movie_metadata CASCADE;
+DROP TABLE anime_metadata CASCADE;
+DROP TABLE media_items CASCADE;
