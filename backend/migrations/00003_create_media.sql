@@ -21,16 +21,6 @@ CREATE TABLE anime_metadata (
     genres TEXT[]
 );
 
-CREATE TABLE anime_seasons (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    media_item_id UUID NOT NULL REFERENCES media_items(id) ON DELETE CASCADE,
-    season_number INT NOT NULL,
-    episode_count INT NOT NULL,
-    title TEXT,
-    air_date DATE,
-    UNIQUE(media_item_id, season_number)
-);
-
 CREATE TABLE movie_metadata (
     media_item_id UUID PRIMARY KEY REFERENCES media_items(id) ON DELETE CASCADE,
     runtime_mins INT,
@@ -64,6 +54,5 @@ DROP INDEX uq_media_items_external;
 DROP TABLE music_metadata;
 DROP TABLE albums;
 DROP TABLE movie_metadata;
-DROP TABLE anime_seasons;
 DROP TABLE anime_metadata;
 DROP TABLE media_items;
