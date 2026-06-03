@@ -43,7 +43,7 @@ func (h *Handler) SyncSonar(w http.ResponseWriter, r *http.Request) {
 			posterURL := s.PosterURL()
 			var externalID *string
 			aniClient := anilist.NewAnilistClient("")
-			results, searchErr := aniClient.Search("ANIME", s.Title, 1)
+			results, searchErr := aniClient.Search("ANIME", s.Title, 1, "TV")
 			time.Sleep(500 * time.Millisecond)
 			if searchErr == nil && len(results) > 0 {
 				id := strconv.Itoa(results[0].ID)
@@ -63,7 +63,7 @@ func (h *Handler) SyncSonar(w http.ResponseWriter, r *http.Request) {
 		} else if err == nil {
 			// backfill external_id if missing
 			aniClient := anilist.NewAnilistClient("")
-			results, searchErr := aniClient.Search("ANIME", s.Title, 1)
+			results, searchErr := aniClient.Search("ANIME", s.Title, 1, "TV")
 			time.Sleep(500 * time.Millisecond)
 			if searchErr == nil && len(results) > 0 {
 				id := strconv.Itoa(results[0].ID)

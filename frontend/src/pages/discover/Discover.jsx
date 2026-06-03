@@ -25,7 +25,7 @@ export default function Discover() {
     }, [activeTab])
 
     useEffect(() => {
-    api.get(`/media?available=true&type=${activeTab === "anime" ? "anime" : "movie"}`)
+    api.get(`/media?available=true&type=${activeTab}`)
         .then(res => setLibrary(res.data ?? []))
         .catch(() => {})
     }, [activeTab])
@@ -48,13 +48,17 @@ export default function Discover() {
 return <div className="flex flex-col gap-6">
         {/* Tabs */}
         <div className="tabs tabs-lift">
-            <input type="radio" name="my_tabs_3" className="tab" aria-label="Anime"
+            <input type="radio" name="tabs" className="tab" aria-label="Anime"
             checked={activeTab === "anime"}
             onChange={() => { setActiveTab("anime"); setResults([]); setQuery(""); }}
             />
-            <input type="radio" name="my_tabs_3" className="tab" aria-label="Manga"
+            <input type="radio" name="tabs" className="tab" aria-label="Manga"
             checked={activeTab === "manga"}
             onChange={() => { setActiveTab("manga"); setResults([]); setQuery(""); }}
+            />
+            <input type="radio" name="tabs" className="tab" aria-label="Movies"
+            checked={activeTab === "movie"}
+            onChange={() => { setActiveTab("movie"); setResults([]); setQuery(""); }}
             />
         </div>
 

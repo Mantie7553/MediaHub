@@ -47,9 +47,9 @@ func NewAnilistClient(urlEnvKey string) *AnilistClient {
 
 // searchQuery is the GraphQL document used by Search. Declared at package scope so the
 // raw multi-line string stays out of the method body.
-const searchQuery = `query ($search: String, $type: MediaType, $perPage: Int) {
+const searchQuery = `query ($search: String, $type: MediaType, $perPage: Int, $format: MediaFormat) {
   Page(perPage: $perPage) {
-    media(search: $search, type: $type) {
+    media(search: $search, type: $type, format: $format) {
       id
       type
       format
@@ -68,9 +68,9 @@ const searchQuery = `query ($search: String, $type: MediaType, $perPage: Int) {
 }`
 
 // sortQuery when sorting by a specific field
-const sortQuery = `query ($sort: [MediaSort], $type: MediaType, $perPage: Int) {
+const sortQuery = `query ($sort: [MediaSort], $type: MediaType, $perPage: Int, $format: MediaFormat) {
   Page(perPage: $perPage) {
-    media(sort: $sort, type: $type) {
+    media(sort: $sort, type: $type, format: $format) {
       id
       type
       format
@@ -116,7 +116,7 @@ Params:
   - query: free-text search term
   - perPage: number of results to return; defaults to 10 when zero or negative
 */
-func (c *AnilistClient) Search(mediaType, query string, perPage int) ([]Media, error) {
+func (c *AnilistClient) Search(mediaType, query string, perPage int, format string) ([]Media, error) {
 	if perPage <= 0 {
 		perPage = 10
 	}
@@ -128,6 +128,10 @@ func (c *AnilistClient) Search(mediaType, query string, perPage int) ([]Media, e
 	// Omit type from the variables when empty so Anilist doesn't reject the value as invalid enum.
 	if mediaType != "" {
 		vars["type"] = mediaType
+	}
+
+	if format != "" {
+		vars["format"] = format
 	}
 
 	var env struct {
@@ -154,7 +158,7 @@ Params:
   - mediaType: "ANIME" or "MANGA". Empty string searches across both.
   - perPage: number of results to return; defaults to 10 when zero or negative
 */
-func (c *AnilistClient) Trending(mediaType string, perPage int) ([]Media, error) {
+func (c *AnilistClient) Trending(mediaType string, perPage int, format string) ([]Media, error) {
 	if perPage <= 0 {
 		perPage = 10
 	}
@@ -167,6 +171,10 @@ func (c *AnilistClient) Trending(mediaType string, perPage int) ([]Media, error)
 	// Omit type from the variables when empty so Anilist doesn't reject the value as invalid enum.
 	if mediaType != "" {
 		vars["type"] = mediaType
+	}
+
+	if format != "" {
+		vars["format"] = format
 	}
 
 	var env struct {

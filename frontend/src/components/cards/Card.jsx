@@ -54,7 +54,7 @@ function mediaInfo(item) {
             break
         case "movie":
             info = <>
-                <span>{Format.year(item.release_date)}</span>
+                <span>{item.release_date ? Format.year(item.release_date) : null}</span>
             </>
             path = "/watch/movie/"
             break

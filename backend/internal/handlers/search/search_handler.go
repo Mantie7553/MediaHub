@@ -63,9 +63,9 @@ func (h *Handler) Search(w http.ResponseWriter, r *http.Request) {
 		var err error
 		client := anilist.NewAnilistClient("")
 		if q == "" {
-			results, err = client.Trending("ANIME", 20)
+			results, err = client.Trending("ANIME", 20, "TV")
 		} else {
-			results, err = client.Search("ANIME", q, 20)
+			results, err = client.Search("ANIME", q, 20, "TV")
 		}
 		if err != nil {
 			utils.Error(w, http.StatusInternalServerError, "search failed")
@@ -89,6 +89,36 @@ func (h *Handler) Search(w http.ResponseWriter, r *http.Request) {
 		}
 		utils.JSON(w, out)
 
+	case "movie":
+		var results []anilist.Media
+		var err error
+		client := anilist.NewAnilistClient("")
+		if q == "" {
+			results, err = client.Trending("ANIME", 20, "MOVIE")
+		} else {
+			results, err = client.Search("ANIME", q, 20, "MOVIE")
+		}
+		if err != nil {
+			utils.Error(w, http.StatusInternalServerError, "search failed")
+			return
+		}
+		// go through the items returned
+		out := make([]SearchResult, 0, len(results))
+		for _, m := range results {
+			title := m.Title.English
+			if title == "" {
+				title = m.Title.Romaji
+			}
+			// format entries to return
+			out = append(out, SearchResult{
+				ExternalID:     strconv.Itoa(m.ID),
+				ExternalSource: "anilist",
+				Title:          title,
+				CoverImageURL:  m.CoverImage.Large,
+				Type:           "movie",
+			})
+		}
+		utils.JSON(w, out)
 	case "manga":
 		// query mangadex
 		client := mangadex.NewMangaDexClient("")
@@ -243,6 +273,43 @@ func (h *Handler) Save(w http.ResponseWriter, r *http.Request) {
 			mediaItemID,
 			utils.NullString(studio),
 			utils.NullString(status),
+			pq.Array(genres),
+		)
+		if utils.InternalError(w, err) {
+			return
+		}
+	}
+
+	if req.Type == "movie" && req.ExternalSource == "anilist" {
+		var (
+			runtime_mins int
+			director     string
+			genres       []string
+		)
+
+		client := anilist.NewAnilistClient("")
+		anilistID, convErr := strconv.Atoi(req.ExternalID)
+		if convErr != nil {
+			log.Printf("invalid anilist external_id %s: %v", req.ExternalID, convErr)
+		} else {
+			movie, fetchErr := client.GetByID(anilistID)
+			if fetchErr != nil {
+				log.Printf("failed to fetch anilist metadata for %s: %v", req.ExternalID, fetchErr)
+			} else {
+				genres = append(genres, movie.Genres...)
+			}
+		}
+
+		_, err = h.db.Exec(
+			`INSERT INTO movie_metadata (media_item_id, runtime_mins, director, genres)
+			VALUES ($1, $2, $3, $4)
+			ON CONFLICT (media_item_id) DO UPDATE SET
+			runtime_mins = EXCLUDED.runtime_mins,
+			director = EXCLUDED.director,
+			genres = EXCLUDED.genres`,
+			mediaItemID,
+			utils.NullInt(&runtime_mins),
+			utils.NullString(director),
 			pq.Array(genres),
 		)
 		if utils.InternalError(w, err) {
