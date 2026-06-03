@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useParams } from "react-router-dom"
+import { ChevronLeft, ChevronRight } from "lucide-react"
 import { useMediaItem, usePages } from "../../hooks";
 import Loading from "../../components/states/Loading";
 import Error from "../../components/states/Error";
@@ -37,14 +38,14 @@ export default function MangaReader() {
     
     return <div className="flex flex-col items-center">
         <div className="flex-1 overflow-hidden relative">
-            <img src={imageSrc}/>
+            <img src={imageSrc} className="max-h-[calc(100vh-5rem)] max-w-full object-contain"/>
             <div className="absolute inset-y-0 left-0 w-1/2 cursor-pointer hover:bg-black/10" onClick={handlePageDown}></div>
             <div className="absolute inset-y-0 right-0 w-1/2 cursor-pointer hover:bg-black/10" onClick={handlePageUp}></div>
         </div>
         <div className="flex gap-2 items-center">
-            <button onClick={handlePageDown} disabled={currentPage === 0} className="btn">Prev</button>
+            <button onClick={handlePageDown} disabled={currentPage === 0} className="btn"><ChevronLeft size={24} strokeWidth={4}/></button>
             <p className={currentPage !== totalPages ? "text-neutral-content" : ""}>{currentPage + 1} / <strong>{totalPages}</strong></p>
-            <button onClick={handlePageUp} disabled={currentPage >= totalPages - 1} className="btn">Next</button>
+            <button onClick={handlePageUp} disabled={currentPage >= totalPages - 1} className="btn"><ChevronRight size={24} strokeWidth={4}/></button>
         </div>
     </div>
 }

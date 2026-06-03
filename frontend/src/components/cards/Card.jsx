@@ -4,33 +4,34 @@ import { mediaStatusBadge } from "../../utils/status";
 import { useRef, useState } from "react";
 import api from "../../services/api";
 import AddToListModal from "../modals/AddToListModal";
+import { Plus, Check } from "lucide-react";
 
 export default function Card({item, showActions=false, userContentMap={}, onListChange}) {
     let {infoSection, path} = mediaInfo(item);
     const userEntry = userContentMap[String(item.external_id ?? item.media_item_id ?? item.id)];
 
     const card = (
-        <li className="card border border-base-300 w-48 shrink-0">
+        <li className="card border border-base-300 w-44 shrink-0 bg-base-300 h-full">
             <figure className="relative">
                 {(userEntry?.status || item.status) && 
                     <span className={`badge ${mediaStatusBadge(userEntry?.status ?? item.status)} absolute top-2 left-2 z-10 text-xs p-1`}>
                         {Format.cleanString(userEntry?.status ?? item.status)}
                     </span>}
                 {item.cover_image_url ? (
-                    <img src={item.cover_image_url} className="w-full h-48"/>
+                    <img src={item.cover_image_url} className="w-full h-56 object-contain"/>
                 ) : (
-                    <div className="skeleton h-48 w-full"></div>
+                    <div className="skeleton h-64 w-full"></div>
                 )}
             </figure>
-            <div  className="card-body">
-                <h3 className="card-title text-sm">{item.media_title ?? item.title}</h3>
+            <div  className="card-body p-2 gap-1">
+                <h3 className="card-title text-sm line-clamp-2">{item.media_title ?? item.title}</h3>
                 {infoSection}
                 <ActionButtons item={item} userEntry={userEntry} onListChange={onListChange}/>
             </div>
         </li>
     )
 
-    return <Link to={`${path}${item.media_item_id || item.id}`} className="h-fit">{card}</Link>
+    return <Link to={`${path}${item.media_item_id || item.id}`}>{card}</Link>
 }
 
 function mediaInfo(item) {
@@ -131,8 +132,8 @@ function ActionButtons({item, userEntry, onListChange}) {
     return <>
         <AddToListModal item={item} onConfirm={handleConfirm} dialogRef={dialogRef} initialValues={userEntry}/>
         <div className="flex flex-col gap-1">
-            <button className="btn btn-sm btn-primary" onClick={handleOpenModal} disabled={loading}>
-                {userEntry ? "Edit" : "+ Add to List"}
+            <button className="absolute top-2 right-2 z-10 btn btn-circle btn-xs btn-primary text-lg" onClick={handleOpenModal} disabled={loading}>
+                {userEntry ? <Check size={14} strokeWidth={4}/> : <Plus size={14} strokeWidth={4}/>}
             </button>
         </div>
         {msg && <p className="text-xs mt-1">{msg}</p>}

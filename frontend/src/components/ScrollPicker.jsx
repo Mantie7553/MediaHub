@@ -1,3 +1,5 @@
+import { ChevronLeft, ChevronRight } from "lucide-react"
+
 /**
  * A horizontal scroll picker for numeric values
  * @param {number} value - current value
@@ -24,7 +26,7 @@ export default function ScrollPicker({ value, onChange, min = 0, max = 10, unset
                 onClick={decrement}
                 disabled={value <= min}
             >
-                ‹
+                <ChevronLeft size={24} strokeWidth={4}/>
             </button>
             <span className="w-8 text-center font-bold text-lg">
                 {value === unsetValue ? unsetLabel : value}
@@ -35,7 +37,7 @@ export default function ScrollPicker({ value, onChange, min = 0, max = 10, unset
                 onClick={increment}
                 disabled={value >= max}
             >
-                ›
+                <ChevronRight size={24} strokeWidth={4}/>
             </button>
         </div>
     )
