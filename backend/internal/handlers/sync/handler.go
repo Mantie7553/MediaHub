@@ -3,7 +3,10 @@ package sync
 import (
 	"database/sql"
 	"net/http"
+	"strconv"
+	"time"
 
+	"github.com/Mantie7553/MediaHub/backend/internal/clients/anilist"
 	"github.com/Mantie7553/MediaHub/backend/internal/clients/arr"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/logger"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/utils"
@@ -38,19 +41,40 @@ func (h *Handler) SyncSonar(w http.ResponseWriter, r *http.Request) {
 
 		if err == sql.ErrNoRows {
 			posterURL := s.PosterURL()
+			var externalID *string
+			aniClient := anilist.NewAnilistClient("")
+			results, searchErr := aniClient.Search("ANIME", s.Title, 1)
+			time.Sleep(500 * time.Millisecond)
+			if searchErr == nil && len(results) > 0 {
+				id := strconv.Itoa(results[0].ID)
+				externalID = &id
+			}
+
 			err = h.db.QueryRow(
-				`INSERT INTO media_items (type, title, cover_image_url)
-    			VALUES ('anime', $1, $2)
-    			RETURNING id`,
-				s.Title, posterURL,
+				`INSERT INTO media_items (type, title, cover_image_url, external_id, external_source)
+				VALUES ('anime', $1, $2, $3, $4)
+				RETURNING id`,
+				s.Title, posterURL, externalID, utils.NullString("anilist"),
 			).Scan(&mediaItemID)
 			if err != nil {
 				logger.Error("failed to create media item for %s: %s", s.Title, err.Error())
 				continue
 			}
-		}
-		if err != nil {
+		} else if err == nil {
+			// backfill external_id if missing
+			aniClient := anilist.NewAnilistClient("")
+			results, searchErr := aniClient.Search("ANIME", s.Title, 1)
+			time.Sleep(500 * time.Millisecond)
+			if searchErr == nil && len(results) > 0 {
+				id := strconv.Itoa(results[0].ID)
+				h.db.Exec(
+					`UPDATE media_items SET external_id = COALESCE(external_id, $1), external_source = COALESCE(external_source, $2) WHERE id = $3`,
+					id, "anilist", mediaItemID,
+				)
+			}
+		} else {
 			logger.Error("failed to find media item for %s : %s", s.Title, err.Error())
+			continue
 		}
 
 		_, err = h.db.Exec(

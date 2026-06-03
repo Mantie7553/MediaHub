@@ -7,7 +7,7 @@ import { Card } from "../cards"
  * @param {any} heading the heading for this list
  * @returns
  */
-export default function ContentList({items, heading}) {
+export default function ContentList({items, heading, userContentMap={}, onListChange}) {
     const navigate = useNavigate();
 
     function handleShowAll() {
@@ -27,7 +27,7 @@ export default function ContentList({items, heading}) {
             <>
                 <ul className="flex gap-4 overflow-x-auto flex-nowrap">
                     {items.slice(0,8).map(item => {
-                        return <Card key={item.id} item={item} />
+                        return <Card key={item.id} item={item} userContentMap={userContentMap} onListChange={onListChange}/>
                     })}
                 </ul>
                 <div className="divider"></div>

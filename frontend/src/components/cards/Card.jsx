@@ -5,15 +5,16 @@ import { useRef, useState } from "react";
 import api from "../../services/api";
 import AddToListModal from "../modals/AddToListModal";
 
-export default function Card({item, showActions=false}) {
+export default function Card({item, showActions=false, userContentMap={}, onListChange}) {
     let {infoSection, path} = mediaInfo(item);
+    const userEntry = userContentMap[String(item.external_id ?? item.media_item_id ?? item.id)];
 
     const card = (
         <li className="card border border-base-300 w-48 shrink-0">
             <figure className="relative">
-                {item.status && 
-                    <span className={`badge ${mediaStatusBadge(item.status)} absolute top-2 left-2 z-10 text-xs p-1`}>
-                        {Format.cleanString(item.status)}
+                {(userEntry?.status || item.status) && 
+                    <span className={`badge ${mediaStatusBadge(userEntry?.status ?? item.status)} absolute top-2 left-2 z-10 text-xs p-1`}>
+                        {Format.cleanString(userEntry?.status ?? item.status)}
                     </span>}
                 {item.cover_image_url ? (
                     <img src={item.cover_image_url} className="w-full h-48"/>
@@ -24,7 +25,7 @@ export default function Card({item, showActions=false}) {
             <div  className="card-body">
                 <h3 className="card-title text-sm">{item.media_title ?? item.title}</h3>
                 {infoSection}
-                <ActionButtons item={item} isVisible={showActions}/>
+                <ActionButtons item={item} userEntry={userEntry} onListChange={onListChange}/>
             </div>
         </li>
     )
@@ -75,7 +76,7 @@ function mediaInfo(item) {
     return {infoSection: info, path: path}
 }
 
-function ActionButtons({item, isVisible}) {
+function ActionButtons({item, userEntry, onListChange}) {
     const [msg, setMsg] = useState("");
     const [loading, setLoading] = useState(false);
     const dialogRef = useRef(null);
@@ -89,52 +90,51 @@ function ActionButtons({item, isVisible}) {
     function handleConfirm({ status, score, progress }) {
         setLoading(true);
         setMsg("");
-        api.post("/search/save", {
-            external_id: item.external_id,
-            external_source: item.external_source,
-            title: item.title,
-            cover_image_url: item.cover_image_url,
-            type: item.type,
-            action: "list",
-            status,
-            rating: score === 0 ? null : score,
-            progress,
-        })
-        .then(() => setMsg("Added to list!"))
-        .catch(err => setMsg(err.response?.data?.error ?? err.message))
-        .finally(() => setLoading(false))
+        if (userEntry) {
+            // existing list entry — update it
+            api.put(`/me/media/${userEntry.id}`, {
+                status,
+                rating: score === 0 ? null : score,
+            })
+            .then(() => { setMsg("Updated!"); onListChange?.(); })
+            .catch(err => setMsg(err.response?.data?.error ?? err.message))
+            .finally(() => setLoading(false))
+        } else if (item.external_source) {
+            // search result — needs full save with external metadata
+            api.post("/search/save", {
+                external_id: item.external_id,
+                external_source: item.external_source,
+                title: item.title,
+                cover_image_url: item.cover_image_url,
+                type: item.type,
+                action: "both",
+                status,
+                rating: score === 0 ? null : score,
+                progress,
+            })
+            .then(() => { setMsg("Added to list!"); onListChange?.(); })
+            .catch(err => setMsg(err.response?.data?.error ?? err.message))
+            .finally(() => setLoading(false))
+        } else {
+            // library item — already in DB, just add to list
+            api.post("/me/media", {
+                media_item_id: item.id,
+                status,
+                rating: score === 0 ? null : score,
+            })
+            .then(() => { setMsg("Added to list!"); onListChange?.(); })
+            .catch(err => setMsg(err.response?.data?.error ?? err.message))
+            .finally(() => setLoading(false))
+        }
     }
 
-    function handleDownload(e) {
-        e.stopPropagation();
-        e.preventDefault();
-        setLoading(true);
-        setMsg("");
-        api.post("/search/save", {
-            external_id: item.external_id,
-            external_source: item.external_source,
-            title: item.title,
-            cover_image_url: item.cover_image_url,
-            type: item.type,
-            action: "download",
-        })
-        .then(() => setMsg("Download requested!"))
-        .catch(err => setMsg(err.response?.data?.error ?? err.message))
-        .finally(() => setLoading(false))
-    }
-
-    return isVisible ?
-    <>
-        <AddToListModal item={item} onConfirm={handleConfirm} dialogRef={dialogRef} />
+    return <>
+        <AddToListModal item={item} onConfirm={handleConfirm} dialogRef={dialogRef} initialValues={userEntry}/>
         <div className="flex flex-col gap-1">
             <button className="btn btn-sm btn-primary" onClick={handleOpenModal} disabled={loading}>
-                + Add to List
-            </button>
-            <button className="btn btn-sm btn-outline" onClick={handleDownload} disabled={loading}>
-                Request Download
+                {userEntry ? "Edit" : "+ Add to List"}
             </button>
         </div>
         {msg && <p className="text-xs mt-1">{msg}</p>}
-    </> :
-    <></>
+    </>
 }

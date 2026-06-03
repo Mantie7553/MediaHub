@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"time"
@@ -53,14 +55,19 @@ Params:
   - qualityProfileID: the id of the quality profile to use while searching
   - rootFolderPath: the location we will send content to once it has been downloaded
 */
-func (c *ArrClient) AddSeries(tvdbID int, qualityProfileID int, rootFolderPath string) (int, error) {
+func (c *ArrClient) AddSeries(tvdbID int, qualityProfileID int, rootFolderPath string, title string) (int, error) {
 	// Initialize the request body we are going to send
 	body, err := json.Marshal(map[string]any{
 		"tvdbId":           tvdbID,
+		"title":            title,
 		"qualityProfileId": qualityProfileID,
 		"rootFolderPath":   rootFolderPath,
 		"monitored":        true,
 		"seasonFolder":     true,
+		"addOptions": map[string]any{
+			"searchForMissingEpisodes": true,
+			"monitor":                  "all",
+		},
 	})
 	if err != nil {
 		return 0, err
@@ -83,7 +90,8 @@ func (c *ArrClient) AddSeries(tvdbID int, qualityProfileID int, rootFolderPath s
 
 	// check that it worked or not
 	if resp.StatusCode != http.StatusCreated {
-		return 0, fmt.Errorf("sonarr returned %d", resp.StatusCode)
+		body, _ := io.ReadAll(resp.Body)
+		return 0, fmt.Errorf("sonarr returned %d: %s", resp.StatusCode, string(body))
 	}
 
 	// get the Sonarr series ID or 0
@@ -119,6 +127,36 @@ func (c *ArrClient) GetAllSeries() ([]SonarrSeries, error) {
 	}
 
 	return result, nil
+}
+
+func (c *ArrClient) LookupSeries(title string) (tvdbID int, sonarrID int, err error) {
+	req, err := http.NewRequest("GET", c.config.BaseURL+"/api/v3/series/lookup?term="+url.QueryEscape(title), nil)
+	if err != nil {
+		return 0, 0, err
+	}
+	req.Header.Set("X-Api-Key", c.config.APIKey)
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return 0, 0, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return 0, 0, fmt.Errorf("sonarr lookup returned %d", resp.StatusCode)
+	}
+
+	var results []struct {
+		ID     int `json:"id"`
+		TvdbID int `json:"tvdbId"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&results); err != nil {
+		return 0, 0, err
+	}
+	if len(results) == 0 {
+		return 0, 0, fmt.Errorf("no results found for %s", title)
+	}
+	return results[0].TvdbID, results[0].ID, nil
 }
 
 func (c *ArrClient) GetEpisodes(seriesID int) ([]SonarrEpisode, error) {

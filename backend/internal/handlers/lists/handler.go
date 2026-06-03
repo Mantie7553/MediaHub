@@ -45,10 +45,10 @@ func (h *Handler) Add(w http.ResponseWriter, r *http.Request) {
 	// add the new entry in the database
 	var statusId string
 	err := h.db.QueryRow(
-		`INSERT INTO user_media_status (user_id, media_item_id, status, rating, notes)
- 		VALUES ($1, $2, $3, $4, $5) 
+		`INSERT INTO user_media_status (user_id, media_item_id, status, rating)
+ 		VALUES ($1, $2, $3, $4) 
 		RETURNING id`,
-		user.UserID, req.MediaItemId, req.Status, req.Rating, utils.NullString(req.Notes),
+		user.UserID, req.MediaItemId, req.Status, req.Rating,
 	).Scan(&statusId)
 	if err != nil {
 		if pqErr, ok := err.(*pq.Error); ok && pqErr.Code == "23505" {
@@ -76,7 +76,7 @@ func (h *Handler) GetAll(w http.ResponseWriter, r *http.Request) {
 	items := []UserMediaEntry{}
 
 	queryString := `SELECT ums.id, ums.status, ums.rating, ums.updated_at,
-	mi.id, mi.type, mi.title, mi.cover_image_url, mi.release_date,
+	mi.id, mi.type, mi.title, mi.cover_image_url, mi.release_date, mi.external_id,
 	mm.artist,
 	uap.episodes_watched
 	FROM user_media_status ums
@@ -99,7 +99,7 @@ func (h *Handler) GetAll(w http.ResponseWriter, r *http.Request) {
 		err := rows.Scan(
 			&item.ID, &item.Status, &item.Rating, &item.UpdatedAt,
 			&item.MediaItemID, &item.MediaType, &item.MediaTitle, &item.CoverImageURL,
-			&item.ReleaseDate, &item.Artist, &item.EpisodesWatched,
+			&item.ReleaseDate, &item.ExternalID, &item.Artist, &item.EpisodesWatched,
 		)
 
 		if utils.InternalError(w, err) {
@@ -139,10 +139,10 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	var mediaStatusId string
 	err := h.db.QueryRow(
 		`UPDATE user_media_status 
-		SET status = $1, rating = $2, notes = $3, updated_at = NOW()
-		WHERE id = $4 AND user_id = $5
+		SET status = $1, rating = $2, updated_at = NOW()
+		WHERE id = $3 AND user_id = $4
 		RETURNING id`,
-		req.Status, req.Rating, utils.NullString(req.Notes), entryID, user.UserID,
+		req.Status, req.Rating, entryID, user.UserID,
 	).Scan(&mediaStatusId)
 
 	if err == sql.ErrNoRows {

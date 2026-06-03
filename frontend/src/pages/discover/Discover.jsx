@@ -1,15 +1,16 @@
 import { useEffect, useState } from "react"
 import Loading from "../../components/states/Loading";
 import api from "../../services/api";
-import { Card } from "../../components/cards";
 import ContentList from "../../components/layout/ContentList";
 import ContentGrid from "../../components/layout/ContentGrid";
+import useUserContent from "../../hooks/useUserContent";
 
 /**
  * Discover page layout
  * @returns 
  */
 export default function Discover() {
+    const { userContentMap, refresh } = useUserContent();
     const [activeTab, setActiveTab] = useState("anime");
     const [library, setLibrary] = useState([]);
     const [query, setQuery] = useState("");
@@ -70,13 +71,13 @@ return <div className="flex flex-col gap-6">
         </div>
 
         {/* Available Now */}
-        <ContentList items={library} heading="Available Now" />
+        <ContentList items={library} heading="Available Now" userContentMap={userContentMap} onListChange={refresh}/>
 
         {/* Search Results */}
         <div>
             {loading && <Loading />}
             {error && <Error error={error}/>}
-            <ContentGrid items={results} heading="Trending Now" showActions={true} />
+            <ContentGrid items={results} heading="Trending Now" showActions={true}  userContentMap={userContentMap} onListChange={refresh}/>
         </div>
     </div>
 }

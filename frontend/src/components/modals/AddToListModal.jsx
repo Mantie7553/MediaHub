@@ -1,11 +1,17 @@
-import { useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import ScrollPicker from "../ScrollPicker";
 import Format from "../../utils/format";
 
-export default function AddToListModal({item, onConfirm, dialogRef}) {
-    const [status, setStatus] = useState('plan_to_watch');
-    const [score, setScore] = useState(0);
-    const [progress, setProgress] = useState(0);
+export default function AddToListModal({item, onConfirm, dialogRef, initialValues}) {
+    const [status, setStatus] = useState(initialValues?.status ?? 'plan_to_watch');
+    const [score, setScore] = useState(initialValues?.rating ?? 0);
+    const [progress, setProgress] = useState((initialValues?.episodes_watched || initialValues?.chapters_read) ?? 0);
+
+    useEffect(() => {
+        setStatus(initialValues?.status ?? 'plan_to_watch');
+        setScore(initialValues?.rating ?? 0);
+        setProgress((initialValues?.episodes_watched || initialValues?.chapters_read) ?? 0);
+    }, [initialValues]);
 
     function statusOptions(type) {
         switch(type) {

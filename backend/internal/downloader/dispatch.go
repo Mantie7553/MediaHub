@@ -70,24 +70,37 @@ func Dispatch(db *sql.DB, requestID string, mediaItemID string,
 			return "", fmt.Errorf("media item has no external_id")
 		}
 
-		extIDInt, err := strconv.Atoi(*externalID)
-		if err != nil {
-			logger.Error("External ID is not a number")
-			return "", fmt.Errorf("invalid external_id")
-		}
 		// connect to sonarr and start downloading
 		sClient := arr.NewArrClient("SONARR_URL", "SONARR_API_KEY")
-		seriesID, err := sClient.AddSeries(extIDInt, 1, dest)
 
+		var title string
+		err = db.QueryRow(`SELECT title FROM media_items WHERE id = $1`, mediaItemID).Scan(&title)
 		if err != nil {
-			logger.Error("Sonarr: %s", err.Error())
-			return "", fmt.Errorf("internal server error")
+			return "", fmt.Errorf("failed to get title: %w", err)
+		}
+
+		tvdbID, sonarrID, err := sClient.LookupSeries(title)
+		if err != nil {
+			logger.Error("Sonarr lookup failed: %s", err.Error())
+			return "", fmt.Errorf("sonarr lookup failed: %w", err)
+		}
+
+		var seriesID int
+		if sonarrID > 0 {
+			seriesID = sonarrID
+		} else {
+			seriesID, err = sClient.AddSeries(tvdbID, 1, dest, title)
+			if err != nil {
+				logger.Error("Sonarr: %s", err.Error())
+				return "", fmt.Errorf("internal server error")
+			}
 		}
 
 		// save the new content as a sonarr item in the database
 		if _, err := db.Exec(
 			`INSERT INTO sonarr_items (media_item_id, sonarr_series_id) 
-			VALUES ($1, $2)`,
+			VALUES ($1, $2)
+			ON CONFLICT (media_item_id) DO NOTHING`,
 			mediaItemID, seriesID,
 		); err != nil {
 			logger.Error("failed to save sonarr_id %s", err.Error())

@@ -10,7 +10,9 @@ import (
 
 	"github.com/Mantie7553/MediaHub/backend/internal/clients/anilist"
 	"github.com/Mantie7553/MediaHub/backend/internal/clients/mangadex"
+	"github.com/Mantie7553/MediaHub/backend/internal/downloader"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/auth"
+	"github.com/Mantie7553/MediaHub/backend/internal/platform/logger"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/utils"
 	"github.com/lib/pq"
 )
@@ -169,14 +171,33 @@ func (h *Handler) Save(w http.ResponseWriter, r *http.Request) {
 	// insert the media item if it doesn't exist, otherwise return the existing id
 	var mediaItemID string
 	err := h.db.QueryRow(
-		`INSERT INTO media_items (type, title, cover_image_url, external_id, external_source)
-		VALUES ($1, $2, $3, $4, $5)
-		ON CONFLICT (external_id, external_source) DO UPDATE SET title = EXCLUDED.title
-		RETURNING id`,
-		req.Type, req.Title, utils.NullString(req.CoverImageURL), req.ExternalID, req.ExternalSource,
+		`SELECT id FROM media_items WHERE title = $1 AND type = $2`,
+		req.Title, req.Type,
 	).Scan(&mediaItemID)
-	if utils.InternalError(w, err) {
+
+	if err == sql.ErrNoRows {
+		err := h.db.QueryRow(
+			`INSERT INTO media_items (type, title, cover_image_url, external_id, external_source)
+			VALUES ($1, $2, $3, $4, $5)
+			ON CONFLICT (external_id, external_source) DO UPDATE SET title = EXCLUDED.title
+			RETURNING id`,
+			req.Type, req.Title, utils.NullString(req.CoverImageURL), req.ExternalID, req.ExternalSource,
+		).Scan(&mediaItemID)
+		if utils.InternalError(w, err) {
+			return
+		}
+	} else if err != nil {
+		utils.InternalError(w, err)
 		return
+	} else {
+		h.db.Exec(
+			`UPDATE media_items SET 
+			external_id = COALESCE(external_id, $1),
+			external_source = COALESCE(external_source, $2),
+			cover_image_url = COALESCE(cover_image_url, $3)
+			WHERE id = $4`,
+			req.ExternalID, req.ExternalSource, utils.NullString(req.CoverImageURL), mediaItemID,
+		)
 	}
 
 	if req.Type == "anime" && req.ExternalSource == "anilist" {
@@ -305,14 +326,40 @@ func (h *Handler) Save(w http.ResponseWriter, r *http.Request) {
 
 	// create a download request if requested
 	if req.Action == "download" || req.Action == "both" {
-		_, err = h.db.Exec(
-			`INSERT INTO download_requests (requested_by, media_item_id, status, auto_approved)
-			VALUES ($1, $2, 'pending', false)
-			ON CONFLICT (requested_by, media_item_id) DO NOTHING`,
-			user.UserID, mediaItemID,
-		)
+		// check the users download permissions
+		var downloadPermissions string
+		err := h.db.QueryRow(
+			`SELECT download_permission FROM users WHERE id = $1`,
+			user.UserID,
+		).Scan(&downloadPermissions)
 		if utils.InternalError(w, err) {
 			return
+		}
+		status := "pending"
+		autoApproved := false
+		if downloadPermissions == "auto_approved" {
+			status = "approved"
+			autoApproved = true
+		}
+
+		var requestID string
+		err = h.db.QueryRow(
+			`INSERT INTO download_requests (requested_by, media_item_id, status, auto_approved)
+			VALUES ($1, $2, $3, $4)
+			ON CONFLICT (requested_by, media_item_id) DO NOTHING
+			RETURNING id`,
+			user.UserID, mediaItemID, status, autoApproved,
+		).Scan(&requestID)
+
+		if err != nil && err != sql.ErrNoRows {
+			utils.InternalError(w, err)
+			return
+		}
+
+		if autoApproved && requestID != "" {
+			if _, err := downloader.Dispatch(h.db, requestID, mediaItemID, "", req.Type, &req.ExternalID); err != nil {
+				logger.Warn("auto-dispatch failed: %s", err.Error())
+			}
 		}
 	}
 
