@@ -8,7 +8,7 @@ import { useMediaItem, useCreateRequest } from "../../hooks";
  * Manga view page layout
  * @returns
  */
-export default function DisplayPage() {
+export default function MangaDetailsPage() {
     const { id } = useParams();
     const { item: manga, loading, error } = useMediaItem(id);
     const { requesting, requestMsg, createRequest } = useCreateRequest(id);

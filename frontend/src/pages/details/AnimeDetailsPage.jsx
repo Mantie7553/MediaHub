@@ -6,7 +6,7 @@ import Error from "../../components/states/Error";
 import { useMediaItem, useCreateRequest } from "../../hooks";
 import { animeBadge } from "../../utils/status";
 
-export default function AnimeViewPage() {
+export default function AnimeDetailsPage() {
     const { id } = useParams();
     const navigate = useNavigate();
     const { item: anime, loading, error } = useMediaItem(id);

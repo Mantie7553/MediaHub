@@ -54,13 +54,13 @@ function mediaInfo(item) {
             path = "/anime/"
             break
         case "light_novel": 
-            path="/light-novels"
+            path="/light-novels/"
             break
         case "movie":
             info = <>
                 <span>{item.release_date ? Format.year(item.release_date) : null}</span>
             </>
-            path = "/watch/movie/"
+            path = "/movies/"
             break
         case "manga":
             // info = <>

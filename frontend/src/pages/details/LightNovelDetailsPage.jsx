@@ -3,7 +3,7 @@ import Loading from "../../components/states/Loading"
 import Error from "../../components/states/Error"
 import { useMediaItem } from "../../hooks"
 
-export default function LightNovelViewPage() {
+export default function LightNovelDetailsPage() {
     const { id } = useParams()
     const { item: ln, loading, error } = useMediaItem(id)
 

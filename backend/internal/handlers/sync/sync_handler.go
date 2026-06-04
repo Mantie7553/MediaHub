@@ -16,21 +16,27 @@ import (
 
 	"github.com/Mantie7553/MediaHub/backend/internal/clients/anilist"
 	"github.com/Mantie7553/MediaHub/backend/internal/clients/arr"
+	"github.com/Mantie7553/MediaHub/backend/internal/clients/mangadex"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/logger"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/utils"
+	"github.com/lib/pq"
 )
 
 type Handler struct {
-	db     *sql.DB
-	sonarr *arr.ArrClient
-	radarr *arr.ArrClient
+	db       *sql.DB
+	sonarr   *arr.ArrClient
+	radarr   *arr.ArrClient
+	mangadex *mangadex.MangaDexClient
+	anilist  *anilist.AnilistClient
 }
 
 func NewHandler(db *sql.DB) *Handler {
 	return &Handler{
-		db:     db,
-		sonarr: arr.NewArrClient("SONARR_URL", "SONARR_API_KEY"),
-		radarr: arr.NewArrClient("RADARR_URL", "RADARR_API_KEY"),
+		db:       db,
+		sonarr:   arr.NewArrClient("SONARR_URL", "SONARR_API_KEY"),
+		radarr:   arr.NewArrClient("RADARR_URL", "RADARR_API_KEY"),
+		mangadex: mangadex.NewMangaDexClient("MANGADEX_URL"),
+		anilist:  anilist.NewAnilistClient(""),
 	}
 }
 
@@ -47,37 +53,69 @@ func (h *Handler) SyncSonar(w http.ResponseWriter, r *http.Request) {
 			s.Title,
 		).Scan(&mediaItemID)
 
+		// Search AniList for metadata regardless of whether the media item exists
+		var aniResult *anilist.Media
+		results, searchErr := h.anilist.Search("ANIME", s.Title, 1, "TV")
+		time.Sleep(500 * time.Millisecond)
+		if searchErr == nil && len(results) > 0 {
+			full, fetchErr := h.anilist.GetByID(results[0].ID)
+			time.Sleep(500 * time.Millisecond)
+			if fetchErr == nil {
+				aniResult = full
+			}
+		}
+
 		if err == sql.ErrNoRows {
 			posterURL := s.PosterURL()
 			var externalID *string
-			aniClient := anilist.NewAnilistClient("")
-			results, searchErr := aniClient.Search("ANIME", s.Title, 1, "TV")
-			time.Sleep(500 * time.Millisecond)
-			if searchErr == nil && len(results) > 0 {
-				id := strconv.Itoa(results[0].ID)
+			var description *string
+			var releaseDate *string
+
+			if aniResult != nil {
+				id := strconv.Itoa(aniResult.ID)
 				externalID = &id
+				description = aniResult.Description
+				if aniResult.StartDate.Year != nil {
+					date := fmt.Sprintf("%04d-%02d-%02d",
+						*aniResult.StartDate.Year,
+						utils.SafeMonth(aniResult.StartDate.Month),
+						utils.SafeDay(aniResult.StartDate.Day),
+					)
+					releaseDate = &date
+				}
 			}
 
 			err = h.db.QueryRow(
-				`INSERT INTO media_items (type, title, cover_image_url, external_id, external_source)
-				VALUES ('anime', $1, $2, $3, $4)
+				`INSERT INTO media_items (type, title, cover_image_url, external_id, external_source, description, release_date)
+				VALUES ('anime', $1, $2, $3, $4, $5, $6)
 				RETURNING id`,
-				s.Title, posterURL, externalID, utils.NullString("anilist"),
+				s.Title, posterURL, externalID, utils.NullString("anilist"), description, releaseDate,
 			).Scan(&mediaItemID)
 			if err != nil {
 				logger.Error("failed to create media item for %s: %s", s.Title, err.Error())
 				continue
 			}
 		} else if err == nil {
-			// backfill external_id if missing
-			aniClient := anilist.NewAnilistClient("")
-			results, searchErr := aniClient.Search("ANIME", s.Title, 1, "TV")
-			time.Sleep(500 * time.Millisecond)
-			if searchErr == nil && len(results) > 0 {
-				id := strconv.Itoa(results[0].ID)
+			// Backfill external_id, description, and release_date if missing
+			if aniResult != nil {
+				id := strconv.Itoa(aniResult.ID)
+				var releaseDate *string
+				if aniResult.StartDate.Year != nil {
+					date := fmt.Sprintf("%04d-%02d-%02d",
+						*aniResult.StartDate.Year,
+						utils.SafeMonth(aniResult.StartDate.Month),
+						utils.SafeDay(aniResult.StartDate.Day),
+					)
+					releaseDate = &date
+				}
 				h.db.Exec(
-					`UPDATE media_items SET external_id = COALESCE(external_id, $1), external_source = COALESCE(external_source, $2) WHERE id = $3`,
-					id, "anilist", mediaItemID,
+					`UPDATE media_items SET
+					external_id = COALESCE(external_id, $1),
+					external_source = COALESCE(external_source, $2),
+					description = COALESCE(description, $3),
+					release_date = COALESCE(release_date, $4)
+					WHERE id = $5`,
+					id, "anilist", aniResult.Description, releaseDate, mediaItemID,
 				)
 			}
 		} else {
@@ -93,8 +131,39 @@ func (h *Handler) SyncSonar(w http.ResponseWriter, r *http.Request) {
 			logger.Error("failed to update cover image for %s: %s", s.Title, err.Error())
 		}
 
+		// Insert/update anime metadata from AniList
+		if aniResult != nil {
+			var status string
+			switch aniResult.Status {
+			case "RELEASING":
+				status = "airing"
+			case "FINISHED":
+				status = "finished"
+			case "NOT_YET_RELEASED":
+				status = "upcoming"
+			}
+
+			var studio string
+			if len(aniResult.Studios) > 0 {
+				studio = aniResult.Studios[0]
+			}
+
+			_, err = h.db.Exec(
+				`INSERT INTO anime_metadata (media_item_id, studio, status, genres)
+				VALUES ($1, $2, $3, $4)
+				ON CONFLICT (media_item_id) DO UPDATE SET
+				studio = EXCLUDED.studio,
+				status = EXCLUDED.status,
+				genres = EXCLUDED.genres`,
+				mediaItemID, utils.NullString(studio), utils.NullString(status), pq.Array(aniResult.Genres),
+			)
+			if err != nil {
+				logger.Error("failed to upsert anime metadata for %s: %s", s.Title, err.Error())
+			}
+		}
+
 		_, err = h.db.Exec(
-			`INSERT INTO sonarr_items (media_item_id, sonarr_series_id) 
+			`INSERT INTO sonarr_items (media_item_id, sonarr_series_id)
 			VALUES ($1, $2)
 			ON CONFLICT (media_item_id) DO UPDATE SET
 			sonarr_series_id = EXCLUDED.sonarr_series_id,
@@ -108,7 +177,7 @@ func (h *Handler) SyncSonar(w http.ResponseWriter, r *http.Request) {
 
 		episodes, err := h.sonarr.GetEpisodes(s.ID)
 		if err != nil {
-			logger.Error("failed to get episodes fro %s : %s", s.Title, err.Error())
+			logger.Error("failed to get episodes for %s : %s", s.Title, err.Error())
 			continue
 		}
 
@@ -153,27 +222,57 @@ func (h *Handler) SyncRadarr(w http.ResponseWriter, r *http.Request) {
 			m.Title,
 		).Scan(&mediaItemID)
 
+		// Search AniList for metadata
+		var aniResult *anilist.Media
+		results, searchErr := h.anilist.Search("ANIME", m.Title, 1, "MOVIE")
+		time.Sleep(500 * time.Millisecond)
+		if searchErr == nil && len(results) > 0 {
+			full, fetchErr := h.anilist.GetByID(results[0].ID)
+			time.Sleep(500 * time.Millisecond)
+			if fetchErr == nil {
+				aniResult = full
+			}
+		}
+
 		if err == sql.ErrNoRows {
 			posterURL := m.PosterURL()
+			var externalID *string
+			var description *string
+
+			if aniResult != nil {
+				id := strconv.Itoa(aniResult.ID)
+				externalID = &id
+				description = aniResult.Description
+			}
+
 			err = h.db.QueryRow(
-				`INSERT INTO media_items (type, title, cover_image_url)
-    			VALUES ('movie', $1, $2)
-    			RETURNING id`,
-				m.Title, utils.NullString(posterURL),
+				`INSERT INTO media_items (type, title, cover_image_url, external_id, external_source, description)
+				VALUES ('movie', $1, $2, $3, $4, $5)
+				RETURNING id`,
+				m.Title, utils.NullString(posterURL), externalID, utils.NullString("anilist"), description,
 			).Scan(&mediaItemID)
 			if err != nil {
 				logger.Error("failed to create media item for %s: %s", m.Title, err.Error())
 				continue
 			}
-			_, err = h.db.Exec(
-				`INSERT INTO movie_metadata (media_item_id) VALUES ($1)`,
-				mediaItemID,
-			)
-			if err != nil {
-				logger.Error("failed to create movie metadata for %s: %s", m.Title, err.Error())
-				continue
+		} else if err == nil {
+			// Backfill external_id and description if missing
+			if aniResult != nil {
+				id := strconv.Itoa(aniResult.ID)
+				h.db.Exec(
+					`UPDATE media_items SET
+					external_id = COALESCE(external_id, $1),
+					external_source = COALESCE(external_source, $2),
+					description = COALESCE(description, $3)
+					WHERE id = $4`,
+					id, "anilist", aniResult.Description, mediaItemID,
+				)
 			}
+		} else {
+			logger.Error("failed to find media item for %s: %s", m.Title, err.Error())
+			continue
 		}
+
 		_, err = h.db.Exec(
 			`UPDATE media_items SET cover_image_url = $1 WHERE id = $2`,
 			utils.NullString(m.PosterURL()), mediaItemID,
@@ -181,6 +280,7 @@ func (h *Handler) SyncRadarr(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			logger.Error("failed to update cover image for %s: %s", m.Title, err.Error())
 		}
+
 		if date := m.ReleaseDate(); date != "" {
 			_, err = h.db.Exec(
 				`UPDATE media_items SET release_date = $1 WHERE id = $2`,
@@ -190,12 +290,30 @@ func (h *Handler) SyncRadarr(w http.ResponseWriter, r *http.Request) {
 				logger.Error("failed to update release_date for %s: %s", m.Title, err.Error())
 			}
 		}
+
+		// Insert/update movie metadata from AniList
+		var genres []string
+		if aniResult != nil {
+			genres = aniResult.Genres
+		}
+
+		_, err = h.db.Exec(
+			`INSERT INTO movie_metadata (media_item_id, genres)
+			VALUES ($1, $2)
+			ON CONFLICT (media_item_id) DO UPDATE SET
+			genres = EXCLUDED.genres`,
+			mediaItemID, pq.Array(genres),
+		)
+		if err != nil {
+			logger.Error("failed to upsert movie metadata for %s: %s", m.Title, err.Error())
+		}
+
 		if !m.HasFile {
 			continue
 		}
 
 		_, err = h.db.Exec(
-			`INSERT INTO radarr_items (media_item_id, radarr_movie_id) 
+			`INSERT INTO radarr_items (media_item_id, radarr_movie_id)
 			VALUES ($1, $2)
 			ON CONFLICT (media_item_id) DO UPDATE SET
 			radarr_movie_id = EXCLUDED.radarr_movie_id,
@@ -203,7 +321,7 @@ func (h *Handler) SyncRadarr(w http.ResponseWriter, r *http.Request) {
 			mediaItemID, m.ID,
 		)
 		if err != nil {
-			logger.Error("failed to update or insert sonarr_items for %s : %s", m.Title, err.Error())
+			logger.Error("failed to update or insert radarr_items for %s : %s", m.Title, err.Error())
 			continue
 		}
 
@@ -222,29 +340,101 @@ func (h *Handler) SyncManga(w http.ResponseWriter, r *http.Request) {
 	mediaRoot := os.Getenv("MEDIA_ROOT")
 	mangaRoot := filepath.Join(mediaRoot, "Manga")
 
-	rows, err := h.db.Query(`SELECT id, title FROM media_items WHERE type = 'manga'`)
+	dirs, err := os.ReadDir(mangaRoot)
 	if utils.InternalError(w, err) {
 		return
 	}
-	defer rows.Close()
 
-	for rows.Next() {
-		var mediaItemID, title string
-		if err := rows.Scan(&mediaItemID, &title); err != nil {
-			logger.Error("failed to scan manga row: %s", err.Error())
+	for _, dir := range dirs {
+		if !dir.IsDir() {
 			continue
 		}
 
-		folderName := strings.ReplaceAll(strings.ReplaceAll(title, ": ", "_"), " ", "_")
-		mangaDir := filepath.Join(mangaRoot, folderName)
-		if _, err := os.Stat(mangaDir); os.IsNotExist(err) {
-			logger.Warn("manga directory not found for %s, skipping", title)
+		// Convert folder name to a search query
+		query := strings.ReplaceAll(dir.Name(), "_", " ")
+		results, err := h.mangadex.Search(query)
+		time.Sleep(500 * time.Millisecond)
+		if err != nil {
+			logger.Error("mangadex search failed for %s: %s", query, err.Error())
+			continue
+		}
+		if len(results) == 0 {
+			logger.Warn("no mangadex results for %s, skipping", query)
 			continue
 		}
 
-		err = filepath.WalkDir(mangaDir, func(path string, d fs.DirEntry, err error) error {
+		manga := results[0]
+
+		// Extract title with fallback
+		title := manga.Attributes.Title.En
+		if title == "" {
+			title = manga.Attributes.Title.JaRo
+		}
+		if title == "" {
+			title = manga.Attributes.Title.Ja
+		}
+
+		// Extract cover URL
+		var coverURL string
+		for _, rel := range manga.Relationships {
+			if rel.Type == "cover_art" {
+				coverURL = fmt.Sprintf("https://uploads.mangadex.org/covers/%s/%s", manga.ID, rel.Attributes.FileName)
+				break
+			}
+		}
+
+		// Extract genres and status
+		var genres []string
+		for _, tag := range manga.Attributes.Tags {
+			if tag.Attributes.Group == "genre" {
+				genres = append(genres, tag.Attributes.Name.En)
+			}
+		}
+		status := manga.Attributes.Status
+
+		var totalChapters int
+		if n, convErr := strconv.Atoi(manga.Attributes.LastChapter); convErr == nil {
+			totalChapters = n
+		}
+
+		// Insert or find the media item
+		var mediaItemID string
+		err = h.db.QueryRow(
+			`INSERT INTO media_items (type, title, cover_image_url, external_id, external_source)
+			VALUES ('manga', $1, $2, $3, 'mangadex')
+			ON CONFLICT (external_id, external_source) DO NOTHING
+			RETURNING id`,
+			title, utils.NullString(coverURL), manga.ID,
+		).Scan(&mediaItemID)
+
+		if err != nil {
+			// Row already existed, fetch the ID
+			err = h.db.QueryRow(
+				`SELECT id FROM media_items WHERE external_id = $1 AND external_source = 'mangadex'`,
+				manga.ID,
+			).Scan(&mediaItemID)
 			if err != nil {
-				return err
+				logger.Error("failed to find existing media item for %s: %s", title, err.Error())
+				continue
+			}
+		}
+
+		// Insert manga metadata
+		_, err = h.db.Exec(
+			`INSERT INTO manga_metadata (media_item_id, total_chapters, genres, status)
+			VALUES ($1, $2, $3, $4)
+			ON CONFLICT (media_item_id) DO NOTHING`,
+			mediaItemID, utils.NullInt(&totalChapters), pq.Array(genres), utils.NullString(status),
+		)
+		if err != nil {
+			logger.Error("failed to insert manga metadata for %s: %s", title, err.Error())
+		}
+
+		// Walk CBZ files and insert chapters
+		mangaDir := filepath.Join(mangaRoot, dir.Name())
+		filepath.WalkDir(mangaDir, func(path string, d fs.DirEntry, walkErr error) error {
+			if walkErr != nil {
+				return walkErr
 			}
 			if d.IsDir() || strings.ToLower(filepath.Ext(path)) != ".cbz" {
 				return nil
@@ -259,35 +449,30 @@ func (h *Handler) SyncManga(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 
-			r, err := zip.OpenReader(path)
+			zr, zErr := zip.OpenReader(path)
 			pageCount := 0
-			if err == nil {
-				for _, f := range r.File {
+			if zErr == nil {
+				for _, f := range zr.File {
 					ext := strings.ToLower(filepath.Ext(f.Name))
 					if ext == ".jpg" || ext == ".jpeg" || ext == ".png" || ext == ".webp" {
 						pageCount++
 					}
 				}
-				r.Close()
+				zr.Close()
 			}
 
 			h.db.Exec(
 				`INSERT INTO manga_chapters (media_item_id, chapter_number, file_path, page_count)
 				VALUES ($1, $2, $3, $4)
-				ON CONFLICT DO NOTHING`,
+				ON CONFLICT (media_item_id, chapter_number) DO NOTHING`,
 				mediaItemID, chapterNum, path, pageCount,
 			)
 			return nil
 		})
-
-		if err != nil {
-			logger.Error("failed to walk manga directory for %s: %s", title, err.Error())
-		}
 	}
 
 	w.WriteHeader(http.StatusOK)
 }
-
 func (h *Handler) SyncLightNovel(w http.ResponseWriter, r *http.Request) {
 	mediaRoot := os.Getenv("MEDIA_ROOT")
 	regex := regexp.MustCompile(`(?i)volume[_\s](\d+)`)

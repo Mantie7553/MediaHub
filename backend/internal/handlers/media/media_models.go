@@ -123,6 +123,7 @@ type MovieMetadata struct {
 	RuntimeMins *int     `json:"runtime_mins"`
 	Director    *string  `json:"director"`
 	Genres      []string `json:"genres"`
+	FilePath    *string  `json:"file_path"`
 }
 
 // MUSIC

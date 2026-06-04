@@ -78,3 +78,17 @@ func NullInt(i *int) *int {
 	}
 	return i
 }
+
+func SafeMonth(m *int) int {
+	if m == nil {
+		return 1
+	}
+	return *m
+}
+
+func SafeDay(d *int) int {
+	if d == nil {
+		return 1
+	}
+	return *d
+}

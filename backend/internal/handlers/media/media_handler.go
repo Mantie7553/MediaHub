@@ -293,9 +293,9 @@ func (h *Handler) GetSpecific(w http.ResponseWriter, r *http.Request) {
 	case "movie":
 		var meta MovieMetadata
 		err := h.db.QueryRow(
-			`SELECT runtime_mins, director, genres FROM movie_metadata WHERE media_item_id = $1`,
+			`SELECT runtime_mins, director, genres, file_path FROM movie_metadata WHERE media_item_id = $1`,
 			item.ID,
-		).Scan(&meta.RuntimeMins, &meta.Director, pq.Array(&meta.Genres))
+		).Scan(&meta.RuntimeMins, &meta.Director, pq.Array(&meta.Genres), &meta.FilePath)
 		if err != nil && err != sql.ErrNoRows {
 			utils.Error(w, http.StatusInternalServerError, "internal server error")
 			return

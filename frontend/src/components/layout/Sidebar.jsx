@@ -17,7 +17,7 @@ export default function Sidebar() {
         navigate("/login");
     }
 
-    return <div className="drawer lg:drawer-open w-fit min-h-screen">
+    return <div className="drawer lg:drawer-open w-fit h-screen sticky top-0">
         <input id="my-drawer-3" type="checkbox" className="drawer-toggle" />
         <div className=" flex flex-col h-full drawer-side bg-base-200 p-2 items-center">
             <h1 className="text-lg font-bold">Media<span className="text-primary">Hub</span></h1>
