@@ -3,10 +3,13 @@ package sync
 import (
 	"archive/zip"
 	"database/sql"
+	"fmt"
+	"io"
 	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -283,4 +286,189 @@ func (h *Handler) SyncManga(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
+}
+
+func (h *Handler) SyncLightNovel(w http.ResponseWriter, r *http.Request) {
+	mediaRoot := os.Getenv("MEDIA_ROOT")
+	regex := regexp.MustCompile(`(?i)volume[_\s](\d+)`)
+	dirListing, err := os.ReadDir(filepath.Join(mediaRoot, "Light Novels"))
+	if utils.InternalError(w, err) {
+		return
+	}
+
+	for _, entry := range dirListing {
+		if !entry.IsDir() {
+			continue
+		}
+
+		files, err := os.ReadDir(filepath.Join(mediaRoot, "Light Novels", entry.Name()))
+		if utils.InternalError(w, err) {
+			return
+		}
+
+		for _, file := range files {
+			if filepath.Ext(file.Name()) != ".epub" {
+				continue
+			}
+			match := regex.FindStringSubmatch(file.Name())
+			if match == nil {
+				logger.Warn("File %s does not include volume number in the name", file.Name())
+				continue
+			}
+
+			volumeNum, _ := strconv.Atoi(match[1])
+
+			var mediaItemID string
+			err = h.db.QueryRow(
+				`SELECT id FROM media_items WHERE type = 'light_novel' AND title = $1`,
+				entry.Name(),
+			).Scan(&mediaItemID)
+
+			if err == sql.ErrNoRows {
+				err = h.db.QueryRow(
+					`INSERT INTO media_items (type, title) VALUES ('light_novel', $1) RETURNING id`,
+					entry.Name(),
+				).Scan(&mediaItemID)
+				if err != nil {
+					logger.Warn("failed to insert media item for %s: %v", entry.Name(), err)
+					continue
+				}
+			} else if err != nil {
+				logger.Warn("failed to query media item for %s: %v", entry.Name(), err)
+				continue
+			}
+
+			_, err = h.db.Exec(
+				`INSERT INTO light_novel_metadata (media_item_id)
+				VALUES ($1)
+				ON CONFLICT (media_item_id) DO NOTHING`,
+				mediaItemID,
+			)
+			if err != nil {
+				logger.Warn("failed to insert or update metadata for %s: %v", entry.Name(), err)
+				continue
+			}
+
+			filePath := filepath.Join(mediaRoot, "Light Novels", entry.Name(), file.Name())
+			var volumeID string
+			err = h.db.QueryRow(
+				`INSERT INTO light_novel_volumes (media_item_id, volume_number, title, file_path)
+				VALUES ($1, $2, $3, $4)
+				ON CONFLICT (media_item_id, volume_number) DO UPDATE SET file_path = EXCLUDED.file_path
+				RETURNING id`,
+				mediaItemID, volumeNum, file.Name(), filePath,
+			).Scan(&volumeID)
+			if err != nil {
+				logger.Warn("failed to insert or update volume for %s: %v", file.Name(), err)
+				continue
+			}
+
+			if volumeNum == 1 {
+				coverFile, err := extractCoverHref(filePath)
+				if err != nil {
+					logger.Warn("failed to extract cover for %s: %v", file.Name(), err)
+				} else if coverFile != "" {
+					coverURL := fmt.Sprintf("%s/light-novels/%s/volumes/%s/images/%s",
+						os.Getenv("API_URL"), mediaItemID, volumeID, coverFile)
+					h.db.Exec(
+						`UPDATE media_items SET cover_image_url = $1 WHERE id = $2`,
+						coverURL, mediaItemID,
+					)
+				}
+			}
+
+		}
+
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
+func extractCoverHref(filePath string) (string, error) {
+	zr, err := zip.OpenReader(filePath)
+	if err != nil {
+		return "", err
+	}
+	defer zr.Close()
+
+	// step 1: find OPF path from container.xml
+	opfPath := ""
+	for _, f := range zr.File {
+		if f.Name != "META-INF/container.xml" {
+			continue
+		}
+		rc, err := f.Open()
+		if err != nil {
+			return "", err
+		}
+		content, err := io.ReadAll(rc)
+		rc.Close()
+		if err != nil {
+			return "", err
+		}
+		pathRe := regexp.MustCompile(`full-path="([^"]+)"`)
+		m := pathRe.FindSubmatch(content)
+		if m != nil {
+			opfPath = string(m[1])
+		}
+		break
+	}
+	if opfPath == "" {
+		return "", nil
+	}
+
+	// step 2: read the OPF
+	for _, f := range zr.File {
+		if f.Name != opfPath {
+			continue
+		}
+		rc, err := f.Open()
+		if err != nil {
+			return "", err
+		}
+		content, err := io.ReadAll(rc)
+		rc.Close()
+		if err != nil {
+			return "", err
+		}
+
+		opf := string(content)
+
+		// try properties="cover-image" first (EPUB3 standard)
+		coverImageRe := regexp.MustCompile(`<item[^>]+properties="cover-image"[^>]+href="([^"]+)"`)
+		if m := coverImageRe.FindStringSubmatch(opf); m != nil {
+			return filepath.Base(m[1]), nil
+		}
+		// also try href before properties
+		coverImageRe2 := regexp.MustCompile(`<item[^>]+href="([^"]+)"[^>]+properties="cover-image"`)
+		if m := coverImageRe2.FindStringSubmatch(opf); m != nil {
+			return filepath.Base(m[1]), nil
+		}
+
+		// try name first then content
+		metaRe2 := regexp.MustCompile(`(?i)<meta\s+name="cover"\s+content="([^"]+)"`)
+		metaRe3 := regexp.MustCompile(`(?i)<meta\s+content="([^"]+)"\s+name="cover"`)
+
+		var coverID string
+		if m := metaRe2.FindStringSubmatch(opf); m != nil {
+			coverID = m[1]
+		} else if m := metaRe3.FindStringSubmatch(opf); m != nil {
+			coverID = m[1]
+		}
+
+		if coverID != "" {
+			itemRe := regexp.MustCompile(`<item\s+[^>]*id="` + regexp.QuoteMeta(coverID) + `"[^>]+href="([^"]+)"`)
+			itemRe2 := regexp.MustCompile(`<item\s+[^>]*href="([^"]+)"[^>]+id="` + regexp.QuoteMeta(coverID) + `"`)
+			if m := itemRe.FindStringSubmatch(opf); m != nil {
+				return filepath.Base(m[1]), nil
+			}
+			if m := itemRe2.FindStringSubmatch(opf); m != nil {
+				return filepath.Base(m[1]), nil
+			}
+		}
+
+		return "", nil
+	}
+
+	return "", nil
 }

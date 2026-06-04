@@ -6,9 +6,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
+	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/Mantie7553/MediaHub/backend/internal/clients/mangadex"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/auth"
+	"github.com/Mantie7553/MediaHub/backend/internal/platform/logger"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/utils"
 	"github.com/go-chi/chi/v5"
 	"github.com/lib/pq"
@@ -136,7 +138,7 @@ func (h *Handler) Upload(w http.ResponseWriter, r *http.Request) {
 			client := mangadex.NewMangaDexClient("")
 			manga, err := client.GetByID(req.ExternalID)
 			if err != nil {
-				log.Printf("failed to fetch mangadex metadata for %s: %v", req.ExternalID, err)
+				logger.Warn("failed to fetch mangadex metadata for %s: %v", req.ExternalID, err)
 			} else {
 				status = manga.Attributes.Status
 				for _, tag := range manga.Attributes.Tags {
@@ -199,8 +201,9 @@ func (h *Handler) GetAll(w http.ResponseWriter, r *http.Request) {
 
 	if available == "true" {
 		conditions = append(conditions, `(EXISTS (SELECT 1 FROM sonarr_items WHERE media_item_id = mi.id)
-		OR EXISTS (SELECT 1 FROM radarr_items WHERE media_item_id = mi.id))
-		OR EXISTS (SELECT 1 FROM manga_chapters WHERE media_item_id = mi.id AND file_path IS NOT NULL)`)
+		OR EXISTS (SELECT 1 FROM radarr_items WHERE media_item_id = mi.id)
+		OR EXISTS (SELECT 1 FROM manga_chapters WHERE media_item_id = mi.id AND file_path IS NOT NULL)
+		OR EXISTS (SELECT 1 FROM light_novel_volumes WHERE media_item_id = mi.id))`)
 	}
 
 	queryString := `SELECT id, type, title, description, cover_image_url, release_date, external_id, external_source, created_at FROM media_items mi`
@@ -347,6 +350,39 @@ func (h *Handler) GetSpecific(w http.ResponseWriter, r *http.Request) {
 			chapters = append(chapters, chapter)
 		}
 		metadata = MangaDetail{MangaMetadata: meta, Chapters: chapters}
+
+	case "light_novel":
+		var meta LightNovelMetadata
+		var volumes []LightNovelVolume
+
+		err := h.db.QueryRow(
+			`SELECT author, total_volumes, genres FROM light_novel_metadata WHERE media_item_id = $1`,
+			item.ID,
+		).Scan(&meta.Author, &meta.TotalVolumes, pq.Array(&meta.Genres))
+		if err != nil && err != sql.ErrNoRows {
+			utils.Error(w, http.StatusInternalServerError, "internal server error")
+			return
+		}
+
+		volumeRows, err := h.db.Query(
+			`SELECT id, volume_number, title FROM light_novel_volumes
+			WHERE media_item_id = $1 ORDER BY volume_number`,
+			item.ID,
+		)
+		if utils.InternalError(w, err) {
+			return
+		}
+		defer volumeRows.Close()
+
+		for volumeRows.Next() {
+			var volume LightNovelVolume
+			if err := volumeRows.Scan(&volume.ID, &volume.VolumeNumber, &volume.Title); utils.InternalError(w, err) {
+				return
+			}
+			volumes = append(volumes, volume)
+		}
+
+		metadata = LightNovelDetail{LightNovelMetadata: meta, Volumes: volumes}
 	}
 
 	// return the item and its metadata
@@ -465,6 +501,216 @@ func (h *Handler) ServePage(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", ct)
 	io.Copy(w, f)
+}
+
+func (h *Handler) ServeVolume(w http.ResponseWriter, r *http.Request) {
+	volumeId := chi.URLParam(r, "volumeId")
+	id := chi.URLParam(r, "id")
+
+	var filePath string
+	err := h.db.QueryRow(
+		`SELECT file_path FROM light_novel_volumes WHERE id = $1`,
+		volumeId,
+	).Scan(&filePath)
+
+	if err == sql.ErrNoRows {
+		utils.Error(w, http.StatusNotFound, "volume not found")
+		return
+	}
+	if utils.InternalError(w, err) {
+		return
+	}
+
+	zr, err := zip.OpenReader(filePath)
+	if utils.InternalError(w, err) {
+		return
+	}
+	defer zr.Close()
+
+	// find OPF path from container.xml
+	opfPath := ""
+	for _, f := range zr.File {
+		if f.Name != "META-INF/container.xml" {
+			continue
+		}
+		rc, err := f.Open()
+		if utils.InternalError(w, err) {
+			return
+		}
+		containerContent, err := io.ReadAll(rc)
+		rc.Close()
+		if utils.InternalError(w, err) {
+			return
+		}
+		pathRe := regexp.MustCompile(`full-path="([^"]+)"`)
+		if m := pathRe.FindSubmatch(containerContent); m != nil {
+			opfPath = string(m[1])
+		}
+		break
+	}
+	if opfPath == "" {
+		utils.Error(w, http.StatusInternalServerError, "could not locate OPF in epub")
+		return
+	}
+
+	var opfContent []byte
+	for _, f := range zr.File {
+		if f.Name == opfPath {
+			rc, err := f.Open()
+			if utils.InternalError(w, err) {
+				return
+			}
+			opfContent, err = io.ReadAll(rc)
+			rc.Close()
+			if utils.InternalError(w, err) {
+				return
+			}
+			break
+		}
+	}
+
+	if opfContent == nil {
+		utils.Error(w, http.StatusInternalServerError, "content.opf not found in epub")
+		return
+	}
+
+	// extract href values from manifest by id
+	manifestHrefs := map[string]string{}
+	opfStr := string(opfContent)
+	itemRe := regexp.MustCompile(`<item\s+id="([^"]+)"\s+href="([^"]+)"`)
+	for _, match := range itemRe.FindAllStringSubmatch(opfStr, -1) {
+		manifestHrefs[match[1]] = match[2]
+	}
+
+	// extract spine order
+	spineRe := regexp.MustCompile(`<itemref\s+idref="([^"]+)"`)
+	var spineIDs []string
+	for _, match := range spineRe.FindAllStringSubmatch(opfStr, -1) {
+		spineIDs = append(spineIDs, match[1])
+	}
+
+	// entries to skip
+	skip := map[string]bool{
+		"cover": true, "toc": true, "copyright": true, "signup": true,
+	}
+
+	// build a lookup from filename to zip entry
+	zipEntries := map[string]*zip.File{}
+	for _, f := range zr.File {
+		zipEntries[f.Name] = f
+	}
+
+	apiURL := os.Getenv("API_URL")
+
+	var body strings.Builder
+	body.WriteString(`<!DOCTYPE html><html><body style="max-width:720px;margin:0 auto;padding:1rem;font-family:serif;line-height:1.8;">`)
+
+	for _, spineID := range spineIDs {
+		href, ok := manifestHrefs[spineID]
+		if !ok {
+			continue
+		}
+
+		base := strings.TrimSuffix(filepath.Base(href), filepath.Ext(href))
+		if skip[base] {
+			continue
+		}
+
+		entryPath := "OEBPS/" + href
+		f, ok := zipEntries[entryPath]
+		if !ok {
+			continue
+		}
+
+		rc, err := f.Open()
+		if err != nil {
+			continue
+		}
+		content, err := io.ReadAll(rc)
+		rc.Close()
+		if err != nil {
+			continue
+		}
+
+		// extract just the body content
+		html := string(content)
+		bodyStart := strings.Index(html, "<body")
+		bodyEnd := strings.LastIndex(html, "</body>")
+		if bodyStart != -1 && bodyEnd != -1 {
+			// find the end of the opening body tag
+			tagEnd := strings.Index(html[bodyStart:], ">")
+			html = html[bodyStart+tagEnd+1 : bodyEnd]
+		}
+
+		// rewrite image paths
+		html = strings.ReplaceAll(html, `src="../Images/`,
+			fmt.Sprintf(`src="%s/light-novels/%s/volumes/%s/images/`, apiURL, id, volumeId))
+		html = strings.ReplaceAll(html, `src="../images/`,
+			fmt.Sprintf(`src="%s/light-novels/%s/volumes/%s/images/`, apiURL, id, volumeId))
+
+		body.WriteString(html)
+		body.WriteString(`<div style="height:1px;background:#333;margin:2rem 0;"></div>`)
+	}
+
+	body.WriteString(`</body></html>`)
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Write([]byte(body.String()))
+}
+
+func (h *Handler) ServeVolumeImage(w http.ResponseWriter, r *http.Request) {
+	volumeId := chi.URLParam(r, "volumeId")
+	imageName := chi.URLParam(r, "imageName")
+
+	var filePath string
+	err := h.db.QueryRow(
+		`SELECT file_path FROM light_novel_volumes WHERE id = $1`,
+		volumeId,
+	).Scan(&filePath)
+
+	if err == sql.ErrNoRows {
+		utils.Error(w, http.StatusNotFound, "volume not found")
+		return
+	}
+	if utils.InternalError(w, err) {
+		return
+	}
+
+	zr, err := zip.OpenReader(filePath)
+	if utils.InternalError(w, err) {
+		return
+	}
+	defer zr.Close()
+
+	for _, f := range zr.File {
+		if filepath.Base(f.Name) != imageName {
+			continue
+		}
+
+		rc, err := f.Open()
+		if utils.InternalError(w, err) {
+			return
+		}
+		defer rc.Close()
+
+		contentTypes := map[string]string{
+			".jpg":  "image/jpeg",
+			".jpeg": "image/jpeg",
+			".png":  "image/png",
+			".webp": "image/webp",
+			".gif":  "image/gif",
+		}
+		ct, ok := contentTypes[strings.ToLower(filepath.Ext(imageName))]
+		if !ok {
+			ct = "application/octet-stream"
+		}
+
+		w.Header().Set("Content-Type", ct)
+		io.Copy(w, rc)
+		return
+	}
+
+	utils.Error(w, http.StatusNotFound, "image not found in archive")
 }
 
 func (h *Handler) GetEpisodes(w http.ResponseWriter, r *http.Request) {

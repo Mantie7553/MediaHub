@@ -22,11 +22,13 @@ export default function DashboardPage() {
     const userMovies = userContent.filter(item => item.media_type === "movie");
     const userMusic = userContent.filter(item => item.media_type === "music_track");
     const userManga = userContent.filter(item => item.media_type === "manga");
+    const userLightNovels = userContent.filter(item => item.media_type === "light_novel");
 
     const serverAnime = libraryContent.filter(item => item.type === "anime");
     const serverMovies = libraryContent.filter(item => item.type === "movie");
     const serverMusic = libraryContent.filter(item => item.type === "music_track");
     const serverManga = libraryContent.filter(item => item.type === "manga");
+    const serverLightNovels = libraryContent.filter(item => item.type === "light_novel");
 
     if (error) return <Error error={error} />
 
@@ -39,6 +41,8 @@ export default function DashboardPage() {
                 <ContentList items={userMovies} heading="Movies" userContentMap={userContentMap} onListChange={refresh}/>
                 <ContentList items={userManga} heading="Manga" userContentMap={userContentMap} onListChange={refresh}/>
                 <ContentList items={userMusic} heading="Music" userContentMap={userContentMap} onListChange={refresh}/>
+                <ContentList items={userLightNovels} heading="Light Novels" userContentMap={userContentMap} onListChange={refresh}/>
+
             </div>
         </section>
         <section className="collapse collapse-arrow border border-base-300">
@@ -49,6 +53,8 @@ export default function DashboardPage() {
                 <ContentList items={serverMovies} heading="Movies" userContentMap={userContentMap} onListChange={refresh}/>
                 <ContentList items={serverManga} heading="Manga" userContentMap={userContentMap} onListChange={refresh}/>
                 <ContentList items={serverMusic} heading="Music" userContentMap={userContentMap} onListChange={refresh}/>
+                <ContentList items={serverLightNovels} heading="Light Novels" userContentMap={userContentMap} onListChange={refresh}/>
+
             </div>
         </section>
     </div>

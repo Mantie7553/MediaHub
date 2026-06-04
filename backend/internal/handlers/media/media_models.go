@@ -68,6 +68,24 @@ type Episode struct {
 	Title         *string `json:"title"`
 }
 
+// LIGHT NOVEL
+type LightNovelMetadata struct {
+	Author       *string  `json:"author"`
+	TotalVolumes *int     `json:"total_volumes"`
+	Genres       []string `json:"genres"`
+}
+
+type LightNovelVolume struct {
+	ID           string  `json:"id"`
+	VolumeNumber int     `json:"volume_number"`
+	Title        *string `json:"title"`
+}
+
+type LightNovelDetail struct {
+	LightNovelMetadata
+	Volumes []LightNovelVolume `json:"volumes"`
+}
+
 // MANGA
 type MangaMetadata struct {
 	MediaItemID   string   `json:"media_item_id"`

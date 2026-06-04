@@ -62,6 +62,8 @@ func (s *Server) routes() {
 	s.router.Delete("/auth/logout", authHandler.Logout)
 	s.router.Post("/auth/refresh", authHandler.Refresh)
 
+	s.router.Get("/light-novels/{id}/volumes/{volumeId}/images/{imageName}", mediaHandler.ServeVolumeImage)
+
 	s.router.Post("/webhooks/sonarr", webhooksHandler.SonarrWebhook)
 
 	// Media streaming endpoints
@@ -81,6 +83,7 @@ func (s *Server) routes() {
 		r.Get("/media/{id}/episodes", mediaHandler.GetEpisodes)
 
 		// List Handler endpoints
+		r.Get("/light-novels/{id}/volumes/{volumeId}/content", mediaHandler.ServeVolume)
 		r.Post("/me/media", listsHandler.Add)
 		r.Get("/me/media", listsHandler.GetAll)
 		r.Put("/me/media/{id}", listsHandler.Update)
@@ -118,5 +121,6 @@ func (s *Server) routes() {
 		r.Post("/admin/sync/sonarr", syncHandler.SyncSonar)
 		r.Post("/admin/sync/radarr", syncHandler.SyncRadarr)
 		r.Post("/admin/sync/manga", syncHandler.SyncManga)
+		r.Post("/admin/sync/light-novels", syncHandler.SyncLightNovel)
 	})
 }
