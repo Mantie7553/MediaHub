@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react"
-import { Play, Pause, X, Music } from "lucide-react"
+import { Play, Pause, X, Music, SkipBack, SkipForward } from "lucide-react"
 import useAudioStore from "../../stores/useAudioStore"
 
 export default function AudioPlayer() {
-    const { currentTrack, isPlaying, pause, resume, stop } = useAudioStore()
+    const { currentTrack, isPlaying, pause, resume, stop, next, prev, queue } = useAudioStore()
     const audioRef = useRef(null)
     const [progress, setProgress] = useState(0)
     const [duration, setDuration] = useState(0)
@@ -49,11 +49,7 @@ export default function AudioPlayer() {
     if (!currentTrack) return null
 
     return <>
-        <audio
-            ref={audioRef}
-            onTimeUpdate={handleTimeUpdate}
-            onEnded={stop}
-        />
+        <audio ref={audioRef} onTimeUpdate={handleTimeUpdate} onEnded={next} />
         <div className="fixed bottom-0 left-0 right-0 bg-base-300 border-t border-base-content/10 px-4 py-2 flex items-center gap-4 z-50">
             {/* Track Info */}
             <div className="flex items-center gap-3 min-w-0 w-64">
@@ -73,12 +69,20 @@ export default function AudioPlayer() {
             {/* Controls */}
             <div className="flex-1 flex flex-col items-center gap-1">
                 <div className="flex items-center gap-3">
-                    <button
-                        className="btn btn-circle btn-sm btn-primary"
-                        onClick={() => isPlaying ? pause() : resume()}
-                    >
+                    {queue.length > 0 && (
+                        <button className="btn btn-ghost btn-sm" onClick={prev}>
+                            <SkipBack size={14} />
+                        </button>
+                    )}
+                    <button className="btn btn-circle btn-sm btn-primary"
+                        onClick={() => isPlaying ? pause() : resume()}>
                         {isPlaying ? <Pause size={16} /> : <Play size={16} />}
                     </button>
+                    {queue.length > 0 && (
+                        <button className="btn btn-ghost btn-sm" onClick={next}>
+                            <SkipForward size={14} />
+                        </button>
+                    )}
                 </div>
 
                 {/* Progress Bar */}

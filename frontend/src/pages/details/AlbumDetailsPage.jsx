@@ -11,7 +11,7 @@ export default function AlbumDetailsPage() {
     const [album, setAlbum] = useState(null)
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState("")
-    const play = useAudioStore(state => state.play)
+    const playAlbum = useAudioStore(state => state.playAlbum)
 
     useEffect(() => {
         api.get(`/albums/${id}`)
@@ -31,6 +31,13 @@ export default function AlbumDetailsPage() {
     if (error) return <Error error={error} />
     if (!album) return null
 
+    const queueTracks = album.tracks.map(t => ({
+        id: t.media_item_id,
+        title: t.title,
+        artist: album.artist,
+        thumbnail: album.cover_image_url,
+    }))
+
     return (
         <div className="flex flex-col gap-8">
             {/* Album Header */}
@@ -46,6 +53,9 @@ export default function AlbumDetailsPage() {
                     <p className="text-sm opacity-70">Album</p>
                     <h2 className="text-3xl font-bold">{album.title}</h2>
                     <p className="opacity-70">{album.artist} · {album.tracks.length} tracks</p>
+                    <button className="btn btn-primary btn-sm w-fit" onClick={() => playAlbum(queueTracks, 0)}>
+                        <Play size={16} /> Play
+                    </button>
                 </div>
             </div>
 
@@ -60,12 +70,7 @@ export default function AlbumDetailsPage() {
                     <div
                         key={track.media_item_id}
                         className="flex items-center gap-3 px-3 py-3 hover:bg-base-200 rounded-lg cursor-pointer group"
-                        onClick={() => play({
-                            id: track.media_item_id,
-                            title: track.title,
-                            artist: album.artist,
-                            thumbnail: album.cover_image_url,
-                        })}
+                        onClick={() => playAlbum(queueTracks, i)}
                     >
                         <span className="w-8 text-right text-sm opacity-50 group-hover:hidden">
                             {track.track_number ?? i + 1}
