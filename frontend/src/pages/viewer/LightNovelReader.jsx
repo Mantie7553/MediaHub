@@ -24,7 +24,7 @@ export default function LightNovelReader() {
     return <div className="flex flex-col items-center pb-16">
         <div className="w-full max-w-2xl px-6">
             <div
-                className="prose prose-invert max-w-none"
+                className="prose prose-invert max-w-none bg-neutral px-2"
                 dangerouslySetInnerHTML={{ __html: content }}
             />
         </div>

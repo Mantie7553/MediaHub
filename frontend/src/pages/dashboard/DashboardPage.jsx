@@ -44,7 +44,7 @@ export default function DashboardPage() {
         <section className="collapse collapse-arrow border border-base-300">
             <input type="checkbox" defaultChecked/>
             <h2 className="collapse-title font-bold text-xl"><span className="border-l-4 border-primary pl-2">My Collection</span></h2>
-            <div className="pl-4 collapse-content">
+            <div className="pl-3 collapse-content">
                 <ContentList items={userAnime} heading="Anime" userContentMap={userContentMap} onListChange={refresh}/>
                 <ContentList items={userMovies} heading="Movies" userContentMap={userContentMap} onListChange={refresh}/>
                 <ContentList items={userManga} heading="Manga" userContentMap={userContentMap} onListChange={refresh}/>
@@ -56,7 +56,7 @@ export default function DashboardPage() {
         <section className="collapse collapse-arrow border border-base-300">
             <input type="checkbox" defaultChecked/>
             <h2 className="collapse-title font-bold text-xl"><span className="border-l-4 border-primary pl-2">Available Now</span></h2>
-            <div className="pl-4 collapse-content">
+            <div className="pl-3 collapse-content">
                 <ContentList items={serverAnime} heading="Anime" userContentMap={userContentMap} onListChange={refresh}/>
                 <ContentList items={serverMovies} heading="Movies" userContentMap={userContentMap} onListChange={refresh}/>
                 <ContentList items={serverManga} heading="Manga" userContentMap={userContentMap} onListChange={refresh}/>

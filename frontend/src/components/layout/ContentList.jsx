@@ -26,7 +26,7 @@ export default function ContentList({items, heading, userContentMap={}, onListCh
         ) : (
             <>
                 <ul className="flex gap-4 overflow-x-auto flex-nowrap">
-                    {items.slice(0,8).map(item => {
+                    {items.slice(0,9).map(item => {
                         return <Card key={item.id} item={item} userContentMap={userContentMap} onListChange={onListChange}/>
                     })}
                 </ul>
