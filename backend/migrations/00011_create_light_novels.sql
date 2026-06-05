@@ -30,6 +30,6 @@ CREATE TABLE light_novel_progress (
 );
 
 -- +goose Down
-DROP TABLE light_novel_progress;
-DROP TABLE light_novel_volumes;
-DROP TABLE light_novel_metadata;
+DROP TABLE light_novel_progress CASCADE;
+DROP TABLE light_novel_volumes CASCADE;
+DROP TABLE light_novel_metadata CASCADE;

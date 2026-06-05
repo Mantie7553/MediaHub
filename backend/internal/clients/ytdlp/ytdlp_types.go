@@ -24,12 +24,16 @@ type wireSearchResult struct {
 }
 
 func (w wireSearchResult) toDomain() SearchResult {
+	thumb := w.Thumbnail
+	if thumb == "" {
+		thumb = "https://img.youtube.com/vi/" + w.ID + "/mqdefault.jpg"
+	}
 	return SearchResult{
 		ID:           w.ID,
 		Title:        w.Title,
 		Uploader:     w.Uploader,
 		DurationSecs: int(w.Duration),
 		URL:          w.WebpageURL,
-		Thumbnail:    w.Thumbnail,
+		Thumbnail:    thumb,
 	}
 }

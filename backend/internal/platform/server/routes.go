@@ -100,6 +100,7 @@ func (s *Server) routes() {
 		// Search Handler endpoints
 		r.Get("/search", searchHandler.Search)
 		r.Post("/search/save", searchHandler.Save)
+		r.Get("/music/yt-search", searchHandler.YTSearch)
 
 	})
 

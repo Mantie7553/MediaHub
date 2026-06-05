@@ -4,6 +4,7 @@ import api from "../../services/api";
 import ContentList from "../../components/layout/ContentList";
 import ContentGrid from "../../components/layout/ContentGrid";
 import useUserContent from "../../hooks/useUserContent";
+import MusicDiscover from "./MusicDiscover";
 
 /**
  * Discover page layout
@@ -19,15 +20,17 @@ export default function Discover() {
     const [error, setError] = useState("");
 
     useEffect(() => {
+        if (activeTab === "music_track") return
         api.get(`/search?type=${activeTab}`)
         .then(resp => setResults(resp.data))
         .catch(err => setError(err));
     }, [activeTab])
 
     useEffect(() => {
-    api.get(`/media?available=true&type=${activeTab}`)
-        .then(res => setLibrary(res.data ?? []))
-        .catch(() => {})
+        if (activeTab === "music_track") return
+        api.get(`/media?available=true&type=${activeTab}`)
+            .then(res => setLibrary(res.data ?? []))
+            .catch(() => {})
     }, [activeTab])
 
     /**
@@ -60,29 +63,39 @@ return <div className="flex flex-col gap-6">
             checked={activeTab === "movie"}
             onChange={() => { setActiveTab("movie"); setResults([]); setQuery(""); }}
             />
-        </div>
-
-        {/* Search */}
-        <div className="flex gap-2">
-            <input 
-                className="input input-bordered flex-1 max-w-1/2" 
-                placeholder={`Search ${activeTab}...`}
-                value={query} 
-                onChange={(e) => setQuery(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+            <input type="radio" name="tabs" className="tab" aria-label="Music"
+            checked={activeTab === "music_track"}
+            onChange={() => { setActiveTab("music_track"); setResults([]); setQuery(""); }}
             />
-            <button className="btn btn-primary" onClick={handleSearch}>Search</button>
         </div>
 
-        {/* Available Now */}
-        <ContentList items={library} heading="Available Now" userContentMap={userContentMap} onListChange={refresh}/>
+        {activeTab === "music_track" ? (
+            <MusicDiscover userContentMap={userContentMap} onListChange={refresh}/>
+        ) : (
+            <>
+                {/* Search */}
+                <div className="flex gap-2">
+                    <input 
+                        className="input input-bordered flex-1 max-w-1/2" 
+                        placeholder={`Search ${activeTab}...`}
+                        value={query} 
+                        onChange={(e) => setQuery(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+                    />
+                    <button className="btn btn-primary" onClick={handleSearch}>Search</button>
+                </div>
 
-        {/* Search Results */}
-        <div>
-            {loading && <Loading />}
-            {error && <Error error={error}/>}
-            <ContentGrid items={results} heading="Trending Now" showActions={true}  userContentMap={userContentMap} onListChange={refresh}/>
-        </div>
+                {/* Available Now */}
+                <ContentList items={library} heading="Available Now" userContentMap={userContentMap} onListChange={refresh}/>
+
+                {/* Search Results */}
+                <div>
+                    {loading && <Loading />}
+                    {error && <Error error={error}/>}
+                    <ContentGrid items={results} heading="Trending Now" showActions={true}  userContentMap={userContentMap} onListChange={refresh}/>
+                </div>
+            </>
+        )}
     </div>
 }
 

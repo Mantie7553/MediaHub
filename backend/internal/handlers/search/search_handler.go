@@ -10,6 +10,7 @@ import (
 
 	"github.com/Mantie7553/MediaHub/backend/internal/clients/anilist"
 	"github.com/Mantie7553/MediaHub/backend/internal/clients/mangadex"
+	"github.com/Mantie7553/MediaHub/backend/internal/clients/ytdlp"
 	"github.com/Mantie7553/MediaHub/backend/internal/downloader"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/auth"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/logger"
@@ -19,10 +20,14 @@ import (
 
 type Handler struct {
 	db *sql.DB
+	yt *ytdlp.YtdlpClient
 }
 
 func NewHandler(db *sql.DB) *Handler {
-	return &Handler{db: db}
+	return &Handler{
+		db: db,
+		yt: ytdlp.NewYtdlpClient("YTDLP_PATH", "MUSIC_DIR"),
+	}
 }
 
 type SearchResult struct {
@@ -43,6 +48,10 @@ type saveRequest struct {
 	Status         string `json:"status"`
 	Score          *int   `json:"rating"`
 	Progress       *int   `json:"progress"`
+	Artist         string `json:"artist"`
+	Album          string `json:"album"`
+	DurationSecs   *int   `json:"duration_secs"`
+	SourceURL      string `json:"source_url"`
 }
 
 /*
@@ -357,6 +366,38 @@ func (h *Handler) Save(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if req.Type == "music_track" && req.ExternalSource == "ytdlp" {
+		var albumID *string
+		if req.Album != "" {
+			var id string
+			err := h.db.QueryRow(
+				`INSERT INTO albums (title, artist)
+				VALUES ($1, $2)
+				ON CONFLICT DO NOTHING
+				RETURNING id`,
+				req.Album, req.Artist,
+			).Scan(&id)
+			if err == nil {
+				albumID = &id
+			}
+		}
+		_, err = h.db.Exec(
+			`INSERT INTO music_metadata (media_item_id, artist, duration_secs, album_id)
+			VALUES ($1, $2, $3, $4)
+			ON CONFLICT (media_item_id) DO UPDATE SET
+			artist = EXCLUDED.artist,
+			duration_secs = EXCLUDED.duration_secs,
+			album_id = EXCLUDED.album_id`,
+			mediaItemID,
+			req.Artist,
+			req.DurationSecs,
+			albumID,
+		)
+		if utils.InternalError(w, err) {
+			return
+		}
+	}
+
 	// add to the user's list if requested
 	if req.Action == "list" || req.Action == "both" {
 		_, err = h.db.Exec(
@@ -411,11 +452,11 @@ func (h *Handler) Save(w http.ResponseWriter, r *http.Request) {
 
 		var requestID string
 		err = h.db.QueryRow(
-			`INSERT INTO download_requests (requested_by, media_item_id, status, auto_approved)
-			VALUES ($1, $2, $3, $4)
+			`INSERT INTO download_requests (requested_by, media_item_id, status, auto_approved, source_url)
+			VALUES ($1, $2, $3, $4, $5)
 			ON CONFLICT (requested_by, media_item_id) DO NOTHING
 			RETURNING id`,
-			user.UserID, mediaItemID, status, autoApproved,
+			user.UserID, mediaItemID, status, autoApproved, req.SourceURL,
 		).Scan(&requestID)
 
 		if err != nil && err != sql.ErrNoRows {
@@ -424,7 +465,7 @@ func (h *Handler) Save(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if autoApproved && requestID != "" {
-			if _, err := downloader.Dispatch(h.db, requestID, mediaItemID, "", req.Type, &req.ExternalID); err != nil {
+			if _, err := downloader.Dispatch(h.db, requestID, mediaItemID, req.SourceURL, req.Type, &req.ExternalID); err != nil {
 				logger.Warn("auto-dispatch failed: %s", err.Error())
 			}
 		}

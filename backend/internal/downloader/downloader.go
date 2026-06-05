@@ -3,6 +3,7 @@ package downloader
 import (
 	"archive/zip"
 	"bufio"
+	"bytes"
 	"database/sql"
 	"io/fs"
 	"os"
@@ -71,6 +72,9 @@ func Run(db *sql.DB, jobID string, mediaItemID string) {
 		return
 	}
 
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+
 	if err := cmd.Start(); err != nil {
 		markFailed(db, jobID, err.Error())
 		return
@@ -95,7 +99,7 @@ func Run(db *sql.DB, jobID string, mediaItemID string) {
 
 	// 6. Wait for finish
 	if err := cmd.Wait(); err != nil {
-		markFailed(db, jobID, err.Error())
+		markFailed(db, jobID, stderr.String())
 		return
 	}
 

@@ -126,6 +126,7 @@ func (c *YtdlpClient) SearchMusic(query string, limit int) ([]SearchResult, erro
 
 	cmd := c.command(
 		"--dump-json",
+		"--flat-playlist",
 		"--no-warnings",
 		"--quiet",
 		searchTerm,
