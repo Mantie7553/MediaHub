@@ -8,6 +8,7 @@ import (
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/jobs"
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/lists"
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/media"
+	"github.com/Mantie7553/MediaHub/backend/internal/handlers/music"
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/requests"
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/search"
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/stream"
@@ -41,6 +42,7 @@ func (s *Server) routes() {
 	jobsHandler := jobs.NewHandler(s.db)
 	listsHandler := lists.NewHandler(s.db)
 	mediaHandler := media.NewHandler(s.db)
+	musicHandler := music.NewHandler(s.db)
 	requestsHandler := requests.NewHandler(s.db)
 	searchHandler := search.NewHandler(s.db)
 	streamHandler := stream.NewHandler(s.db)
@@ -83,6 +85,10 @@ func (s *Server) routes() {
 		r.Get("/manga/{id}/chapters/{chapterId}/pages/{pageNum}", mediaHandler.ServePage)
 		r.Put("/manga/{id}/chapters/{chapterId}/progress", mediaHandler.MangaProgress)
 		r.Get("/media/{id}/episodes", mediaHandler.GetEpisodes)
+
+		//Music Handler Endpoints
+		r.Get("/albums", musicHandler.GetAlbums)
+		r.Get("/albums/{id}", musicHandler.GetAlbum)
 
 		// List Handler endpoints
 		r.Get("/light-novels/{id}/volumes/{volumeId}/content", mediaHandler.ServeVolume)

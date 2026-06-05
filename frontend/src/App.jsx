@@ -8,6 +8,7 @@ import SettingsPage from './pages/settings/SettingsPage'
 import Discover from './pages/discover/Discover'
 import Library from './pages/library/Library'
 import { 
+  AlbumDetailsPage,
   AnimeDetailsPage, LightNovelDetailsPage, 
   MangaDetailsPage, MovieDetailsPage 
 } from './pages/details'
@@ -28,6 +29,7 @@ function App() {
           <Route path="/library" element={<Library/>}/>
           <Route path="/settings" element={<SettingsPage/>} />
           <Route path="/anime/:id" element={<AnimeDetailsPage/>} />
+          <Route path='/albums/:id' element={<AlbumDetailsPage/>}/>
           <Route path="/light-novels/:id" element={<LightNovelDetailsPage />} />
           <Route path="/manga/:id" element={<MangaDetailsPage/>}/>
           <Route path='/movies/:id' element={<MovieDetailsPage/>}/>

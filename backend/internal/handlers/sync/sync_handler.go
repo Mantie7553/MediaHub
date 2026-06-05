@@ -777,6 +777,17 @@ func (h *Handler) SyncMusic(w http.ResponseWriter, r *http.Request) {
 			)
 		}
 
+		if albumID != nil {
+			if _, coverErr := os.Stat(coverPath); coverErr == nil {
+				apiURL := os.Getenv("API_URL")
+				coverURL := fmt.Sprintf("%s/stream/music/%s/cover", apiURL, mediaItemID)
+				h.db.Exec(
+					`UPDATE albums SET cover_image_url = $1 WHERE id = $2 AND cover_image_url IS NULL`,
+					coverURL, *albumID,
+				)
+			}
+		}
+
 		return nil
 	})
 

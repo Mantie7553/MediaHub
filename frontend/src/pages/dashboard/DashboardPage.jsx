@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 import api from "../../services/api"
 import ContentList from "../../components/layout/ContentList";
 import useUserContent from "../../hooks/useUserContent";
+import AlbumList from "../../components/layout/AlbumList";
 
 /**
  * Dashboard page layout
@@ -11,6 +12,13 @@ export default function DashboardPage() {
     const { userContent, userContentMap, refresh } = useUserContent();
     const [libraryContent, setLibraryContent] = useState([]);
     const [error, setError] = useState("");
+    const [albums, setAlbums] = useState([])
+
+    useEffect(() => {
+        api.get("/albums")
+            .then(res => setAlbums(res.data ?? []))
+            .catch(() => {})
+    }, [])
 
     useEffect(() => {
         api.get("/media?available=true")
@@ -40,7 +48,7 @@ export default function DashboardPage() {
                 <ContentList items={userAnime} heading="Anime" userContentMap={userContentMap} onListChange={refresh}/>
                 <ContentList items={userMovies} heading="Movies" userContentMap={userContentMap} onListChange={refresh}/>
                 <ContentList items={userManga} heading="Manga" userContentMap={userContentMap} onListChange={refresh}/>
-                <ContentList items={userMusic} heading="Music" userContentMap={userContentMap} onListChange={refresh}/>
+                <AlbumList albums={albums} heading="Music" />
                 <ContentList items={userLightNovels} heading="Light Novels" userContentMap={userContentMap} onListChange={refresh}/>
 
             </div>
@@ -52,7 +60,7 @@ export default function DashboardPage() {
                 <ContentList items={serverAnime} heading="Anime" userContentMap={userContentMap} onListChange={refresh}/>
                 <ContentList items={serverMovies} heading="Movies" userContentMap={userContentMap} onListChange={refresh}/>
                 <ContentList items={serverManga} heading="Manga" userContentMap={userContentMap} onListChange={refresh}/>
-                <ContentList items={serverMusic} heading="Music" userContentMap={userContentMap} onListChange={refresh}/>
+                <AlbumList albums={albums} heading="Music" />
                 <ContentList items={serverLightNovels} heading="Light Novels" userContentMap={userContentMap} onListChange={refresh}/>
 
             </div>
