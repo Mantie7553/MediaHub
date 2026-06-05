@@ -5,10 +5,12 @@ import { useRef, useState } from "react";
 import api from "../../services/api";
 import AddToListModal from "../modals/AddToListModal";
 import { Plus, Check } from "lucide-react";
+import useAudioStore from "../../stores/useAudioStore"
 
 export default function Card({item, showActions=false, userContentMap={}, onListChange}) {
     let {infoSection, path} = mediaInfo(item);
     const userEntry = userContentMap[String(item.external_id ?? item.media_item_id ?? item.id)];
+    const play = useAudioStore(state => state.play);
 
     const card = (
         <li className="card border border-base-300 w-44 shrink-0 bg-base-300 h-full">
@@ -30,6 +32,15 @@ export default function Card({item, showActions=false, userContentMap={}, onList
             </div>
         </li>
     )
+
+    if (path === null) {
+        return <div onClick={() => play({
+            id: item.media_item_id || item.id,
+            title: item.media_title || item.title,
+            artist: item.artist,
+            thumbnail: item.cover_image_url,
+        })} className="cursor-pointer">{card}</div>
+    }
 
     return <Link to={`${path}${item.media_item_id || item.id}`}>{card}</Link>
 }
@@ -68,10 +79,11 @@ function mediaInfo(item) {
             // </>
             path = "/manga/"
             break
-        case "music": 
+        case "music_track": 
             info = <>
                 <span>{item.artist}</span>
             </>
+            path = null
             break
 
         default: break

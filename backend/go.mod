@@ -9,4 +9,5 @@ require (
 	github.com/joho/godotenv v1.5.1
 	github.com/lib/pq v1.12.3
 	golang.org/x/crypto v0.50.0
+	github.com/dhowden/tag v0.0.0-20240417053706-3d75831295e8
 )

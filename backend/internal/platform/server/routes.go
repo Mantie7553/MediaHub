@@ -69,6 +69,8 @@ func (s *Server) routes() {
 	// Media streaming endpoints
 	s.router.Get("/stream/media/{type}/{id}", streamHandler.StreamMedia)
 	s.router.Get("/stream/segments/{type}/{id}/{file}", streamHandler.ServeSegment)
+	s.router.Get("/stream/music/{id}", streamHandler.ServeTrack)
+	s.router.Get("/stream/music/{id}/cover", streamHandler.ServeCover)
 
 	// Endpoints for all authenticated users
 	s.router.Group(func(r chi.Router) {
@@ -123,5 +125,6 @@ func (s *Server) routes() {
 		r.Post("/admin/sync/radarr", syncHandler.SyncRadarr)
 		r.Post("/admin/sync/manga", syncHandler.SyncManga)
 		r.Post("/admin/sync/light-novels", syncHandler.SyncLightNovel)
+		r.Post("/admin/sync/music", syncHandler.SyncMusic)
 	})
 }

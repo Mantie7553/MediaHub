@@ -46,6 +46,7 @@ CREATE TABLE music_metadata (
     album_id UUID REFERENCES albums(id) ON DELETE SET NULL,
     track_number INT,
     duration_secs INT,
+    file_path TEXT,
     genres TEXT[]
 );
 

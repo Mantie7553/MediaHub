@@ -19,6 +19,7 @@ import (
 	"github.com/Mantie7553/MediaHub/backend/internal/clients/mangadex"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/logger"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/utils"
+	"github.com/dhowden/tag"
 	"github.com/lib/pq"
 )
 
@@ -656,4 +657,155 @@ func extractCoverHref(filePath string) (string, error) {
 	}
 
 	return "", nil
+}
+
+func (h *Handler) SyncMusic(w http.ResponseWriter, r *http.Request) {
+	mediaRoot := os.Getenv("MEDIA_ROOT")
+	musicRoot := filepath.Join(mediaRoot, "Music")
+
+	if _, err := os.Stat(musicRoot); os.IsNotExist(err) {
+		utils.Error(w, http.StatusNotFound, "music directory not found")
+		return
+	}
+
+	synced := 0
+
+	err := filepath.WalkDir(musicRoot, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() || strings.ToLower(filepath.Ext(path)) != ".mp3" {
+			return nil
+		}
+
+		// derive artist and album from directory structure: Music/Artist/Album/track.mp3
+		rel, err := filepath.Rel(musicRoot, path)
+		if err != nil {
+			logger.Warn("failed to get relative path for %s: %s", path, err.Error())
+			return nil
+		}
+
+		parts := strings.Split(filepath.ToSlash(rel), "/")
+		if len(parts) < 3 {
+			logger.Warn("unexpected path structure for %s, skipping", path)
+			return nil
+		}
+
+		artist := parts[0]
+		albumName := parts[1]
+		fileName := strings.TrimSuffix(parts[len(parts)-1], filepath.Ext(parts[len(parts)-1]))
+
+		// upsert media_item
+		var mediaItemID string
+		err = h.db.QueryRow(
+			`SELECT id FROM media_items WHERE title = $1 AND type = 'music_track'`,
+			fileName,
+		).Scan(&mediaItemID)
+
+		if err == sql.ErrNoRows {
+			err = h.db.QueryRow(
+				`INSERT INTO media_items (type, title)
+				VALUES ('music_track', $1)
+				RETURNING id`,
+				fileName,
+			).Scan(&mediaItemID)
+			if err != nil {
+				logger.Error("failed to create media item for %s: %s", fileName, err.Error())
+				return nil
+			}
+		} else if err != nil {
+			logger.Error("failed to query media item for %s: %s", fileName, err.Error())
+			return nil
+		}
+
+		// upsert album if not "Singles"
+		var albumID *string
+		if albumName != "Singles" {
+			var id string
+			err = h.db.QueryRow(
+				`SELECT id FROM albums WHERE title = $1 AND artist = $2`,
+				albumName, artist,
+			).Scan(&id)
+
+			if err == sql.ErrNoRows {
+				err = h.db.QueryRow(
+					`INSERT INTO albums (title, artist)
+					VALUES ($1, $2)
+					RETURNING id`,
+					albumName, artist,
+				).Scan(&id)
+				if err != nil {
+					logger.Error("failed to create album %s: %s", albumName, err.Error())
+					return nil
+				}
+			} else if err != nil {
+				logger.Error("failed to query album %s: %s", albumName, err.Error())
+				return nil
+			}
+			albumID = &id
+		}
+
+		// upsert music_metadata with file_path
+		_, err = h.db.Exec(
+			`INSERT INTO music_metadata (media_item_id, artist, album_id, file_path)
+			VALUES ($1, $2, $3, $4)
+			ON CONFLICT (media_item_id) DO UPDATE SET
+			artist = EXCLUDED.artist,
+			album_id = EXCLUDED.album_id,
+			file_path = EXCLUDED.file_path`,
+			mediaItemID, artist, albumID, path,
+		)
+		if err != nil {
+			logger.Error("failed to upsert music_metadata for %s: %s", fileName, err.Error())
+			return nil
+		}
+
+		synced++
+
+		coverPath := filepath.Join(filepath.Dir(path), "cover.jpg")
+		if _, coverErr := os.Stat(coverPath); os.IsNotExist(coverErr) {
+			extractCoverArt(path, coverPath)
+		}
+
+		// Set cover_image_url if cover exists
+		if _, coverErr := os.Stat(coverPath); coverErr == nil {
+			apiURL := os.Getenv("API_URL")
+			coverURL := fmt.Sprintf("%s/stream/music/%s/cover", apiURL, mediaItemID)
+			h.db.Exec(
+				`UPDATE media_items SET cover_image_url = $1 WHERE id = $2 AND cover_image_url IS NULL`,
+				coverURL, mediaItemID,
+			)
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		logger.Error("failed to walk music directory: %s", err.Error())
+		utils.Error(w, http.StatusInternalServerError, "sync failed")
+		return
+	}
+
+	logger.Info("Music sync complete: %d tracks synced", synced)
+	utils.JSON(w, map[string]int{"synced": synced})
+}
+
+func extractCoverArt(mp3Path string, destPath string) {
+	f, err := os.Open(mp3Path)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+
+	meta, err := tag.ReadFrom(f)
+	if err != nil {
+		return
+	}
+
+	pic := meta.Picture()
+	if pic == nil || len(pic.Data) == 0 {
+		return
+	}
+
+	os.WriteFile(destPath, pic.Data, 0644)
 }

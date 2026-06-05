@@ -141,3 +141,43 @@ func (h *Handler) ServeSegment(w http.ResponseWriter, r *http.Request) {
 
 	http.ServeFile(w, r, filePath)
 }
+
+func (h *Handler) ServeTrack(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+
+	var filePath string
+	err := h.db.QueryRow(
+		`SELECT file_path FROM music_metadata WHERE media_item_id = $1`,
+		id,
+	).Scan(&filePath)
+	if err != nil {
+		utils.Error(w, http.StatusNotFound, "track not found")
+		return
+	}
+
+	w.Header().Set("Content-Type", "audio/mpeg")
+	http.ServeFile(w, r, filePath)
+}
+
+func (h *Handler) ServeCover(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+
+	var filePath string
+	err := h.db.QueryRow(
+		`SELECT file_path FROM music_metadata WHERE media_item_id = $1`,
+		id,
+	).Scan(&filePath)
+	if err != nil {
+		utils.Error(w, http.StatusNotFound, "track not found")
+		return
+	}
+
+	coverPath := filepath.Join(filepath.Dir(filePath), "cover.jpg")
+	if _, err := os.Stat(coverPath); os.IsNotExist(err) {
+		utils.Error(w, http.StatusNotFound, "cover not found")
+		return
+	}
+
+	w.Header().Set("Content-Type", "image/jpeg")
+	http.ServeFile(w, r, coverPath)
+}

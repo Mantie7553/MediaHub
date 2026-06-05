@@ -4,6 +4,7 @@ import api from "../../services/api"
 import Loading from "../../components/states/Loading"
 import Error from "../../components/states/Error"
 import MusicRequestModal from "../../components/modals/MusicRequestModal"
+import useAudioStore from "../../stores/useAudioStore"
 
 export default function MusicDiscover({ userContentMap, onListChange }) {
     const [query, setQuery] = useState("")
@@ -12,6 +13,7 @@ export default function MusicDiscover({ userContentMap, onListChange }) {
     const [ytResults, setYtResults] = useState([])
     const dialogRef = useRef(null)
     const [selectedTrack, setSelectedTrack] = useState(null)
+    const play = useAudioStore(state => state.play)
 
     function handleSearch() {
         if (!query.trim()) return

@@ -57,6 +57,14 @@ func Run(db *sql.DB, jobID string, mediaItemID string) {
 		outputTemplate = destinationPath + "/%(title)s.%(ext)s"
 	}
 
+	tmpFile, err := os.CreateTemp("", "ytdlp-path-*.txt")
+	if err != nil {
+		markFailed(db, jobID, err.Error())
+		return
+	}
+	defer os.Remove(tmpFile.Name())
+	tmpFile.Close()
+
 	// 4. Build and start the command
 	cmd := exec.Command("yt-dlp",
 		"-x",
@@ -64,6 +72,7 @@ func Run(db *sql.DB, jobID string, mediaItemID string) {
 		"--newline",
 		"-o", outputTemplate,
 		sourceURL,
+		"--print-to-file", "after_move:filepath", tmpFile.Name(),
 	)
 
 	stdout, err := cmd.StdoutPipe()
@@ -101,6 +110,16 @@ func Run(db *sql.DB, jobID string, mediaItemID string) {
 	if err := cmd.Wait(); err != nil {
 		markFailed(db, jobID, stderr.String())
 		return
+	}
+
+	// 7. Save the downloaded file path
+	pathBytes, err := os.ReadFile(tmpFile.Name())
+	if err == nil {
+		filePath := strings.TrimSpace(string(pathBytes))
+		if filePath != "" {
+			db.Exec(`UPDATE music_metadata SET file_path = $1 WHERE media_item_id = $2`,
+				filePath, mediaItemID)
+		}
 	}
 
 	logger.Info("Job %s completed!", jobID)

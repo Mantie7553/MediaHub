@@ -1,4 +1,5 @@
 import Sidebar from "./Sidebar";
+import AudioPlayer from "../../pages/viewer/AudioPlayer";
 
 /**
  * Component to layout our pages properly, always puts the Sidebar on the left
@@ -8,8 +9,9 @@ import Sidebar from "./Sidebar";
 export default function Layout({children}) {
     return <div className="flex gap-2">
         <Sidebar/>
-        <main className="w-full p-2">
+        <main className="w-full p-2 pb-20">
             {children}
         </main>
+        <AudioPlayer />
     </div>
 }

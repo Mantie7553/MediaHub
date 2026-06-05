@@ -47,6 +47,7 @@ type MediaItem struct {
 	ExternalID     *string    `json:"external_id"`
 	ExternalSource *string    `json:"external_source"`
 	CreatedAt      time.Time  `json:"created_at"`
+	Artist         *string    `json:"artist"`
 }
 
 type MediaItemDetail struct {

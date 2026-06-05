@@ -203,10 +203,13 @@ func (h *Handler) GetAll(w http.ResponseWriter, r *http.Request) {
 		conditions = append(conditions, `(EXISTS (SELECT 1 FROM sonarr_items WHERE media_item_id = mi.id)
 		OR EXISTS (SELECT 1 FROM radarr_items WHERE media_item_id = mi.id)
 		OR EXISTS (SELECT 1 FROM manga_chapters WHERE media_item_id = mi.id AND file_path IS NOT NULL)
-		OR EXISTS (SELECT 1 FROM light_novel_volumes WHERE media_item_id = mi.id))`)
+		OR EXISTS (SELECT 1 FROM light_novel_volumes WHERE media_item_id = mi.id)
+		OR EXISTS (SELECT 1 FROM music_metadata WHERE media_item_id = mi.id AND file_path IS NOT NULL))`)
 	}
 
-	queryString := `SELECT id, type, title, description, cover_image_url, release_date, external_id, external_source, created_at FROM media_items mi`
+	queryString := `SELECT mi.id, mi.type, mi.title, mi.description, mi.cover_image_url, mi.release_date, mi.external_id, mi.external_source, mi.created_at, mm.artist
+	FROM media_items mi
+	LEFT JOIN music_metadata mm ON mm.media_item_id = mi.id`
 
 	if len(conditions) > 0 {
 		queryString += " WHERE " + strings.Join(conditions, " AND ")
@@ -225,7 +228,7 @@ func (h *Handler) GetAll(w http.ResponseWriter, r *http.Request) {
 		err := rows.Scan(
 			&item.ID, &item.Type, &item.Title, &item.Description,
 			&item.CoverImageURL, &item.ReleaseDate, &item.ExternalID,
-			&item.ExternalSource, &item.CreatedAt,
+			&item.ExternalSource, &item.CreatedAt, &item.Artist,
 		)
 
 		if utils.InternalError(w, err) {
