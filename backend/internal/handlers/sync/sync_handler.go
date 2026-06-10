@@ -375,6 +375,8 @@ func (h *Handler) SyncManga(w http.ResponseWriter, r *http.Request) {
 			title = manga.Attributes.Title.Ja
 		}
 
+		description := manga.Attributes.Description["en"]
+
 		// Extract cover URL
 		var coverURL string
 		for _, rel := range manga.Relationships {
@@ -401,11 +403,11 @@ func (h *Handler) SyncManga(w http.ResponseWriter, r *http.Request) {
 		// Insert or find the media item
 		var mediaItemID string
 		err = h.db.QueryRow(
-			`INSERT INTO media_items (type, title, cover_image_url, external_id, external_source)
-			VALUES ('manga', $1, $2, $3, 'mangadex')
+			`INSERT INTO media_items (type, title, cover_image_url, external_id, external_source, description)
+			VALUES ('manga', $1, $2, $3, 'mangadex', $4)
 			ON CONFLICT (external_id, external_source) DO NOTHING
 			RETURNING id`,
-			title, utils.NullString(coverURL), manga.ID,
+			title, utils.NullString(coverURL), manga.ID, description,
 		).Scan(&mediaItemID)
 
 		if err != nil {
@@ -416,6 +418,15 @@ func (h *Handler) SyncManga(w http.ResponseWriter, r *http.Request) {
 			).Scan(&mediaItemID)
 			if err != nil {
 				logger.Error("failed to find existing media item for %s: %s", title, err.Error())
+				continue
+			}
+
+			_, err = h.db.Exec(
+				`UPDATE media_items SET description = COALESCE(description, $1) WHERE id = $2`,
+				description, mediaItemID,
+			)
+			if err != nil {
+				logger.Error("unable to add description for %s: %s", title, err.Error())
 				continue
 			}
 		}
@@ -474,6 +485,7 @@ func (h *Handler) SyncManga(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 }
+
 func (h *Handler) SyncLightNovel(w http.ResponseWriter, r *http.Request) {
 	mediaRoot := os.Getenv("MEDIA_ROOT")
 	regex := regexp.MustCompile(`(?i)volume[_\s](\d+)`)
@@ -492,6 +504,94 @@ func (h *Handler) SyncLightNovel(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		// Convert folder name to a search query
+		query := strings.ReplaceAll(entry.Name(), "_", " ")
+		results, err := h.anilist.Search("MANGA", query, 1, "NOVEL")
+		time.Sleep(500 * time.Millisecond)
+		if err != nil {
+			logger.Error("anilist search failed for %s: %s", query, err.Error())
+			continue
+		}
+		if len(results) == 0 {
+			logger.Warn("no anilist results for %s, skipping", query)
+			continue
+		}
+
+		lightNovel, err := h.anilist.GetByID(results[0].ID)
+		time.Sleep(500 * time.Millisecond)
+		if err != nil {
+			logger.Error("anilist search failed for %s: %s", query, err.Error())
+			continue
+		}
+		if lightNovel == nil {
+			logger.Warn("no anilist results for %s, skipping", query)
+			continue
+		}
+
+		var mediaItemID string
+		err = h.db.QueryRow(
+			`SELECT id FROM media_items WHERE type = 'light_novel' AND title = $1`,
+			entry.Name(),
+		).Scan(&mediaItemID)
+
+		if err == sql.ErrNoRows {
+			var startDate *string
+
+			if lightNovel.StartDate.Year != nil {
+				date := fmt.Sprintf("%04d-%02d-%02d",
+					*lightNovel.StartDate.Year,
+					utils.SafeMonth(lightNovel.StartDate.Month),
+					utils.SafeDay(lightNovel.StartDate.Day),
+				)
+				startDate = &date
+			}
+
+			err = h.db.QueryRow(
+				`INSERT INTO media_items (type, title, description, cover_image_url, external_id, external_source, release_date)
+				 VALUES ('light_novel', $1, $2, $3, $4, $5, $6) RETURNING id`,
+				entry.Name(), lightNovel.Description, lightNovel.CoverImage.Large, strconv.Itoa(lightNovel.ID), "anilist", startDate,
+			).Scan(&mediaItemID)
+			if err != nil {
+				logger.Warn("failed to insert media item for %s: %v", entry.Name(), err)
+				continue
+			}
+		} else if err == nil {
+			id := strconv.Itoa(lightNovel.ID)
+			var releaseDate *string
+			if lightNovel.StartDate.Year != nil {
+				date := fmt.Sprintf("%04d-%02d-%02d",
+					*lightNovel.StartDate.Year,
+					utils.SafeMonth(lightNovel.StartDate.Month),
+					utils.SafeDay(lightNovel.StartDate.Day),
+				)
+				releaseDate = &date
+			}
+			h.db.Exec(
+				`UPDATE media_items SET
+				external_id = COALESCE(external_id, $1),
+				external_source = COALESCE(external_source, $2),
+				description = COALESCE(description, $3),
+				cover_image_url = COALESCE(cover_image_url, $4),
+				release_date = COALESCE(release_date, $5)
+				WHERE id = $6`,
+				id, "anilist", lightNovel.Description, lightNovel.CoverImage.Large, releaseDate, mediaItemID,
+			)
+		} else if err != nil {
+			logger.Warn("failed to query media item for %s: %v", entry.Name(), err)
+			continue
+		}
+
+		_, err = h.db.Exec(
+			`INSERT INTO light_novel_metadata (media_item_id, genres)
+			VALUES ($1, $2)
+			ON CONFLICT (media_item_id) DO NOTHING`,
+			mediaItemID, pq.Array(lightNovel.Genres),
+		)
+		if err != nil {
+			logger.Warn("failed to insert or update metadata for %s: %v", entry.Name(), err)
+			continue
+		}
+
 		for _, file := range files {
 			if filepath.Ext(file.Name()) != ".epub" {
 				continue
@@ -503,37 +603,6 @@ func (h *Handler) SyncLightNovel(w http.ResponseWriter, r *http.Request) {
 			}
 
 			volumeNum, _ := strconv.Atoi(match[1])
-
-			var mediaItemID string
-			err = h.db.QueryRow(
-				`SELECT id FROM media_items WHERE type = 'light_novel' AND title = $1`,
-				entry.Name(),
-			).Scan(&mediaItemID)
-
-			if err == sql.ErrNoRows {
-				err = h.db.QueryRow(
-					`INSERT INTO media_items (type, title) VALUES ('light_novel', $1) RETURNING id`,
-					entry.Name(),
-				).Scan(&mediaItemID)
-				if err != nil {
-					logger.Warn("failed to insert media item for %s: %v", entry.Name(), err)
-					continue
-				}
-			} else if err != nil {
-				logger.Warn("failed to query media item for %s: %v", entry.Name(), err)
-				continue
-			}
-
-			_, err = h.db.Exec(
-				`INSERT INTO light_novel_metadata (media_item_id)
-				VALUES ($1)
-				ON CONFLICT (media_item_id) DO NOTHING`,
-				mediaItemID,
-			)
-			if err != nil {
-				logger.Warn("failed to insert or update metadata for %s: %v", entry.Name(), err)
-				continue
-			}
 
 			filePath := filepath.Join(mediaRoot, "Light Novels", entry.Name(), file.Name())
 			var volumeID string
@@ -557,7 +626,7 @@ func (h *Handler) SyncLightNovel(w http.ResponseWriter, r *http.Request) {
 					coverURL := fmt.Sprintf("%s/light-novels/%s/volumes/%s/images/%s",
 						os.Getenv("API_URL"), mediaItemID, volumeID, coverFile)
 					h.db.Exec(
-						`UPDATE media_items SET cover_image_url = $1 WHERE id = $2`,
+						`UPDATE media_items SET cover_image_url = $1 WHERE id = $2 AND cover_image_url is NULL`,
 						coverURL, mediaItemID,
 					)
 				}

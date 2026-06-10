@@ -7,10 +7,11 @@ type Manga struct {
 }
 
 type MangaAttributes struct {
-	Title       Title  `json:"title"`
-	Status      string `json:"status"`
-	Tags        []Tag  `json:"tags"`
-	LastChapter string `json:"lastChapter"`
+	Title       Title             `json:"title"`
+	Status      string            `json:"status"`
+	Tags        []Tag             `json:"tags"`
+	LastChapter string            `json:"lastChapter"`
+	Description map[string]string `json:"description"`
 }
 
 type Title struct {

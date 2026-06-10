@@ -29,6 +29,9 @@ export default function MangaDetailsPage() {
                         <span key={`${manga.title}-${i}`} className="badge">{genre}</span>
                     ))}
                 </div>
+                {manga.description && (
+                        <p className="text-sm max-w-xl">{manga.description}</p>
+                    )}
                 <div>
                     <button className="btn btn-primary" onClick={createRequest} disabled={requesting}>
                         {requesting ? <Loading /> : "Request Download"}

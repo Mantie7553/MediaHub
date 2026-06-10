@@ -2,6 +2,7 @@ import { NavLink, useParams } from "react-router-dom"
 import Loading from "../../components/states/Loading"
 import Error from "../../components/states/Error"
 import { useMediaItem } from "../../hooks"
+import Format from "../../utils/format"
 
 export default function LightNovelDetailsPage() {
     const { id } = useParams()
@@ -17,11 +18,21 @@ export default function LightNovelDetailsPage() {
             <div className="flex flex-col gap-3">
                 <h2 className="text-2xl font-bold">{ln.title}</h2>
                 {ln.metadata.author && <span className="text-sm text-neutral-content">by {ln.metadata.author}</span>}
+                
+                {ln.release_date && (
+                    <span className="text-sm text-neutral-content">{Format.year(ln.release_date)}</span>
+                )}
+
                 <div className="flex flex-wrap gap-1">
                     {(ln.metadata.genres ?? []).map((genre, i) => (
                         <span key={i} className="badge">{genre}</span>
                     ))}
                 </div>
+                {ln.description && (
+                    <p className="text-sm max-w-xl"
+                    dangerouslySetInnerHTML={{__html: ln.description}}
+                    />
+                )}
             </div>
         </div>
 

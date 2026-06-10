@@ -40,7 +40,9 @@ export default function MovieDetailsPage() {
                     </div>
 
                     {movie.description && (
-                        <p className="text-sm max-w-xl">{movie.description}</p>
+                        <p className="text-sm max-w-xl"
+                        dangerouslySetInnerHTML={{__html: movie.description}}
+                        />
                     )}
 
                     <div className="flex gap-2">

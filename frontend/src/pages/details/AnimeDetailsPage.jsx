@@ -5,6 +5,7 @@ import Loading from "../../components/states/Loading";
 import Error from "../../components/states/Error";
 import { useMediaItem, useCreateRequest } from "../../hooks";
 import { animeBadge } from "../../utils/status";
+import Format from "../../utils/format";
 
 export default function AnimeDetailsPage() {
     const { id } = useParams();
@@ -38,11 +39,19 @@ export default function AnimeDetailsPage() {
                 <div className="flex flex-col gap-3">
                     <h2 className="text-2xl font-bold">{anime.title}</h2>
                     <span className={`badge ${animeBadge(anime.metadata.status)}`}>{anime.metadata.status}</span>
+                    {anime.release_date && (
+                        <span className="text-sm text-neutral-content">{Format.date(anime.release_date)}</span>
+                    )}
                     <div className="flex flex-wrap gap-1">
                         {(anime.metadata.genres ?? []).map((genre, i) => (
                             <span key={`${anime.title}-${i}`} className="badge">{genre}</span>
                         ))}
                     </div>
+                    {anime.description && (
+                        <p className="text-sm max-w-xl"
+                        dangerouslySetInnerHTML={{ __html: anime.description}}
+                        />
+                    )}
                     <div>
                         <button className="btn btn-primary" onClick={createRequest} disabled={requesting}>
                             {requesting ? <Loading /> : "Request Download"}
