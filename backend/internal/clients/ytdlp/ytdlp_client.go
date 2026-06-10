@@ -157,7 +157,9 @@ func (c *YtdlpClient) SearchMusic(query string, limit int) ([]SearchResult, erro
 		if err := json.Unmarshal(line, &w); err != nil {
 			continue
 		}
-		results = append(results, w.toDomain())
+		if w.Duration > 30 {
+			results = append(results, w.toDomain())
+		}
 	}
 
 	if err := cmd.Wait(); err != nil {

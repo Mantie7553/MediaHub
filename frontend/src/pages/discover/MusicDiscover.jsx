@@ -12,6 +12,7 @@ export default function MusicDiscover({ userContentMap, onListChange }) {
     const [error, setError] = useState("")
     const [ytResults, setYtResults] = useState([])
     const dialogRef = useRef(null)
+    const [limitVal, setLimitVal] = useState(15)
     const [selectedTrack, setSelectedTrack] = useState(null)
     const play = useAudioStore(state => state.play)
 
@@ -20,7 +21,7 @@ export default function MusicDiscover({ userContentMap, onListChange }) {
         setLoading(true)
         setError("")
 
-        api.get(`/music/yt-search?q=${encodeURIComponent(query)}`)
+        api.get(`/music/yt-search?q=${encodeURIComponent(query)}&limit=${limitVal}`)
             .then(res => setYtResults(res.data ?? []))
             .catch(err => setError(err.message))
             .finally(() => setLoading(false))
@@ -62,6 +63,13 @@ export default function MusicDiscover({ userContentMap, onListChange }) {
             <button className="btn btn-primary" onClick={handleSearch}>
                 <Search size={16} /> Search
             </button>
+            <select className="select select-bordered w-fit" value={limitVal} onChange={e => setLimitVal(Number(e.target.value))}>
+                <option value={5}>5</option>
+                <option value={10}>10</option>
+                <option value={15}>15</option>
+                <option value={20}>20</option>
+                <option value={25}>25</option>
+            </select>
         </div>
 
         {loading && <Loading />}
