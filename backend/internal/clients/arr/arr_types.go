@@ -16,6 +16,9 @@ type SonarrSeries struct {
 		CoverType string `json:"coverType"`
 		RemoteURL string `json:"remoteUrl"`
 	} `json:"images"`
+	AlternateTitles []struct {
+		Title string `json:"title"`
+	} `json:"alternateTitles"`
 }
 
 func (s SonarrSeries) PosterURL() string {
@@ -40,6 +43,9 @@ type RadarrMovie struct {
 	MovieFile struct {
 		Path string `json:"path"`
 	} `json:"movieFile"`
+	AlternateTitles []struct {
+		Title string `json:"title"`
+	} `json:"alternateTitles"`
 }
 
 func (m RadarrMovie) PosterURL() string {
