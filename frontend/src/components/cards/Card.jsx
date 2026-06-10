@@ -42,7 +42,7 @@ export default function Card({item, showActions=false, userContentMap={}, onList
         })} className="cursor-pointer">{card}</div>
     }
 
-    return <Link to={`${path}${item.media_item_id || item.id}`}>{card}</Link>
+    return item.media_item_id || item.id ? <Link to={`${path}${item.media_item_id || item.id}`}>{card}</Link> : card
 }
 
 function mediaInfo(item) {

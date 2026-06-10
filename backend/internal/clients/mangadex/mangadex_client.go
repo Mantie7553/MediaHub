@@ -53,6 +53,7 @@ Params:
 */
 func (c *MangaDexClient) Search(query string) ([]Manga, error) {
 	params := url.Values{}
+	params.Add("excludedTags[]", "b13b2a48-c720-44a9-9c77-39c9979373fb")
 	params.Set("title", query)
 	params.Set("limit", "20")
 	params.Add("includes[]", "cover_art")
@@ -90,6 +91,7 @@ Purpose:	Search MangaDex for Trending Manga
 */
 func (c *MangaDexClient) Trending() ([]Manga, error) {
 	params := url.Values{}
+	params.Add("excludedTags[]", "b13b2a48-c720-44a9-9c77-39c9979373fb")
 	params.Add("order[followedCount]", "desc")
 	params.Set("limit", "20")
 	params.Add("includes[]", "cover_art")
