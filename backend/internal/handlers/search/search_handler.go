@@ -196,8 +196,8 @@ func (h *Handler) Save(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// check that all required fields are present
-	if req.ExternalID == "" || req.ExternalSource == "" || req.Title == "" || req.Type == "" {
-		utils.Error(w, http.StatusBadRequest, "external_id, external_source, title and type are required")
+	if req.Title == "" || req.Type == "" {
+		utils.Error(w, http.StatusBadRequest, " title and type are required")
 		return
 	}
 
@@ -215,6 +215,10 @@ func (h *Handler) Save(w http.ResponseWriter, r *http.Request) {
 	).Scan(&mediaItemID)
 
 	if err == sql.ErrNoRows {
+		if req.ExternalID == "" || req.ExternalSource == "" {
+			utils.Error(w, http.StatusBadRequest, "external id and external source are required")
+			return
+		}
 		err := h.db.QueryRow(
 			`INSERT INTO media_items (type, title, cover_image_url, external_id, external_source)
 			VALUES ($1, $2, $3, $4, $5)
@@ -239,7 +243,7 @@ func (h *Handler) Save(w http.ResponseWriter, r *http.Request) {
 		)
 	}
 
-	if req.Type == "anime" && req.ExternalSource == "anilist" {
+	if req.Type == "anime" && req.ExternalSource == "anilist" && req.ExternalID != "" {
 		var (
 			studio string
 			status string
@@ -289,7 +293,7 @@ func (h *Handler) Save(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if req.Type == "movie" && req.ExternalSource == "anilist" {
+	if req.Type == "movie" && req.ExternalSource == "anilist" && req.ExternalID != "" {
 		var (
 			runtime_mins int
 			director     string
@@ -326,7 +330,7 @@ func (h *Handler) Save(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if req.Type == "manga" && req.ExternalSource == "mangadex" {
+	if req.Type == "manga" && req.ExternalSource == "mangadex" && req.ExternalID != "" {
 		var (
 			status        string
 			genres        []string
@@ -366,7 +370,7 @@ func (h *Handler) Save(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if req.Type == "music_track" && req.ExternalSource == "ytdlp" {
+	if req.Type == "music_track" && req.ExternalSource == "ytdlp" && req.ExternalID != "" {
 		var albumID *string
 		if req.Album != "" {
 			var id string
