@@ -15,16 +15,16 @@ export default function AddToListModal({item, onConfirm, dialogRef, initialValue
 
     function statusOptions(type) {
         switch(type) {
-            case "movie": return ["current", "completed", "wishlist"]
-            default: return ["current", "completed", "dropped", "planned", "wishlist"]
+            case "movie": return ["completed", "current", "wishlist"]
+            default: return ["completed", "current", "dropped", "planned", "wishlist"]
         }
     }
 
     return <dialog className="modal" ref={dialogRef} onClick={e => { e.stopPropagation(); e.preventDefault(); }}>
-        <div className="modal-box">
-            <h2>{item.title || item.media_title}</h2>
+        <div className="modal-box flex flex-col gap-4">
+            <h2 className="text-xl font-semibold">{item.title || item.media_title}</h2>
             <section>
-                <h4>Status</h4>
+                <h4 className="text-xs font-medium text-base-content/80 uppercase tracking-wide mb-1">Status</h4>
                 <div className="flex flex-wrap gap-2">
                     {statusOptions(item.type || item.media_type).map(option => (
                         <button
@@ -39,18 +39,18 @@ export default function AddToListModal({item, onConfirm, dialogRef, initialValue
                 </div>
             </section>
             {((item.type || item.media_type) !== "movie" && (item.type || item.media_type) !== "anime") && (
-                <section>
-                    <h4>Progress</h4>
-                    <ScrollPicker value={progress} onChange={setProgress} max={(item.episode_count || item.total_chapters) ?? 999}/>
+                <section className="pl-4">
+                    <h4 className="text-xs font-medium text-base-content/80 uppercase tracking-wide mb-1">Progress</h4>
+                    <ScrollPicker value={progress} onChange={setProgress} max={item.total_chapters ?? 999}/>
                 </section>
             )}
-            <section>
-                <h4>Score</h4>
+            <section className="pl-4">
+                <h4 className="text-xs font-medium text-base-content/80 uppercase tracking-wide mb-1">Score</h4>
                 <ScrollPicker value={score} onChange={setScore} max={10}/>
             </section>
-            <section>
+            <section className="flex gap-2 pt-2 pl-4">
                 <button className="btn btn-primary" onClick={() => {onConfirm({ status, score, progress}); dialogRef.current.close()}}>Confirm</button>
-                <button className="btn btn-secondary" onClick={() => dialogRef.current.close()}>Cancel</button>
+                <button className="btn btn-secondary btn-outline" onClick={() => dialogRef.current.close()}>Cancel</button>
             </section>
         </div>
     </dialog>

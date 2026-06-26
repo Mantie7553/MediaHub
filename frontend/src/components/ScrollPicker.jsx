@@ -19,10 +19,10 @@ export default function ScrollPicker({ value, onChange, min = 0, max = 10, unset
     }
 
     return (
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 w-fit input border-base-300">
             <button
                 type="button"
-                className="btn btn-sm btn-ghost"
+                className="btn btn-sm btn-ghost hover:text-primary"
                 onClick={decrement}
                 disabled={value <= min}
             >
@@ -33,7 +33,7 @@ export default function ScrollPicker({ value, onChange, min = 0, max = 10, unset
             </span>
             <button
                 type="button"
-                className="btn btn-sm btn-ghost"
+                className="btn btn-sm btn-ghost hover:text-primary"
                 onClick={increment}
                 disabled={value >= max}
             >
