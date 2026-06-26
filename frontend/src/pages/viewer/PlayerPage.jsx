@@ -1,16 +1,21 @@
 import { useState, useEffect, useRef } from "react"
-import { useParams } from "react-router-dom"
+import { useParams, useLocation } from "react-router-dom"
 import Hls from "hls.js"
 import api from "../../services/api"
 import Loading from "../../components/states/Loading"
 import Error from "../../components/states/Error"
 
 export default function PlayerPage() {
-    const { type, id } = useParams()
-    const videoRef = useRef(null)
-    const [playlistUrl, setPlaylistUrl] = useState(null)
-    const [loading, setLoading] = useState(true)
-    const [error, setError] = useState(null)
+    const location = useLocation();
+    const { type, id } = useParams();
+    const videoRef = useRef(null);
+    const [playlistUrl, setPlaylistUrl] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+    const initialPosition = location.state?.position ?? 0;
+    const saveIntervalRef = useRef(null);
+    const positionRef = useRef(0);
+    const durationRef = useRef(0);
 
     const baseURL = import.meta.env.VITE_API_URL
 
@@ -21,18 +26,67 @@ export default function PlayerPage() {
             .finally(() => setLoading(false))
     }, [id])
 
+    // set up video after playlist loads
     useEffect(() => {
-        if (!playlistUrl || !videoRef.current) return
+        if (!playlistUrl || !videoRef.current) return;
+
+        const video = videoRef.current;
 
         if (Hls.isSupported()) {
             const hls = new Hls()
             hls.loadSource(playlistUrl)
-            hls.attachMedia(videoRef.current)
-            return () => hls.destroy()
-        } else if (videoRef.current.canPlayType("application/vnd.apple.mpegurl")) {
-            videoRef.current.src = playlistUrl
+            hls.attachMedia(video)
+            hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                video.play().catch(() => {})
+                if (initialPosition > 0) {
+                    const seekOnce = () => {
+                        if (video.duration && initialPosition < video.duration - 10) {
+                            video.currentTime = initialPosition
+                            video.removeEventListener("canplay", seekOnce)
+                        }
+                    }
+                    video.addEventListener("canplay", seekOnce)
+                }
+            })
+            return () => {
+                hls.destroy()
+                video.src = ""
+            }
         }
-    }, [playlistUrl])
+    }, [playlistUrl, initialPosition])
+
+    // save progress every 5 seconds and on unmount
+    useEffect(() => {
+        if (type !== "episode") return
+
+        function updateRefs() {
+            const video = videoRef.current
+            if (video) {
+                positionRef.current = video.currentTime
+                durationRef.current = video.duration || durationRef.current
+            }
+        }
+
+        saveIntervalRef.current = setInterval(() => {
+            updateRefs()
+            saveProgress()
+        }, 5000)
+
+        return () => {
+            clearInterval(saveIntervalRef.current)
+            updateRefs()
+            saveProgress()
+        }
+    }, [type, id])
+
+    function saveProgress() {
+        if (type !== "episode") return
+        if (positionRef.current <= 0) return
+        api.put(`/episodes/${id}/progress`, {
+            position_secs: positionRef.current,
+            duration_secs: durationRef.current,
+        }).catch(() => {})
+    }
 
     if (loading) return <Loading />
     if (error) return <Error error={error} />
@@ -42,7 +96,6 @@ export default function PlayerPage() {
             <video
                 ref={videoRef}
                 controls
-                autoPlay
                 crossOrigin="anonymous"
                 className="w-full max-w-6xl"
             >

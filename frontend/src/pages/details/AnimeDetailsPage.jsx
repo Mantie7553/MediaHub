@@ -16,14 +16,25 @@ export default function AnimeDetailsPage() {
     const { item: anime, loading, error } = useMediaItem(id);
     const [episodes, setEpisodes] = useState([]);
     const [watchedEpisodes, setWatchedEpisodes] = useState(new Set());
+    const [episodeProgress, setEpisodeProgress] = useState({});
 
     useEffect(() => {
-        api.get(`/media/${id}/episodes`)
-            .then(res => {
-                setEpisodes(res.data ?? []);
-                setWatchedEpisodes(new Set((res.data ?? []).filter(ep => ep.watched).map(ep => ep.id)));
-            })
-            .catch(() => {})
+        function fetchEpisodes() {
+            api.get(`/media/${id}/episodes`)
+                .then(res => {
+                    const data = res.data ?? [];
+                    setEpisodes(data);
+                    setWatchedEpisodes(new Set(data.filter(ep => ep.watched).map(ep => ep.id)));
+                    const initial = {};
+                    data.forEach(ep => { initial[ep.id] = { position: ep.position_secs, duration: ep.duration_secs }; });
+                    setEpisodeProgress(initial);
+                })
+                .catch(() => {})
+        }
+
+        fetchEpisodes();
+        window.addEventListener("focus", fetchEpisodes);
+        return () => window.removeEventListener("focus", fetchEpisodes);
     }, [id])
 
     function updateStatus(status) {
@@ -140,7 +151,7 @@ export default function AnimeDetailsPage() {
                             <div className="flex flex-col gap-2">
                                 {eps.map(ep => (
                                     <div key={ep.id} className="flex items-center justify-between p-3 rounded-lg bg-base-200">
-                                        <div className="flex items-center gap-3">
+                                        <div className="flex items-center gap-3 flex-1">
                                             <button
                                                 className={`btn btn-circle btn-xs ${watchedEpisodes.has(ep.id) ? "btn-primary" : "btn-outline"}`}
                                                 onClick={() => toggleEpisode(ep)}
@@ -150,10 +161,19 @@ export default function AnimeDetailsPage() {
                                             <span className="text-sm">
                                                 EP {ep.episode_number} — {ep.title ?? "Untitled"}
                                             </span>
+                                            {(episodeProgress[ep.id]?.duration ?? ep.duration_secs) > 0 && (
+                                                <div className="relative flex-1 max-w-48">
+                                                    <progress
+                                                        className="progress progress-primary w-full"
+                                                        value={episodeProgress[ep.id]?.position ?? ep.position_secs}
+                                                        max={episodeProgress[ep.id]?.duration ?? ep.duration_secs}
+                                                    />
+                                                </div>
+                                            )}
                                         </div>
                                         <button
                                             className="btn btn-sm btn-primary"
-                                            onClick={() => navigate(`/watch/episode/${ep.id}`)}
+                                            onClick={() => navigate(`/watch/episode/${ep.id}`, { state: { position: episodeProgress[ep.id]?.position ?? ep.position_secs } }) }
                                         >
                                             Watch
                                         </button>

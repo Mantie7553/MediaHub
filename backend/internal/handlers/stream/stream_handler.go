@@ -14,6 +14,8 @@ import (
 
 type Handler struct {
 	db *sql.DB
+	procs    map[string]*exec.Cmd
+    procsMu  sync.Mutex
 }
 
 func NewHandler(db *sql.DB) *Handler {

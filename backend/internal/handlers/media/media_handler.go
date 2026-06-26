@@ -759,9 +759,12 @@ func (h *Handler) GetEpisodes(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := h.db.Query(
 		`SELECT e.id, e.season_number, e.episode_number, e.title,
-		COALESCE(uap.watched, false)
+		COALESCE(uap.watched, false),
+		COALESCE(uep.position_secs, 0),
+		COALESCE(uep.duration_secs, 0)
 		FROM episodes e
 		LEFT JOIN user_anime_progress uap ON uap.episode_id = e.id AND uap.user_id = $2
+		LEFT JOIN user_episode_progress uep ON uep.episode_id = e.id AND uep.user_id = $2
 		WHERE e.media_item_id = $1
 		ORDER BY e.season_number, e.episode_number`,
 		mediaID, user.UserID,
@@ -773,7 +776,7 @@ func (h *Handler) GetEpisodes(w http.ResponseWriter, r *http.Request) {
 
 	for rows.Next() {
 		var ep Episode
-		if err := rows.Scan(&ep.ID, &ep.SeasonNumber, &ep.EpisodeNumber, &ep.Title, &ep.Watched); err != nil {
+		if err := rows.Scan(&ep.ID, &ep.SeasonNumber, &ep.EpisodeNumber, &ep.Title, &ep.Watched, &ep.PositionSecs, &ep.DurationSecs); err != nil {
 			utils.InternalError(w, err)
 			return
 		}
@@ -785,6 +788,34 @@ func (h *Handler) GetEpisodes(w http.ResponseWriter, r *http.Request) {
 	}
 
 	utils.JSON(w, episodes)
+}
+
+func (h *Handler) UpdateEpisodeProgress(w http.ResponseWriter, r *http.Request) {
+    var req struct {
+        PositionSecs float64 `json:"position_secs"`
+        DurationSecs float64 `json:"duration_secs"`
+    }
+    user := auth.GetUser(r)
+    episodeId := chi.URLParam(r, "id")
+
+    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+        utils.Error(w, http.StatusBadRequest, "invalid request body")
+        return
+    }
+
+    _, err := h.db.Exec(
+        `INSERT INTO user_episode_progress (user_id, episode_id, position_secs, duration_secs, updated_at)
+        VALUES ($1, $2, $3, $4, NOW())
+        ON CONFLICT (user_id, episode_id) DO UPDATE SET
+        position_secs = $3, duration_secs = $4, updated_at = NOW()`,
+        user.UserID, episodeId, req.PositionSecs, req.DurationSecs,
+    )
+
+    if utils.InternalError(w, err) {
+        return
+    }
+
+    w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *Handler) MarkChapterRead(w http.ResponseWriter, r *http.Request) {

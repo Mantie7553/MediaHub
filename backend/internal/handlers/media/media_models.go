@@ -67,11 +67,13 @@ type AnimeMetadata struct {
 }
 
 type Episode struct {
-	ID            string  `json:"id"`
-	SeasonNumber  int     `json:"season_number"`
-	EpisodeNumber int     `json:"episode_number"`
-	Title         *string `json:"title"`
-	Watched		  bool 	  `json:"watched"`
+    ID            string   `json:"id"`
+    SeasonNumber  int      `json:"season_number"`
+    EpisodeNumber int      `json:"episode_number"`
+    Title         *string  `json:"title"`
+    Watched       bool     `json:"watched"`
+    PositionSecs  float64  `json:"position_secs"`
+    DurationSecs  float64  `json:"duration_secs"`
 }
 
 // LIGHT NOVEL

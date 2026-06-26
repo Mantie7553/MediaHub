@@ -82,6 +82,7 @@ func (s *Server) routes() {
 		// Media Handler Endpoints
 		r.Get("/media", mediaHandler.GetAll)
 		r.Get("/media/{id}", mediaHandler.GetSpecific)
+		r.Put("/episodes/{id}/progress", mediaHandler.UpdateEpisodeProgress)
 		r.Get("/manga/{id}/chapters/{chapterId}/pages/{pageNum}", mediaHandler.ServePage)
 		r.Put("/manga/{id}/chapters/{chapterId}/progress", mediaHandler.MangaProgress)
 		r.Get("/media/{id}/episodes", mediaHandler.GetEpisodes)
