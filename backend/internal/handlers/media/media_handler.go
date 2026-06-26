@@ -375,7 +375,8 @@ func (h *Handler) GetSpecific(w http.ResponseWriter, r *http.Request) {
 
 		volumeRows, err := h.db.Query(
 			`SELECT lnv.id, lnv.volume_number, lnv.title,
-			COALESCE(lnp.completed, false)
+			COALESCE(lnp.completed, false),
+			COALESCE(lnp.scroll_position, 0)
 			FROM light_novel_volumes lnv
 			LEFT JOIN light_novel_progress lnp ON lnp.volume_id = lnv.id AND lnp.user_id = $2
 			WHERE lnv.media_item_id = $1 ORDER BY lnv.volume_number`,
@@ -388,7 +389,7 @@ func (h *Handler) GetSpecific(w http.ResponseWriter, r *http.Request) {
 
 		for volumeRows.Next() {
 			var volume LightNovelVolume
-			if err := volumeRows.Scan(&volume.ID, &volume.VolumeNumber, &volume.Title, &volume.Completed); utils.InternalError(w, err) {
+			if err := volumeRows.Scan(&volume.ID, &volume.VolumeNumber, &volume.Title, &volume.Completed, &volume.ScrollPosition); utils.InternalError(w, err) {
 				return
 			}
 			volumes = append(volumes, volume)
@@ -438,6 +439,32 @@ func (h *Handler) MangaProgress(w http.ResponseWriter, r *http.Request) {
 
 	// return no content
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Handler) UpdateLightNovelProgress(w http.ResponseWriter, r *http.Request) {
+    var req struct {
+        ScrollPosition float64 `json:"scroll_position"`
+    }
+    user := auth.GetUser(r)
+    volumeId := chi.URLParam(r, "volumeId")
+
+    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+        utils.Error(w, http.StatusBadRequest, "invalid request body")
+        return
+    }
+
+    _, err := h.db.Exec(
+        `INSERT INTO light_novel_progress (user_id, volume_id, media_item_id, scroll_position, updated_at)
+        VALUES ($1, $2, (SELECT media_item_id FROM light_novel_volumes WHERE id = $2), $3, NOW())
+        ON CONFLICT (user_id, volume_id) DO UPDATE SET scroll_position = $3, updated_at = NOW()`,
+        user.UserID, volumeId, req.ScrollPosition,
+    )
+
+    if utils.InternalError(w, err) {
+        return
+    }
+
+    w.WriteHeader(http.StatusNoContent)
 }
 
 /*

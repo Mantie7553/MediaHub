@@ -97,18 +97,28 @@ export default function LightNovelDetailsPage() {
             <h3 className="font-bold text-lg mt-6">Volumes</h3>
             <div className="flex flex-col gap-2 mt-2">
                 {(ln.metadata.volumes ?? []).map(volume => (
-                    <div key={volume.id} className="flex items-center justify-between p-3 rounded-lg bg-base-200">
-                        <div className="flex items-center gap-3">
-                            <button
-                                className={`btn btn-circle btn-xs ${readVolumes.has(volume.id) ? "btn-primary" : "btn-outline"}`}
-                                onClick={() => toggleVolume(volume)}
-                            >
-                                <Check size={10} strokeWidth={3} />
-                            </button>
-                            <NavLink to={`/light-novels/${id}/volumes/${volume.id}/read`} className="text-sm">
-                                {volume.title ?? `Volume ${volume.volume_number}`}
-                            </NavLink>
-                        </div>
+                    <div key={volume.id} className="flex items-center gap-3 p-3 rounded-lg bg-base-200">
+                        <button
+                            className={`btn btn-circle btn-xs ${readVolumes.has(volume.id) ? "btn-primary" : "btn-outline"}`}
+                            onClick={() => toggleVolume(volume)}
+                        >
+                            <Check size={10} strokeWidth={3} />
+                        </button>
+                        <NavLink to={`/light-novels/${id}/volumes/${volume.id}/read`} className="text-sm w-24 shrink-0">
+                            {volume.title ?? `Volume ${volume.volume_number}`}
+                        </NavLink>
+                        {volume.scroll_position != null && (
+                            <div className="relative flex-1 max-w-48">
+                                <progress
+                                    className="progress progress-primary w-full"
+                                    value={Math.round((volume.scroll_position ?? 0) * 100)}
+                                    max="100"
+                                />
+                                <span className="absolute inset-0 flex items-center justify-center text-xs font-bold">
+                                    {Math.round((volume.scroll_position ?? 0) * 100)}%
+                                </span>
+                            </div>
+                        )}
                     </div>
                 ))}
             </div>

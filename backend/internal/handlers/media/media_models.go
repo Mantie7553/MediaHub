@@ -82,10 +82,11 @@ type LightNovelMetadata struct {
 }
 
 type LightNovelVolume struct {
-	ID           string  `json:"id"`
-	VolumeNumber int     `json:"volume_number"`
-	Title        *string `json:"title"`
-	Completed    bool    `json:"completed"`
+	ID           	string   `json:"id"`
+	VolumeNumber 	int      `json:"volume_number"`
+	Title        	*string  `json:"title"`
+	Completed    	bool     `json:"completed"`
+	ScrollPosition	*float64 `json:"scroll_position"`
 }
 
 type LightNovelDetail struct {
