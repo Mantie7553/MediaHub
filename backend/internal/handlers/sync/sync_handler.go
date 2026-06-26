@@ -47,140 +47,94 @@ func (h *Handler) SyncSonar(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	tvdbToAnilist, _, err := arr.FetchAnimeMaps()
+	if err != nil {
+		logger.Error("failed to fetch fribb anime-list map: %s", err.Error())
+		tvdbToAnilist = map[int]int{}
+	}
+
 	for _, s := range series {
+		// Look up existing record by sonarr_series_id first
 		var mediaItemID string
 		err := h.db.QueryRow(
-			`SELECT id FROM media_items WHERE title = $1 AND type = 'anime'`,
-			s.Title,
+			`SELECT media_item_id FROM sonarr_items WHERE sonarr_series_id = $1`,
+			s.ID,
 		).Scan(&mediaItemID)
 
-		// Search AniList for metadata regardless of whether the media item exists
+		if err == sql.ErrNoRows {
+			// New series — insert media_item
+			var releaseDate *string
+			if s.Year > 0 {
+				date := fmt.Sprintf("%04d-01-01", s.Year)
+				releaseDate = &date
+			}
+
+			err = h.db.QueryRow(
+				`INSERT INTO media_items (type, title, cover_image_url,description, release_date)
+				VALUES ('anime', $1, $2, $3, $4)
+				RETURNING id`,
+				s.Title, utils.NullString(s.PosterURL()), utils.NullString(s.Overview), releaseDate,
+			).Scan(&mediaItemID)
+			if err != nil {
+				logger.Error("failed to create media item for %s: %s", s.Title, err.Error())
+				continue
+			}
+		} else if err == nil {
+			// Existing — update native fields
+			var releaseDate *string
+			if s.Year > 0 {
+				date := fmt.Sprintf("%04d-01-01", s.Year)
+				releaseDate = &date
+			}
+			h.db.Exec(
+				`UPDATE media_items SET
+				title = $1,
+				cover_image_url = $2,
+				description = COALESCE(description, $3),
+				release_date = COALESCE(release_date, $4)
+				WHERE id = $5`,
+				s.Title, utils.NullString(s.PosterURL()), utils.NullString(s.Overview), releaseDate, mediaItemID,
+			)
+		} else {
+			logger.Error("failed to query sonarr_items for %s: %s", s.Title, err.Error())
+			continue
+		}
+
 		var aniResult *anilist.Media
-		results, searchErr := h.anilist.Search("ANIME", s.Title, 1, "TV")
-		time.Sleep(500 * time.Millisecond)
-		if searchErr == nil && len(results) > 0 {
-			full, fetchErr := h.anilist.GetByID(results[0].ID)
-			time.Sleep(500 * time.Millisecond)
-			if fetchErr == nil {
-				title := full.Title.English
-				if title == "" {
-					title = full.Title.Romaji
-				}
-				normalized := strings.ToLower(strings.ReplaceAll(title, " ", ""))
-				searchNormalized := strings.ToLower(strings.ReplaceAll(s.Title, " ", ""))
-				if len(searchNormalized) > 15 || normalized == searchNormalized {
+		if s.TvdbID > 0 {
+			if anilistID, ok := tvdbToAnilist[s.TvdbID]; ok {
+				full, fetchErr := h.anilist.GetByID(anilistID)
+				time.Sleep(2 * time.Second)
+				if fetchErr != nil {
+					logger.Error("anilist fetch failed for %s (anilist %d): %s", s.Title, anilistID, fetchErr.Error())
+				} else {
 					aniResult = full
 				}
 			}
 		}
 
-		if aniResult == nil {
-			for _, alt := range s.AlternateTitles {
-				results, searchErr = h.anilist.Search("ANIME", alt.Title, 1, "TV")
-				time.Sleep(500 * time.Millisecond)
-				if searchErr == nil && len(results) > 0 {
-					full, fetchErr := h.anilist.GetByID(results[0].ID)
-					time.Sleep(500 * time.Millisecond)
-					if fetchErr == nil {
-						title := full.Title.English
-						if title == "" {
-							title = full.Title.Romaji
-						}
-						normalized := strings.ToLower(strings.ReplaceAll(title, " ", ""))
-						searchNormalized := strings.ToLower(strings.ReplaceAll(s.Title, " ", ""))
-						if len(searchNormalized) > 15 || normalized == searchNormalized {
-							aniResult = full
-						}
-					}
-				}
-			}
-		}
+		if aniResult != nil {
+			id := strconv.Itoa(aniResult.ID)
+			h.db.Exec(
+				`UPDATE media_items SET
+				external_id = COALESCE(external_id, $1),
+				external_source = COALESCE(external_source, $2)
+				WHERE id = $3`,
+				id, "anilist", mediaItemID,
+			)
 
-		if err == sql.ErrNoRows {
-			// Title didn't match — try finding by external_id before inserting
-			if aniResult != nil {
-				_ = h.db.QueryRow(
-					`SELECT id FROM media_items WHERE external_id = $1 AND external_source = 'anilist'`,
-					strconv.Itoa(aniResult.ID),
-				).Scan(&mediaItemID)
-			}
-
-			if mediaItemID != "" {
-				// Found by external_id — sync the title to match Sonarr
-				h.db.Exec(`UPDATE media_items SET title = $1 WHERE id = $2`, s.Title, mediaItemID)
-			} else {
-				// Truly new — do the full INSERT
-				posterURL := s.PosterURL()
-				var externalID *string
-				var externalSource *string
-				var description *string
-				var releaseDate *string
-
-				if aniResult != nil {
-					id := strconv.Itoa(aniResult.ID)
-					externalID = &id
-					src := "anilist"
-					externalSource = &src
-					description = aniResult.Description
-					if aniResult.StartDate.Year != nil {
-						date := fmt.Sprintf("%04d-%02d-%02d",
-							*aniResult.StartDate.Year,
-							utils.SafeMonth(aniResult.StartDate.Month),
-							utils.SafeDay(aniResult.StartDate.Day),
-						)
-						releaseDate = &date
-					}
-				}
-
-				err = h.db.QueryRow(
-					`INSERT INTO media_items (type, title, cover_image_url, external_id, external_source, description, release_date)
-					VALUES ('anime', $1, $2, $3, $4, $5, $6)
-					RETURNING id`,
-					s.Title, posterURL, externalID, externalSource, description, releaseDate,
-				).Scan(&mediaItemID)
-				if err != nil {
-					logger.Error("failed to create media item for %s: %s", s.Title, err.Error())
-					continue
-				}
-			}
-		} else if err == nil {
-			// Backfill external_id, description, and release_date if missing
-			if aniResult != nil {
-				id := strconv.Itoa(aniResult.ID)
-				var releaseDate *string
-				if aniResult.StartDate.Year != nil {
-					date := fmt.Sprintf("%04d-%02d-%02d",
-						*aniResult.StartDate.Year,
-						utils.SafeMonth(aniResult.StartDate.Month),
-						utils.SafeDay(aniResult.StartDate.Day),
-					)
-					releaseDate = &date
-				}
+			if aniResult.StartDate.Year != nil {
+				date := fmt.Sprintf("%04d-%02d-%02d",
+					*aniResult.StartDate.Year,
+					utils.SafeMonth(aniResult.StartDate.Month),
+					utils.SafeDay(aniResult.StartDate.Day),
+				)
 				h.db.Exec(
-					`UPDATE media_items SET
-					external_id = COALESCE(external_id, $1),
-					external_source = COALESCE(external_source, $2),
-					description = COALESCE(description, $3),
-					release_date = COALESCE(release_date, $4)
-					WHERE id = $5`,
-					id, "anilist", aniResult.Description, releaseDate, mediaItemID,
+					`UPDATE media_items SET release_date = $1 WHERE id = $2`,
+					date, mediaItemID,
 				)
 			}
-		} else {
-			logger.Error("failed to find media item for %s : %s", s.Title, err.Error())
-			continue
-		}
 
-		_, err = h.db.Exec(
-			`UPDATE media_items SET cover_image_url = $1 WHERE id = $2`,
-			utils.NullString(s.PosterURL()), mediaItemID,
-		)
-		if err != nil {
-			logger.Error("failed to update cover image for %s: %s", s.Title, err.Error())
-		}
-
-		// Insert/update anime metadata from AniList
-		if aniResult != nil {
 			var status string
 			switch aniResult.Status {
 			case "RELEASING":
@@ -208,6 +162,18 @@ func (h *Handler) SyncSonar(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				logger.Error("failed to upsert anime metadata for %s: %s", s.Title, err.Error())
 			}
+		} else {
+			// No AniList match — still upsert anime_metadata with Sonarr genres
+			_, err = h.db.Exec(
+				`INSERT INTO anime_metadata (media_item_id, genres)
+				VALUES ($1, $2)
+				ON CONFLICT (media_item_id) DO UPDATE SET
+				genres = EXCLUDED.genres`,
+				mediaItemID, pq.Array(s.Genres),
+			)
+			if err != nil {
+				logger.Error("failed to update or insert anime metadata for %s: %s", s.Title, err.Error())
+			}
 		}
 
 		_, err = h.db.Exec(
@@ -225,7 +191,7 @@ func (h *Handler) SyncSonar(w http.ResponseWriter, r *http.Request) {
 
 		episodes, err := h.sonarr.GetEpisodes(s.ID)
 		if err != nil {
-			logger.Error("failed to get episodes for %s : %s", s.Title, err.Error())
+			logger.Error("failed to get episodes for %s: %s", s.Title, err.Error())
 			continue
 		}
 
@@ -236,7 +202,7 @@ func (h *Handler) SyncSonar(w http.ResponseWriter, r *http.Request) {
 
 			filePath, err := h.sonarr.GetEpisodeFilePath(ep.EpisodeFileID)
 			if err != nil {
-				logger.Error("failed to get file path for episode %d : %s", ep.ID, err.Error())
+				logger.Error("failed to get file path for episode %d: %s", ep.ID, err.Error())
 				continue
 			}
 
@@ -250,7 +216,7 @@ func (h *Handler) SyncSonar(w http.ResponseWriter, r *http.Request) {
 				mediaItemID, ep.SeasonNumber, ep.EpisodeNumber, ep.Title, filePath, ep.ID,
 			)
 			if err != nil {
-				logger.Error("failed to update or insert episode %d : %s", ep.ID, err.Error())
+				logger.Error("failed to update or insert episode %d: %s", ep.ID, err.Error())
 			}
 		}
 	}
@@ -263,150 +229,91 @@ func (h *Handler) SyncRadarr(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	_, tmdbToAnilist, err := arr.FetchAnimeMaps()
+	if err != nil {
+		logger.Error("failed to fetch fribb anime-list map: %s", err.Error())
+		tmdbToAnilist = map[int]int{}
+	}
+
 	for _, m := range movies {
+		// Look up existing record by radarr_movie_id first
 		var mediaItemID string
 		err := h.db.QueryRow(
-			`SELECT id FROM media_items WHERE title = $1 AND type = 'movie'`,
-			m.Title,
+			`SELECT media_item_id FROM radarr_items WHERE radarr_movie_id = $1`,
+			m.ID,
 		).Scan(&mediaItemID)
 
-		// Search AniList for metadata
-		var aniResult *anilist.Media
-		results, searchErr := h.anilist.Search("ANIME", m.Title, 1, "MOVIE")
-		time.Sleep(500 * time.Millisecond)
-		if searchErr == nil && len(results) > 0 {
-			full, fetchErr := h.anilist.GetByID(results[0].ID)
-			time.Sleep(500 * time.Millisecond)
-			if fetchErr == nil {
-				title := full.Title.English
-				if title == "" {
-					title = full.Title.Romaji
-				}
-				normalized := strings.ToLower(strings.ReplaceAll(title, " ", ""))
-				searchNormalized := strings.ToLower(strings.ReplaceAll(m.Title, " ", ""))
-				if len(searchNormalized) > 15 || normalized == searchNormalized {
-					aniResult = full
-				}
-			}
-		}
-
-		if aniResult == nil {
-			for _, alt := range m.AlternateTitles {
-				results, searchErr = h.anilist.Search("ANIME", alt.Title, 1, "MOVIE")
-				time.Sleep(500 * time.Millisecond)
-				if searchErr == nil && len(results) > 0 {
-					full, fetchErr := h.anilist.GetByID(results[0].ID)
-					time.Sleep(500 * time.Millisecond)
-					if fetchErr == nil {
-						title := full.Title.English
-						if title == "" {
-							title = full.Title.Romaji
-						}
-						normalized := strings.ToLower(strings.ReplaceAll(title, " ", ""))
-						searchNormalized := strings.ToLower(strings.ReplaceAll(m.Title, " ", ""))
-						if len(searchNormalized) > 15 || normalized == searchNormalized {
-							aniResult = full
-						}
-					}
-				}
-			}
-		}
-
 		if err == sql.ErrNoRows {
-			// Title didn't match — try finding by external_id before inserting
-			if aniResult != nil {
-				_ = h.db.QueryRow(
-					`SELECT id FROM media_items WHERE external_id = $1 AND external_source = 'anilist'`,
-					strconv.Itoa(aniResult.ID),
-				).Scan(&mediaItemID)
-			}
-
-			if mediaItemID != "" {
-				// Found by external_id — sync the title to match Radarr
-				h.db.Exec(`UPDATE media_items SET title = $1 WHERE id = $2`, m.Title, mediaItemID)
-			} else {
-				// Truly new — do the full INSERT
-				posterURL := m.PosterURL()
-				var externalID *string
-				var externalSource *string
-				var description *string
-
-				if aniResult != nil {
-					id := strconv.Itoa(aniResult.ID)
-					externalID = &id
-					src := "anilist"
-					externalSource = &src
-					description = aniResult.Description
-				}
-
-				err = h.db.QueryRow(
-					`INSERT INTO media_items (type, title, cover_image_url, external_id, external_source, description)
-					VALUES ('movie', $1, $2, $3, $4, $5)
-					RETURNING id`,
-					m.Title, utils.NullString(posterURL), externalID, externalSource, description,
-				).Scan(&mediaItemID)
-				if err != nil {
-					logger.Error("failed to create media item for %s: %s", m.Title, err.Error())
-					continue
-				}
+			// New movie - insert media_item using Radarr's native data
+			err = h.db.QueryRow(
+				`INSERT INTO media_items (type, title, cover_image_url, description, release_date)
+				VALUES ('movie', $1, $2, $3, $4)
+				RETURNING id`,
+				m.Title, utils.NullString(m.PosterURL()), utils.NullString(m.Overview), utils.NullString(m.ReleaseDate()),
+			).Scan(&mediaItemID)
+			if err != nil {
+				logger.Error("failed to create media item for %s: %s", m.Title, err.Error())
+				continue
 			}
 		} else if err == nil {
-			// Backfill external_id and description if missing
-			if aniResult != nil {
-				id := strconv.Itoa(aniResult.ID)
-				h.db.Exec(
-					`UPDATE media_items SET
-					external_id = COALESCE(external_id, $1),
-					external_source = COALESCE(external_source, $2),
-					description = COALESCE(description, $3)
-					WHERE id = $4`,
-					id, "anilist", aniResult.Description, mediaItemID,
-				)
-			}
+			// Existing - update native fields
+			h.db.Exec(
+				`UPDATE media_items SET
+				title = $1,
+				cover_image_url = $2,
+				description = COALESCE(description, $3),
+				release_date = COALESCE(release_date, $4)
+				WHERE id = $5`,
+				m.Title, utils.NullString(m.PosterURL()), utils.NullString(m.Overview), utils.NullString(m.ReleaseDate()), mediaItemID,
+			)
 		} else {
-			logger.Error("failed to find media item for %s: %s", m.Title, err.Error())
+			logger.Error("failed to query radarr_items for %s: %s", m.Title, err.Error())
 			continue
 		}
 
-		_, err = h.db.Exec(
-			`UPDATE media_items SET cover_image_url = $1 WHERE id = $2`,
-			utils.NullString(m.PosterURL()), mediaItemID,
-		)
-		if err != nil {
-			logger.Error("failed to update cover image for %s: %s", m.Title, err.Error())
-		}
-
-		if date := m.ReleaseDate(); date != "" {
-			_, err = h.db.Exec(
-				`UPDATE media_items SET release_date = $1 WHERE id = $2`,
-				date, mediaItemID,
-			)
-			if err != nil {
-				logger.Error("failed to update release_date for %s: %s", m.Title, err.Error())
-			}
-		}
-
-		// Insert/update movie metadata from AniList
-		var genres []string
-		if aniResult != nil {
-			genres = aniResult.Genres
-		}
-
+		// Upsert movie_metadata using Radarr's genres as baseline
 		_, err = h.db.Exec(
 			`INSERT INTO movie_metadata (media_item_id, genres)
 			VALUES ($1, $2)
 			ON CONFLICT (media_item_id) DO UPDATE SET
 			genres = EXCLUDED.genres`,
-			mediaItemID, pq.Array(genres),
+			mediaItemID, pq.Array(m.Genres),
 		)
 		if err != nil {
-			logger.Error("failed to upsert movie metadata for %s: %s", m.Title, err.Error())
+			logger.Error("failed to udpate or insert movie metadata for %s: %s", m.Title, err.Error())
 		}
 
-		if !m.HasFile {
-			continue
+		// AniList enrichment via Fribb TMDB mapping
+		if m.TmdbID > 0 {
+			if anilistID, ok := tmdbToAnilist[m.TmdbID]; ok {
+				full, fetchErr := h.anilist.GetByID(anilistID)
+				time.Sleep(1 * time.Second)
+				if fetchErr != nil {
+					logger.Error("anilist fetch failed for %s (anilist %d): %s", m.Title, anilistID, fetchErr.Error())
+				} else {
+					id := strconv.Itoa(full.ID)
+					h.db.Exec(
+						`UPDATE media_items SET
+						external_id = COALESCE(external_id, $1),
+						external_source = COALESCE(external_source, $2)
+						WHERE id = $3`,
+						id, "anilist", mediaItemID,
+					)
+					_, err = h.db.Exec(
+						`INSERT INTO movie_metadata (media_item_id, genres)
+						VALUES ($1, $2)
+						ON CONFLICT (media_item_id) DO UPDATE SET
+						genres = EXCLUDED.genres`,
+						mediaItemID, pq.Array(full.Genres),
+					)
+					if err != nil {
+						logger.Error("failed to upsert movie metadata for %s: %s", m.Title, err.Error())
+					}
+				}
+			}
 		}
 
+		// Always upsert radarr_items regardless of file status
 		_, err = h.db.Exec(
 			`INSERT INTO radarr_items (media_item_id, radarr_movie_id)
 			VALUES ($1, $2)
@@ -416,7 +323,11 @@ func (h *Handler) SyncRadarr(w http.ResponseWriter, r *http.Request) {
 			mediaItemID, m.ID,
 		)
 		if err != nil {
-			logger.Error("failed to update or insert radarr_items for %s : %s", m.Title, err.Error())
+			logger.Error("failed to update or insert radarr_items for %s: %s", m.Title, err.Error())
+			continue
+		}
+
+		if !m.HasFile {
 			continue
 		}
 

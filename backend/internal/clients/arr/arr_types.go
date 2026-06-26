@@ -10,15 +10,16 @@ type SonarrEpisode struct {
 }
 
 type SonarrSeries struct {
-	ID     int    `json:"id"`
-	Title  string `json:"title"`
-	Images []struct {
+	ID       int      `json:"id"`
+	Title    string   `json:"title"`
+	TvdbID   int      `json:"tvdbId"`
+	Overview string   `json:"overview"`
+	Genres   []string `json:"genres"`
+	Year     int      `json:"year"`
+	Images   []struct {
 		CoverType string `json:"coverType"`
 		RemoteURL string `json:"remoteUrl"`
 	} `json:"images"`
-	AlternateTitles []struct {
-		Title string `json:"title"`
-	} `json:"alternateTitles"`
 }
 
 func (s SonarrSeries) PosterURL() string {
@@ -31,11 +32,15 @@ func (s SonarrSeries) PosterURL() string {
 }
 
 type RadarrMovie struct {
-	ID              int    `json:"id"`
-	Title           string `json:"title"`
-	HasFile         bool   `json:"hasFile"`
-	DigitalRelease  string `json:"digitalRelease"`
-	PhysicalRelease string `json:"physicalRelease"`
+	ID              int      `json:"id"`
+	Title           string   `json:"title"`
+	HasFile         bool     `json:"hasFile"`
+	DigitalRelease  string   `json:"digitalRelease"`
+	PhysicalRelease string   `json:"physicalRelease"`
+	TmdbID          int      `json:"tmdbId"`
+	Overview        string   `json:"overview"`
+	Genres          []string `json:"genres"`
+	Year            int      `json:"year"`
 	Images          []struct {
 		CoverType string `json:"coverType"`
 		RemoteURL string `json:"remoteUrl"`
@@ -43,9 +48,6 @@ type RadarrMovie struct {
 	MovieFile struct {
 		Path string `json:"path"`
 	} `json:"movieFile"`
-	AlternateTitles []struct {
-		Title string `json:"title"`
-	} `json:"alternateTitles"`
 }
 
 func (m RadarrMovie) PosterURL() string {
