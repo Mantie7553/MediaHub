@@ -283,3 +283,30 @@ func (c *ArrClient) GetAllMovies() ([]RadarrMovie, error) {
 
 	return result, nil
 }
+
+func (c *ArrClient) GetMovieFilePath(movieFileID int) (string, error) {
+	req, err := http.NewRequest("GET", c.config.BaseURL+"/api/v3/moviefile/"+strconv.Itoa(movieFileID), nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("X-Api-Key", c.config.APIKey)
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("radarr returned %d", resp.StatusCode)
+	}
+
+	var result struct {
+		Path string `json:"path"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", err
+	}
+
+	return result.Path, nil
+}

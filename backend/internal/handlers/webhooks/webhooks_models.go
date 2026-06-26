@@ -17,3 +17,17 @@ type sonarrEpisode struct {
 	Title         string `json:"title"`
 	EpisodeFileID int    `json:"episodeFileId"`
 }
+
+type radarrPayload struct {
+	EventType string           `json:"eventType"`
+	Movie     radarrMovie      `json:"movie"`
+	MovieFile radarrMovieFile  `json:"movieFile"`
+}
+
+type radarrMovie struct {
+	ID int `json:"id"`
+}
+
+type radarrMovieFile struct {
+	ID int `json:"id"`
+}

@@ -67,6 +67,7 @@ func (s *Server) routes() {
 	s.router.Get("/light-novels/{id}/volumes/{volumeId}/images/{imageName}", mediaHandler.ServeVolumeImage)
 
 	s.router.Post("/webhooks/sonarr", webhooksHandler.SonarrWebhook)
+	s.router.Post("/webhooks/radarr", webhooksHandler.RadarrWebhook)
 
 	// Media streaming endpoints
 	s.router.Get("/stream/media/{type}/{id}", streamHandler.StreamMedia)

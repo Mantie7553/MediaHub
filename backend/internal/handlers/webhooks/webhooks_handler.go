@@ -84,3 +84,49 @@ func (h *Handler) SonarrWebhook(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 }
+
+func (h *Handler) RadarrWebhook(w http.ResponseWriter, r *http.Request) {
+	var payload radarrPayload
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		utils.Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if payload.EventType != "Download" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	var mediaItemID string
+	err := h.db.QueryRow(
+		`SELECT media_item_id FROM radarr_items WHERE radarr_movie_id = $1`,
+		payload.Movie.ID,
+	).Scan(&mediaItemID)
+
+	if err == sql.ErrNoRows {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	if utils.InternalError(w, err) {
+		return
+	}
+
+	radarrClient := arr.NewArrClient("RADARR_URL", "RADARR_API_KEY")
+	filePath, err := radarrClient.GetMovieFilePath(payload.MovieFile.ID)
+	if err != nil {
+		logger.Error("failed to get file path for movie file %d: %s", payload.MovieFile.ID, err.Error())
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	_, err = h.db.Exec(
+		`UPDATE movie_metadata SET file_path = $1 WHERE media_item_id = $2`,
+		filePath, mediaItemID,
+	)
+	if err != nil {
+		logger.Error("failed to update file path for media item %s: %s", mediaItemID, err.Error())
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
