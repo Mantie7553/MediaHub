@@ -40,7 +40,7 @@ export default function AddToListModal({item, onConfirm, dialogRef, initialValue
                     ))}
                 </div>
             </section>
-            {(item.type || item.media_type) !== "movie" && (
+            {((item.type || item.media_type) !== "movie" && (item.type || item.media_type) !== "anime") && (
                 <section>
                     <h4>Progress</h4>
                     <ScrollPicker value={progress} onChange={setProgress} max={(item.episode_count || item.total_chapters) ?? 999}/>

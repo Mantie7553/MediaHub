@@ -67,6 +67,7 @@ type Episode struct {
 	SeasonNumber  int     `json:"season_number"`
 	EpisodeNumber int     `json:"episode_number"`
 	Title         *string `json:"title"`
+	Watched		  bool 	  `json:"watched"`
 }
 
 // LIGHT NOVEL

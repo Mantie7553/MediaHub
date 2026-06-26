@@ -50,9 +50,9 @@ function mediaInfo(item) {
     let info = null;
     switch(item.media_type ?? item.type) {
         case "anime": 
-            const season = item.season_number ? `S${item.season_number}` : null
-            const total = item.episode_count
-            const episodes = item.episodes_watched ?? null
+            const season = item.active_season ? `S${item.active_season}` : null
+            const total = item.season_total
+            const episodes = item.season_watched ?? null
             const progressLabel = episodes !== null 
                 ? [season, `E${episodes}${total ? ` / ${total}` : ""}`].filter(Boolean).join(" · ")
                 : null

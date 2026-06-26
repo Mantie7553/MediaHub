@@ -18,10 +18,10 @@ CREATE TABLE user_media_status (
 CREATE TABLE user_anime_progress (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    media_item_id UUID NOT NULL REFERENCES media_items(id) ON DELETE CASCADE,
-    episodes_watched INT NOT NULL DEFAULT 0,
-    last_watched_at TIMESTAMPTZ,
-    UNIQUE(user_id, media_item_id)
+    episode_id UUID NOT NULL REFERENCES episodes(id) ON DELETE CASCADE,
+    watched BOOLEAN,
+    watched_at TIMESTAMPTZ,
+    UNIQUE(user_id, episode_id)
 );
 
 CREATE TABLE user_manga_progress (

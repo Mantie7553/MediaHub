@@ -78,30 +78,43 @@ func (h *Handler) GetAll(w http.ResponseWriter, r *http.Request) {
 	queryString := `SELECT ums.id, ums.status, ums.rating, ums.updated_at,
 	mi.id, mi.type, mi.title, mi.cover_image_url, mi.release_date, mi.external_id,
 	mm.artist,
-	uap.episodes_watched
+	anime_progress.active_season, anime_progress.season_watched, anime_progress.season_total
 	FROM user_media_status ums
 	JOIN media_items mi ON mi.id = ums.media_item_id
 	LEFT JOIN music_metadata mm ON mm.media_item_id = mi.id
-	LEFT JOIN user_anime_progress uap ON uap.media_item_id = mi.id AND uap.user_id = ums.user_id
+	LEFT JOIN LATERAL (
+		SELECT 
+			e.season_number AS active_season,
+			COUNT(*) FILTER (WHERE uap.watched = true) AS season_watched,
+			COUNT(*) AS season_total
+		FROM episodes e
+		LEFT JOIN user_anime_progress uap ON uap.episode_id = e.id AND uap.user_id = ums.user_id
+		WHERE e.media_item_id = mi.id
+		AND e.season_number = COALESCE(
+			(SELECT e2.season_number FROM episodes e2
+			JOIN user_anime_progress uap2 ON uap2.episode_id = e2.id
+			WHERE e2.media_item_id = mi.id AND uap2.user_id = ums.user_id AND uap2.watched = true
+			ORDER BY uap2.watched_at DESC LIMIT 1),
+			1
+		)
+		GROUP BY e.season_number
+	) anime_progress ON true
 	WHERE ums.user_id = $1`
 
-	// run the query
 	rows, err := h.db.Query(queryString, user.UserID)
-
 	if utils.InternalError(w, err) {
 		return
 	}
 	defer rows.Close()
 
-	// go through each item, map it to a proper object
 	for rows.Next() {
 		var item UserMediaEntry
 		err := rows.Scan(
 			&item.ID, &item.Status, &item.Rating, &item.UpdatedAt,
 			&item.MediaItemID, &item.MediaType, &item.MediaTitle, &item.CoverImageURL,
-			&item.ReleaseDate, &item.ExternalID, &item.Artist, &item.EpisodesWatched,
+			&item.ReleaseDate, &item.ExternalID, &item.Artist,
+			&item.ActiveSeason, &item.SeasonWatched, &item.SeasonTotal,
 		)
-
 		if utils.InternalError(w, err) {
 			return
 		}
@@ -112,7 +125,6 @@ func (h *Handler) GetAll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// return the items from the database
 	utils.JSON(w, items)
 }
 
@@ -204,7 +216,7 @@ func (h *Handler) UpdateProgress(w http.ResponseWriter, r *http.Request) {
 	// get the user info from the request
 	user := auth.GetUser(r)
 	// get the entries id from the URL parameters
-	entryID := chi.URLParam(r, "id")
+	episodeID := chi.URLParam(r, "id")
 
 	// decode the incoming request, check that the structure is correct
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -212,30 +224,78 @@ func (h *Handler) UpdateProgress(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.EpisodesWatched < 0 {
-		utils.Error(w, http.StatusBadRequest, "episodes watched must be a positive number")
-		return
-	}
-
 	// do the update
 	var progressID string
-	var episodesWatched int
 	err := h.db.QueryRow(
-		`INSERT INTO user_anime_progress (user_id, media_item_id, season_id, episodes_watched, last_watched_at)
-		VALUES ($1, $2, $3, $4, NOW())
-		ON CONFLICT (user_id, media_item_id, season_id) 
-		DO UPDATE SET episodes_watched = $4, last_watched_at = NOW()
-		RETURNING id, episodes_watched`,
-		user.UserID, entryID, utils.NullString(req.SeasonID), req.EpisodesWatched,
-	).Scan(&progressID, &episodesWatched)
+		`INSERT INTO user_anime_progress (user_id, episode_id, watched, watched_at)
+		VALUES ($1, $2, $3, NOW())
+		ON CONFLICT (user_id, episode_id) 
+		DO UPDATE SET watched = $3, watched_at = NOW()
+		RETURNING id`,
+		user.UserID, episodeID, req.Watched,
+	).Scan(&progressID)
 
 	if utils.InternalError(w, err) {
 		return
 	}
 
-	// return the id and the new number of episodes watched
+	// return the id
 	utils.JSON(w, map[string]any{
-		"id":               progressID,
-		"episodes_watched": episodesWatched,
+		"id": progressID,
 	})
+}
+
+func (h *Handler) MarkSeasonWatched(w http.ResponseWriter, r *http.Request) {
+	var req progressRequest
+	user := auth.GetUser(r)
+	id := chi.URLParam(r, "id")
+	seasonNumber := chi.URLParam(r, "seasonNumber")
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utils.Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	_, err := h.db.Exec(
+		`INSERT INTO user_anime_progress (user_id, episode_id, watched, watched_at) 
+		SELECT $1, e.id, $2, NOW() 
+		FROM episodes e 
+		WHERE e.media_item_id = $3 AND e.season_number = $4 
+		ON CONFLICT (user_id, episode_id) 
+		DO UPDATE SET watched = $2, watched_at = NOW()`,
+		user.UserID, req.Watched, id, seasonNumber,
+	)
+
+	if utils.InternalError(w, err) {
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Handler) MarkShowWatched(w http.ResponseWriter, r *http.Request) {
+	var req progressRequest
+	user := auth.GetUser(r)
+	id := chi.URLParam(r, "id")
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utils.Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	_, err := h.db.Exec(
+		`INSERT INTO user_anime_progress (user_id, episode_id, watched, watched_at) 
+		SELECT $1, e.id, $2, NOW() 
+		FROM episodes e 
+		WHERE e.media_item_id = $3
+		ON CONFLICT (user_id, episode_id) 
+		DO UPDATE SET watched = $2, watched_at = NOW()`,
+		user.UserID, req.Watched, id,
+	)
+
+	if utils.InternalError(w, err) {
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }

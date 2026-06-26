@@ -717,15 +717,18 @@ func (h *Handler) ServeVolumeImage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) GetEpisodes(w http.ResponseWriter, r *http.Request) {
+	user := auth.GetUser(r)
 	mediaID := chi.URLParam(r, "id")
 	episodes := []Episode{}
 
 	rows, err := h.db.Query(
-		`SELECT id, season_number, episode_number, title 
-        FROM episodes 
-        WHERE media_item_id = $1 
-        ORDER BY season_number, episode_number`,
-		mediaID,
+		`SELECT e.id, e.season_number, e.episode_number, e.title,
+		COALESCE(uap.watched, false)
+		FROM episodes e
+		LEFT JOIN user_anime_progress uap ON uap.episode_id = e.id AND uap.user_id = $2
+		WHERE e.media_item_id = $1
+		ORDER BY e.season_number, e.episode_number`,
+		mediaID, user.UserID,
 	)
 	if utils.InternalError(w, err) {
 		return
@@ -734,7 +737,7 @@ func (h *Handler) GetEpisodes(w http.ResponseWriter, r *http.Request) {
 
 	for rows.Next() {
 		var ep Episode
-		if err := rows.Scan(&ep.ID, &ep.SeasonNumber, &ep.EpisodeNumber, &ep.Title); err != nil {
+		if err := rows.Scan(&ep.ID, &ep.SeasonNumber, &ep.EpisodeNumber, &ep.Title, &ep.Watched); err != nil {
 			utils.InternalError(w, err)
 			return
 		}

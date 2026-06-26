@@ -96,7 +96,9 @@ func (s *Server) routes() {
 		r.Get("/me/media", listsHandler.GetAll)
 		r.Put("/me/media/{id}", listsHandler.Update)
 		r.Delete("/me/media/{id}", listsHandler.Delete)
-		r.Post("/me/anime/{id}/progress", listsHandler.UpdateProgress)
+		r.Put("/episodes/{id}/watched", listsHandler.UpdateProgress)
+		r.Put("/anime/{id}/watched", listsHandler.MarkShowWatched)
+		r.Put("/anime/{id}/seasons/{seasonNumber}/watched", listsHandler.MarkSeasonWatched)
 
 		// Request Handler endpoints
 		r.Get("/requests", requestsHandler.GetAll)
