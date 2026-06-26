@@ -1,50 +1,117 @@
-import { NavLink, useParams } from "react-router-dom"
-import Loading from "../../components/states/Loading"
-import Error from "../../components/states/Error"
-import { useMediaItem } from "../../hooks"
-import Format from "../../utils/format"
+import { useState, useEffect } from "react";
+import { NavLink, useParams } from "react-router-dom";
+import Loading from "../../components/states/Loading";
+import Error from "../../components/states/Error";
+import { useMediaItem, useUserContent } from "../../hooks";
+import { mediaStatusBadge } from "../../utils/status";
+import api from "../../services/api";
+import { Check } from "lucide-react";
+import Format from "../../utils/format";
 
 export default function LightNovelDetailsPage() {
-    const { id } = useParams()
-    const { item: ln, loading, error } = useMediaItem(id)
+    const { userContentMap, refresh } = useUserContent();
+    const { id } = useParams();
+    const { item: ln, loading, error } = useMediaItem(id);
+    const userEntry = userContentMap[id];
+    const [readVolumes, setReadVolumes] = useState(new Set());
+
+    useEffect(() => {
+        if (ln?.metadata?.volumes) {
+            setReadVolumes(new Set(ln.metadata.volumes.filter(v => v.completed).map(v => v.id)));
+        }
+    }, [ln]);
+
+    function updateStatus(status) {
+        if (userEntry) {
+            api.put(`/me/media/${userEntry.id}`, { status }).then(() => refresh());
+        } else {
+            api.post(`/me/media`, { media_item_id: id, status }).then(() => refresh());
+        }
+    }
+
+    function toggleVolume(volume) {
+        const read = !readVolumes.has(volume.id);
+        api.put(`/light-novels/volumes/${volume.id}/read`, { read })
+            .then(() => {
+                const next = new Set(readVolumes);
+                read ? next.add(volume.id) : next.delete(volume.id);
+                const status = next.size === ln.metadata.volumes.length ? "completed" : "manga_reading";
+                setReadVolumes(next);
+                updateStatus(status);
+            })
+            .catch(() => {});
+    }
+
+    function markAll(read) {
+        api.put(`/light-novels/${id}/read`, { read })
+            .then(() => {
+                setReadVolumes(read ? new Set(ln.metadata.volumes.map(v => v.id)) : new Set());
+                updateStatus(read ? "completed" : "plan_to_watch");
+            })
+            .catch(() => {});
+    }
 
     if (loading) return <Loading />
     if (error) return <Error error={error} />
     if (!ln) return null
 
-    return <div className="flex flex-col">
-        <div className="flex gap-6">
-            <img src={ln.cover_image_url} className="w-48 h-64 object-contain rounded-md" />
-            <div className="flex flex-col gap-3">
-                <h2 className="text-2xl font-bold">{ln.title}</h2>
-                {ln.metadata.author && <span className="text-sm text-neutral-content">by {ln.metadata.author}</span>}
-                
-                {ln.release_date && (
-                    <span className="text-sm text-neutral-content">{Format.year(ln.release_date)}</span>
-                )}
-
-                <div className="flex flex-wrap gap-1">
-                    {(ln.metadata.genres ?? []).map((genre, i) => (
-                        <span key={i} className="badge">{genre}</span>
-                    ))}
+    return (
+        <div className="flex flex-col">
+            <div className="flex gap-6">
+                <img src={ln.cover_image_url} className="w-48 h-64 object-contain rounded-md" />
+                <div className="flex flex-col gap-3">
+                    <h2 className="text-2xl font-bold">{ln.title}</h2>
+                    {ln.metadata.author && <span className="text-sm text-neutral-content">by {ln.metadata.author}</span>}
+                    {ln.release_date && (
+                        <span className="text-sm text-neutral-content">{Format.year(ln.release_date)}</span>
+                    )}
+                    <div className="flex flex-wrap gap-1">
+                        {(ln.metadata.genres ?? []).map((genre, i) => (
+                            <span key={i} className="badge">{genre}</span>
+                        ))}
+                    </div>
+                    {ln.description && (
+                        <p className="text-sm max-w-xl" dangerouslySetInnerHTML={{ __html: ln.description }} />
+                    )}
+                    <div className="flex flex-wrap items-center gap-2">
+                        <div className="dropdown">
+                            <div tabIndex={0} className={`badge ${mediaStatusBadge(userEntry?.status)} cursor-pointer`}>
+                                {Format.cleanString(userEntry?.status ?? "Add to list")}
+                            </div>
+                            <ul tabIndex={0} className="dropdown-content menu bg-base-200 rounded-box z-10 p-2 shadow gap-1">
+                                {["manga_reading", "completed", "dropped", "plan_to_watch"].map(option => (
+                                    <li key={option}>
+                                        <button onClick={() => { updateStatus(option); document.activeElement.blur(); }}>
+                                            {Format.cleanString(option)}
+                                        </button>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                        <button className="btn btn-outline btn-sm" onClick={() => markAll(true)}>Mark all read</button>
+                        <button className="btn btn-outline btn-sm" onClick={() => markAll(false)}>Mark all unread</button>
+                    </div>
                 </div>
-                {ln.description && (
-                    <p className="text-sm max-w-xl"
-                    dangerouslySetInnerHTML={{__html: ln.description}}
-                    />
-                )}
+            </div>
+
+            <h3 className="font-bold text-lg mt-6">Volumes</h3>
+            <div className="flex flex-col gap-2 mt-2">
+                {(ln.metadata.volumes ?? []).map(volume => (
+                    <div key={volume.id} className="flex items-center justify-between p-3 rounded-lg bg-base-200">
+                        <div className="flex items-center gap-3">
+                            <button
+                                className={`btn btn-circle btn-xs ${readVolumes.has(volume.id) ? "btn-primary" : "btn-outline"}`}
+                                onClick={() => toggleVolume(volume)}
+                            >
+                                <Check size={10} strokeWidth={3} />
+                            </button>
+                            <NavLink to={`/light-novels/${id}/volumes/${volume.id}/read`} className="text-sm">
+                                {volume.title ?? `Volume ${volume.volume_number}`}
+                            </NavLink>
+                        </div>
+                    </div>
+                ))}
             </div>
         </div>
-
-        <h3 className="font-bold text-lg mt-6">Volumes</h3>
-        <ul className="list">
-            {(ln.metadata.volumes ?? []).map(volume => (
-                <li key={volume.id} className="list-item hover:bg-base-300 transition-colors px-2 py-1">
-                    <NavLink to={`/light-novels/${id}/volumes/${volume.id}/read`} className="block w-full">
-                        {volume.title ?? `Volume ${volume.volume_number}`}
-                    </NavLink>
-                </li>
-            ))}
-        </ul>
-    </div>
+    )
 }

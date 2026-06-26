@@ -37,6 +37,10 @@ type progressRequest struct {
 	Completed    bool `json:"completed"`
 }
 
+type markReadRequest struct {
+    Read bool `json:"read"`
+}
+
 type MediaItem struct {
 	ID             string     `json:"id"`
 	Type           string     `json:"type"`
@@ -81,6 +85,7 @@ type LightNovelVolume struct {
 	ID           string  `json:"id"`
 	VolumeNumber int     `json:"volume_number"`
 	Title        *string `json:"title"`
+	Completed    bool    `json:"completed"`
 }
 
 type LightNovelDetail struct {
@@ -104,6 +109,7 @@ type MangaChapter struct {
 	FilePath      *string    `json:"file_path"`
 	PageCount     *int       `json:"page_count"`
 	CreatedAt     *time.Time `json:"created_at"`
+	Completed 	  bool 	     `json:"completed"`
 }
 
 type MangaProgress struct {

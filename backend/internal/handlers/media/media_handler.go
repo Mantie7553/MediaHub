@@ -253,6 +253,7 @@ Params:
   - r: http request coming from the frontend
 */
 func (h *Handler) GetSpecific(w http.ResponseWriter, r *http.Request) {
+	user := auth.GetUser(r)
 	// get the id from the URL
 	mediaId := chi.URLParam(r, "id")
 	item := MediaItem{}
@@ -330,9 +331,12 @@ func (h *Handler) GetSpecific(w http.ResponseWriter, r *http.Request) {
 
 		// also get the chapters for the manga
 		rows, err := h.db.Query(
-			`SELECT id, chapter_number, title, file_path, page_count, created_at FROM manga_chapters
-			WHERE media_item_id = $1 ORDER BY chapter_number`,
-			item.ID,
+			`SELECT mc.id, mc.chapter_number, mc.title, mc.file_path, mc.page_count, mc.created_at,
+			COALESCE(mp.completed, false)
+			FROM manga_chapters mc
+			LEFT JOIN manga_progress mp ON mp.chapter_id = mc.id AND mp.user_id = $2
+			WHERE mc.media_item_id = $1 ORDER BY mc.chapter_number`,
+			item.ID, user.UserID,
 		)
 		if utils.InternalError(w, err) {
 			return
@@ -345,6 +349,7 @@ func (h *Handler) GetSpecific(w http.ResponseWriter, r *http.Request) {
 			err := rows.Scan(
 				&chapter.ID, &chapter.ChapterNumber, &chapter.Title,
 				&chapter.FilePath, &chapter.PageCount, &chapter.CreatedAt,
+				&chapter.Completed,
 			)
 
 			if utils.InternalError(w, err) {
@@ -368,9 +373,12 @@ func (h *Handler) GetSpecific(w http.ResponseWriter, r *http.Request) {
 		}
 
 		volumeRows, err := h.db.Query(
-			`SELECT id, volume_number, title FROM light_novel_volumes
-			WHERE media_item_id = $1 ORDER BY volume_number`,
-			item.ID,
+			`SELECT lnv.id, lnv.volume_number, lnv.title,
+			COALESCE(lnp.completed, false)
+			FROM light_novel_volumes lnv
+			LEFT JOIN light_novel_progress lnp ON lnp.volume_id = lnv.id AND lnp.user_id = $2
+			WHERE lnv.media_item_id = $1 ORDER BY lnv.volume_number`,
+			item.ID, user.UserID,
 		)
 		if utils.InternalError(w, err) {
 			return
@@ -379,7 +387,7 @@ func (h *Handler) GetSpecific(w http.ResponseWriter, r *http.Request) {
 
 		for volumeRows.Next() {
 			var volume LightNovelVolume
-			if err := volumeRows.Scan(&volume.ID, &volume.VolumeNumber, &volume.Title); utils.InternalError(w, err) {
+			if err := volumeRows.Scan(&volume.ID, &volume.VolumeNumber, &volume.Title, &volume.Completed); utils.InternalError(w, err) {
 				return
 			}
 			volumes = append(volumes, volume)
@@ -749,4 +757,102 @@ func (h *Handler) GetEpisodes(w http.ResponseWriter, r *http.Request) {
 	}
 
 	utils.JSON(w, episodes)
+}
+
+func (h *Handler) MarkChapterRead(w http.ResponseWriter, r *http.Request) {
+	var req markReadRequest
+	user := auth.GetUser(r)
+	chapterId := chi.URLParam(r, "chapterId")
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utils.Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	_, err := h.db.Exec(
+		`INSERT INTO manga_progress (user_id, chapter_id, media_item_id, completed, updated_at)
+		VALUES ($1, $2, (SELECT media_item_id FROM manga_chapters WHERE id = $2), $3, NOW())
+		ON CONFLICT (user_id, chapter_id) DO UPDATE SET completed = $3, updated_at = NOW()`,
+		user.UserID, chapterId, req.Read,
+	)
+
+	if utils.InternalError(w, err) {
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Handler) MarkMangaRead(w http.ResponseWriter, r *http.Request) {
+	var req markReadRequest
+	user := auth.GetUser(r)
+	mediaId := chi.URLParam(r, "id")
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utils.Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	_, err := h.db.Exec(
+		`INSERT INTO manga_progress (user_id, chapter_id, media_item_id, completed, updated_at)
+		SELECT $1, id, media_item_id, $2, NOW() FROM manga_chapters WHERE media_item_id = $3
+		ON CONFLICT (user_id, chapter_id) DO UPDATE SET completed = $2, updated_at = NOW()`,
+		user.UserID, req.Read, mediaId,
+	)
+
+	if utils.InternalError(w, err) {
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+	
+}
+
+func (h *Handler) MarkVolumeRead(w http.ResponseWriter, r *http.Request) {
+	var req markReadRequest
+	user := auth.GetUser(r)
+	volumeId := chi.URLParam(r, "volumeId")
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utils.Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	_, err := h.db.Exec(
+		`INSERT INTO light_novel_progress (user_id, volume_id, media_item_id, completed, updated_at)
+		VALUES ($1, $2, (SELECT media_item_id FROM light_novel_volumes WHERE id = $2), $3, NOW())
+		ON CONFLICT (user_id, volume_id) DO UPDATE SET completed = $3, updated_at = NOW()`,
+		user.UserID, volumeId, req.Read,
+	)
+
+	if utils.InternalError(w, err) {
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Handler) MarkLightNovelRead(w http.ResponseWriter, r *http.Request) {
+	var req markReadRequest
+	user := auth.GetUser(r)
+	mediaId := chi.URLParam(r, "id")
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utils.Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	_, err := h.db.Exec(
+		`INSERT INTO light_novel_progress (user_id, volume_id, media_item_id, completed, updated_at)
+		SELECT $1, id, media_item_id, $2, NOW() FROM light_novel_volumes WHERE media_item_id = $3
+		ON CONFLICT (user_id, volume_id) DO UPDATE SET completed = $2, updated_at = NOW()`,
+		user.UserID, req.Read, mediaId,
+	)
+
+	if utils.InternalError(w, err) {
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+	
 }

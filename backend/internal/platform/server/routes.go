@@ -85,6 +85,10 @@ func (s *Server) routes() {
 		r.Get("/manga/{id}/chapters/{chapterId}/pages/{pageNum}", mediaHandler.ServePage)
 		r.Put("/manga/{id}/chapters/{chapterId}/progress", mediaHandler.MangaProgress)
 		r.Get("/media/{id}/episodes", mediaHandler.GetEpisodes)
+		r.Put("/manga/{id}/read", mediaHandler.MarkMangaRead)
+		r.Put("/manga/chapters/{chapterId}/read", mediaHandler.MarkChapterRead)
+		r.Put("/light-novels/{id}/read", mediaHandler.MarkLightNovelRead)
+		r.Put("/light-novels/volumes/{volumeId}/read", mediaHandler.MarkVolumeRead)
 
 		//Music Handler Endpoints
 		r.Get("/albums", musicHandler.GetAlbums)
