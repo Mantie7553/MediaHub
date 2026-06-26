@@ -53,7 +53,7 @@ export default class Format {
         
         const labels = {
             current: { anime: "Watching", manga: "Reading", light_novel: "Reading", movie: "Watching" },
-            planned: { anime: "Plan to Watch", manga: "Plan to Read", light_novel: "Plan to Read", movie: "Plan to Watch" },
+            planned: { anime: "Plan to Watch", manga: "Plan to Read", light_novel: "Plan to Read", movie: "Plan to Watch", music_album: "Plan to Listen" },
             completed: { music_album: "Listened", default: "Completed" },
             dropped: "Dropped",
             wishlist: "Wishlist",

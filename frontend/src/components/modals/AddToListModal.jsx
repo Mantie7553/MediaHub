@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import ScrollPicker from "../ScrollPicker";
 import Format from "../../utils/format";
 
-export default function AddToListModal({item, onConfirm, dialogRef, initialValues}) {
+export default function AddToListModal({item, onConfirm, dialogRef, initialValues, isLibraryItem}) {
     const [status, setStatus] = useState(initialValues?.status ?? 'planned');
     const [score, setScore] = useState(initialValues?.rating ?? 0);
     const [progress, setProgress] = useState((initialValues?.episodes_watched || initialValues?.chapters_read) ?? 0);
@@ -14,10 +14,11 @@ export default function AddToListModal({item, onConfirm, dialogRef, initialValue
     }, [initialValues]);
 
     function statusOptions(type) {
+        const withWishlist = !isLibraryItem;
         switch(type) {
-            case "music_album": return ["completed", "wishlist"]
-            case "movie": return ["completed", "current", "wishlist"]
-            default: return ["completed", "current", "dropped", "planned", "wishlist"]
+            case "music_album": return ["completed", "planned"]
+            case "movie": return ["completed", "current", ...(withWishlist ? ["wishlist"] : [])]
+            default: return ["completed", "current", "dropped", "planned", ...(withWishlist ? ["wishlist"] : [])]
         }
     }
 

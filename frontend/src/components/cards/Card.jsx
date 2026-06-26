@@ -137,7 +137,7 @@ function ActionButtons({item, userEntry, onListChange}) {
                 title: item.title,
                 cover_image_url: item.cover_image_url,
                 type: item.type,
-                action: "both",
+                action: status === "wishlist" ? "both" : "list",
                 status,
                 rating: score === 0 ? null : score,
                 progress,
@@ -148,8 +148,10 @@ function ActionButtons({item, userEntry, onListChange}) {
         }
     }
 
+    const isLibraryItem = !!(userEntry || item.id);
+
     return <>
-        <AddToListModal item={item} onConfirm={handleConfirm} dialogRef={dialogRef} initialValues={userEntry}/>
+        <AddToListModal item={item} onConfirm={handleConfirm} dialogRef={dialogRef} initialValues={userEntry} isLibraryItem={isLibraryItem}/>
         <div className="flex flex-col gap-1">
             <button className="absolute top-2 right-2 z-10 btn btn-circle btn-xs btn-primary text-lg" onClick={handleOpenModal} disabled={loading}>
                 {userEntry ? <Check size={14} strokeWidth={4}/> : <Plus size={14} strokeWidth={4}/>}
