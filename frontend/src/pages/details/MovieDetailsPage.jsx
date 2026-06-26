@@ -32,7 +32,7 @@ export default function MovieDetailsPage() {
                 <div className="flex flex-col gap-3">
                     <h2 className="text-2xl font-bold">{movie.title}</h2>
 
-                    {movie.release_date && (
+                    {movie.release_date && Format.year(movie.release_date) !== "0" && (
                         <span className="text-sm text-neutral-content">{Format.year(movie.release_date)}</span>
                     )}
 
