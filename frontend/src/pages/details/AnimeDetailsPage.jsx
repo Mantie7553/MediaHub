@@ -40,7 +40,7 @@ export default function AnimeDetailsPage() {
             .then(() => {
                 const next = new Set(watchedEpisodes);
                 watched ? next.add(ep.id) : next.delete(ep.id);
-                const status = next.size === episodes.length ? "completed" : "watching";
+                const status = next.size === episodes.length ? "completed" : "current";
                 setWatchedEpisodes(next);
                 updateStatus(status);
             })
@@ -52,7 +52,7 @@ export default function AnimeDetailsPage() {
             .then(() => {
                 const next = new Set(watchedEpisodes);
                 eps.forEach(ep => watched ? next.add(ep.id) : next.delete(ep.id));
-                const status = next.size === episodes.length ? "completed" : watched ? "watching" : "plan_to_watch";
+                const status = next.size === episodes.length ? "completed" : watched ? "current" : "planned";
                 setWatchedEpisodes(next);
                 updateStatus(status);
             })
@@ -63,7 +63,7 @@ export default function AnimeDetailsPage() {
         api.put(`/anime/${id}/watched`, { watched })
             .then(() => {
                 setWatchedEpisodes(watched ? new Set(episodes.map(ep => ep.id)) : new Set());
-                updateStatus(watched ? "completed" : "plan_to_watch");
+                updateStatus(watched ? "completed" : "planned");
             })
             .catch(() => {});
     }
@@ -100,13 +100,13 @@ export default function AnimeDetailsPage() {
                     <div className="flex flex-wrap gap-2">
                         <div className="dropdown">
                             <div tabIndex={0} className={`badge ${mediaStatusBadge(userEntry?.status)} cursor-pointer`}>
-                                {Format.cleanString(userEntry?.status ?? "Add to list")}
+                                {Format.statusLabel(userEntry?.status, anime.type)}
                             </div>
                             <ul tabIndex={0} className="dropdown-content menu bg-base-200 rounded-box z-10 p-2 shadow gap-1">
-                                {["watching", "completed", "dropped", "plan_to_watch"].map(option => (
+                                {["current", "completed", "dropped", "planned"].map(option => (
                                     <li key={option}>
                                         <button onClick={() => { updateStatus(option); document.activeElement.blur(); }}>
-                                            {Format.cleanString(option)}
+                                            {Format.statusLabel(option, anime.type)}
                                         </button>
                                     </li>
                                 ))}

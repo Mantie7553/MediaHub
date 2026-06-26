@@ -3,22 +3,20 @@ import ScrollPicker from "../ScrollPicker";
 import Format from "../../utils/format";
 
 export default function AddToListModal({item, onConfirm, dialogRef, initialValues}) {
-    const [status, setStatus] = useState(initialValues?.status ?? 'plan_to_watch');
+    const [status, setStatus] = useState(initialValues?.status ?? 'planned');
     const [score, setScore] = useState(initialValues?.rating ?? 0);
     const [progress, setProgress] = useState((initialValues?.episodes_watched || initialValues?.chapters_read) ?? 0);
 
     useEffect(() => {
-        setStatus(initialValues?.status ?? 'plan_to_watch');
+        setStatus(initialValues?.status ?? 'planned');
         setScore(initialValues?.rating ?? 0);
         setProgress((initialValues?.episodes_watched || initialValues?.chapters_read) ?? 0);
     }, [initialValues]);
 
     function statusOptions(type) {
         switch(type) {
-            case "anime": return ["watching", "completed", "dropped", "plan_to_watch"]
-            case "manga": return ["manga_reading", "completed", "dropped", "plan_to_watch"]
-            case "movie": return ["watching", "completed", "wishlist"]
-            default: return []
+            case "movie": return ["current", "completed", "wishlist"]
+            default: return ["current", "completed", "dropped", "planned", "wishlist"]
         }
     }
 
@@ -35,7 +33,7 @@ export default function AddToListModal({item, onConfirm, dialogRef, initialValue
                             className={`btn btn-sm ${option === status ? "btn-primary" : "btn-outline"}`}
                             onClick={() => setStatus(option)}
                         >
-                            {Format.cleanString(option)}
+                            {Format.statusLabel(option, item.type)}
                         </button>
                     ))}
                 </div>

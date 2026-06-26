@@ -47,4 +47,21 @@ export default class Format {
     static cleanString(string) {
         return string.replaceAll("_", " ").replace(/^\w/, c => c.toUpperCase());
     }
+
+    static statusLabel(status, type) {
+        if (!status) return "Add to list";
+        
+        const labels = {
+            current: { anime: "Watching", manga: "Reading", light_novel: "Reading", movie: "Watching" },
+            planned: { anime: "Plan to Watch", manga: "Plan to Read", light_novel: "Plan to Read", movie: "Plan to Watch" },
+            completed: "Completed",
+            dropped: "Dropped",
+            wishlist: "Wishlist",
+        }
+
+        const entry = labels[status];
+        if (!entry) return Format.cleanString(status);
+        if (typeof entry === "string") return entry;
+        return entry[type] ?? Format.cleanString(status);
+    }
 }

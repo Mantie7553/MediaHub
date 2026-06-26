@@ -35,7 +35,7 @@ export default function MangaDetailsPage() {
             .then(() => {
                 const next = new Set(readChapters);
                 read ? next.add(chapter.id) : next.delete(chapter.id);
-                const status = next.size === manga.metadata.chapters.length ? "completed" : "manga_reading";
+                const status = next.size === manga.metadata.chapters.length ? "completed" : "current";
                 setReadChapters(next);
                 updateStatus(status);
             })
@@ -46,7 +46,7 @@ export default function MangaDetailsPage() {
         api.put(`/manga/${id}/read`, { read })
             .then(() => {
                 setReadChapters(read ? new Set(manga.metadata.chapters.map(c => c.id)) : new Set());
-                updateStatus(read ? "completed" : "plan_to_watch");
+                updateStatus(read ? "completed" : "planned");
             })
             .catch(() => {});
     }
@@ -74,13 +74,13 @@ export default function MangaDetailsPage() {
                     <div className="flex flex-wrap items-center gap-2">
                         <div className="dropdown">
                             <div tabIndex={0} className={`badge ${mediaStatusBadge(userEntry?.status)} cursor-pointer`}>
-                                {Format.cleanString(userEntry?.status ?? "Add to list")}
+                                {Format.statusLabel(userEntry?.status, manga.type)}
                             </div>
                             <ul tabIndex={0} className="dropdown-content menu bg-base-200 rounded-box z-10 p-2 shadow gap-1">
-                                {["manga_reading", "completed", "dropped", "plan_to_watch"].map(option => (
+                                {["current", "completed", "dropped", "planned"].map(option => (
                                     <li key={option}>
                                         <button onClick={() => { updateStatus(option); document.activeElement.blur(); }}>
-                                            {Format.cleanString(option)}
+                                            {Format.statusLabel(option, manga.type)}
                                         </button>
                                     </li>
                                 ))}

@@ -35,8 +35,8 @@ export function statusColor(status) {
 export function mediaStatusBadge(status) {
     switch(status) {
         case "completed": return "badge-success"
-        case "watching": return "badge-info"
-        case "plan_to_watch": return "badge-warning"
+        case "current": return "badge-info"
+        case "planned": return "badge-warning"
         case "dropped": return "badge-error"
         default: return "badge-neutral"
     }

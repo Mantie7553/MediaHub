@@ -1,13 +1,25 @@
 import { useParams, useNavigate } from "react-router-dom";
 import Loading from "../../components/states/Loading";
 import Error from "../../components/states/Error";
-import { useMediaItem } from "../../hooks";
+import { useMediaItem, useUserContent } from "../../hooks";
 import Format from "../../utils/format";
+import api from "../../services/api";
+import { mediaStatusBadge } from "../../utils/status";
 
 export default function MovieDetailsPage() {
+    const { userContentMap, refresh } = useUserContent();
     const { id } = useParams();
     const navigate = useNavigate();
     const { item: movie, loading, error } = useMediaItem(id);
+    const userEntry = userContentMap[id];
+
+    function updateStatus(status) {
+        if (userEntry) {
+            api.put(`/me/media/${userEntry.id}`, { status }).then(() => refresh());
+        } else {
+            api.post(`/me/media`, { media_item_id: id, status }).then(() => refresh());
+        }
+    }
 
     if (loading) return <Loading />
     if (error) return <Error error={error} />
@@ -53,6 +65,20 @@ export default function MovieDetailsPage() {
                                 Watch
                             </button>
                         )}
+                        <div className="dropdown">
+                            <div tabIndex={0} className={`badge ${mediaStatusBadge(userEntry?.status)} cursor-pointer`}>
+                                {Format.statusLabel(userEntry?.status, movie.type)}
+                            </div>
+                            <ul tabIndex={0} className="dropdown-content menu bg-base-200 rounded-box z-10 p-2 shadow gap-1">
+                                {["current", "completed", "wishlist"].map(option => (
+                                    <li key={option}>
+                                        <button onClick={() => { updateStatus(option); document.activeElement.blur(); }}>
+                                            {Format.statusLabel(option, movie.type)}
+                                        </button>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
                     </div>
                 </div>
             </div>

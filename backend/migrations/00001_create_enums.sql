@@ -4,7 +4,7 @@ CREATE TYPE download_permission AS ENUM ('vetted', 'auto_approved');
 CREATE TYPE media_type AS ENUM ('anime', 'movie', 'manga', 'music_track');
 CREATE TYPE external_source AS ENUM ('anilist', 'tmdb', 'ytdlp', 'manual', 'mangadex');
 CREATE TYPE anime_status AS ENUM ('airing', 'finished', 'upcoming');
-CREATE TYPE media_status AS ENUM ('watching', 'completed', 'wishlist', 'dropped', 'plan_to_watch', 'listening', 'manga_reading');
+CREATE TYPE media_status AS ENUM ('current', 'planned', 'completed', 'dropped', 'wishlist');
 CREATE TYPE request_status AS ENUM ('pending', 'approved', 'rejected', 'queued', 'downloading', 'complete', 'failed');
 CREATE TYPE job_status AS ENUM ('queued', 'downloading', 'complete', 'failed');
 CREATE TYPE manga_status AS ENUM ('ongoing', 'completed', 'hiatus');

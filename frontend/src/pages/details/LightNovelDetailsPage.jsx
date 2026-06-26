@@ -35,7 +35,7 @@ export default function LightNovelDetailsPage() {
             .then(() => {
                 const next = new Set(readVolumes);
                 read ? next.add(volume.id) : next.delete(volume.id);
-                const status = next.size === ln.metadata.volumes.length ? "completed" : "manga_reading";
+                const status = next.size === ln.metadata.volumes.length ? "completed" : "current";
                 setReadVolumes(next);
                 updateStatus(status);
             })
@@ -46,7 +46,7 @@ export default function LightNovelDetailsPage() {
         api.put(`/light-novels/${id}/read`, { read })
             .then(() => {
                 setReadVolumes(read ? new Set(ln.metadata.volumes.map(v => v.id)) : new Set());
-                updateStatus(read ? "completed" : "plan_to_watch");
+                updateStatus(read ? "completed" : "planned");
             })
             .catch(() => {});
     }
@@ -76,13 +76,13 @@ export default function LightNovelDetailsPage() {
                     <div className="flex flex-wrap items-center gap-2">
                         <div className="dropdown">
                             <div tabIndex={0} className={`badge ${mediaStatusBadge(userEntry?.status)} cursor-pointer`}>
-                                {Format.cleanString(userEntry?.status ?? "Add to list")}
+                                {Format.statusLabel(userEntry?.status, ln.type)}
                             </div>
                             <ul tabIndex={0} className="dropdown-content menu bg-base-200 rounded-box z-10 p-2 shadow gap-1">
-                                {["manga_reading", "completed", "dropped", "plan_to_watch"].map(option => (
+                                {["current", "completed", "dropped", "planned"].map(option => (
                                     <li key={option}>
                                         <button onClick={() => { updateStatus(option); document.activeElement.blur(); }}>
-                                            {Format.cleanString(option)}
+                                            {Format.statusLabel(option, ln.type)}
                                         </button>
                                     </li>
                                 ))}
