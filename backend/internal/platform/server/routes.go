@@ -13,6 +13,7 @@ import (
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/search"
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/stream"
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/sync"
+	"github.com/Mantie7553/MediaHub/backend/internal/handlers/users"
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/webhooks"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/auth"
 	"github.com/go-chi/chi/v5"
@@ -48,6 +49,7 @@ func (s *Server) routes() {
 	streamHandler := stream.NewHandler(s.db)
 	syncHandler := sync.NewHandler(s.db)
 	webhooksHandler := webhooks.NewHandler(s.db)
+	usersHandler := users.NewHandler(s.db)
 
 	s.router.Use(cors.Handler(cors.Options{
 		AllowedOrigins: []string{"http://localhost:5173"},
@@ -142,5 +144,11 @@ func (s *Server) routes() {
 		r.Post("/admin/sync/manga", syncHandler.SyncManga)
 		r.Post("/admin/sync/light-novels", syncHandler.SyncLightNovel)
 		r.Post("/admin/sync/music", syncHandler.SyncMusic)
+
+		// User Handler endpoints
+		r.Get("/admin/users", usersHandler.GetAll)
+		r.Post("/admin/users", usersHandler.Create)
+		r.Put("/admin/users/{id}", usersHandler.Update)
+		r.Delete("/admin/users/{id}", usersHandler.Delete)
 	})
 }

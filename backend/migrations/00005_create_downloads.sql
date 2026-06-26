@@ -1,7 +1,7 @@
 -- +goose Up
 CREATE TABLE download_requests (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    requested_by UUID NOT NULL REFERENCES users(id),
+    requested_by UUID REFERENCES users(id) ON DELETE SET NULL,
     media_item_id UUID REFERENCES media_items(id) ON DELETE SET NULL,
     album_id UUID REFERENCES albums(id) ON DELETE SET NULL,
     title_override TEXT,

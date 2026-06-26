@@ -1,6 +1,6 @@
 import { useRef, forwardRef, useState } from "react";
 import useJobs from "../../hooks/useJobs";
-import useRequests from "../../hooks/useRequests"
+import { useAdminRequests } from "../../hooks"
 import { approveRequest, rejectRequest } from "../../services/requestsService";
 import Format from "../../utils/format";
 import { statusBadge, statusColor } from "../../utils/status";
@@ -12,7 +12,7 @@ import Loading from "../../components/states/Loading"
  */
 export default function DownloadsPage() {
 
-    const { requests, loading: rLoading, error: rError, refetch: refetchRequests } = useRequests()
+    const { requests, loading: rLoading, error: rError, refetch: refetchRequests } = useAdminRequests()
     const { jobs, loading: jLoading, error: jError } = useJobs();
     const [selectedRequest, setSelectedRequest] = useState(null);
     const modalRef = useRef(null);

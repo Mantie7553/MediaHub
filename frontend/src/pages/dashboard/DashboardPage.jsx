@@ -26,7 +26,7 @@ export default function DashboardPage() {
         .catch(err => setError(err.message ?? "Unable to retrieve server library"));
     }, [])
 
-    const sortOrder = (a, b) => a.title.localeCompare(b.title);
+    const sortOrder = (a, b) => (a.title ?? "").localeCompare(b.title ?? "");
 
     const userAnime = userContent.filter(item => item.media_type === "anime").sort(sortOrder);
     const userMovies = userContent.filter(item => item.media_type === "movie").sort(sortOrder);

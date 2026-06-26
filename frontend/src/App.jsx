@@ -13,6 +13,7 @@ import {
   MangaDetailsPage, MovieDetailsPage 
 } from './pages/details'
 import { LightNovelReader, MangaReader, PlayerPage } from './pages/viewer'
+import UserManagementPage from './pages/Management/UserManagementPage'
 
 function App() {
   return (
@@ -25,6 +26,7 @@ function App() {
         <Route element={<ProtectedRoute><Layout><Outlet /></Layout></ProtectedRoute>}>
           <Route path="/" element={<DashboardPage/>} />
           <Route path="/downloads" element={<DownloadsPage />} />
+          <Route path='/users' element={<UserManagementPage/>} />
           <Route path="/discover" element={<Discover />} />
           <Route path="/library" element={<Library/>}/>
           <Route path="/settings" element={<SettingsPage/>} />

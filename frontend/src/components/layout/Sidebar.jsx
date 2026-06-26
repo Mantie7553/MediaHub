@@ -7,6 +7,7 @@ import api from "../../services/api"
  */
 export default function Sidebar() {
     const navigate = useNavigate();
+    const role = getRole();
 
     function handleLogout() {
         api.delete("/auth/logout", {
@@ -17,13 +18,24 @@ export default function Sidebar() {
         navigate("/login");
     }
 
+    function getRole() {
+        const token = localStorage.getItem("token");
+        if (!token) return null;
+        try {
+            return JSON.parse(atob(token.split(".")[1])).role;
+        } catch {
+            return null;
+        }
+    }
+
     return <div className="drawer lg:drawer-open w-fit h-screen sticky top-0">
         <input id="my-drawer-3" type="checkbox" className="drawer-toggle" />
         <div className=" flex flex-col h-full drawer-side bg-base-200 p-2 items-center">
             <h1 className="text-lg font-bold">Media<span className="text-primary">Hub</span></h1>
             <ul className="menu flex-1">
                 <NavItem path="/" title="Dashboard"/>
-                <NavItem path="/downloads" title="Downloads"/>
+                {role === "admin" && <NavItem path="/downloads" title="Downloads"/>}
+                {role === "admin" && <NavItem path="/users" title="Users"/>}
                 <NavItem path="/discover" title="Discover"/>
                 <NavItem path="/settings" title="Settings"/>
             </ul>
