@@ -138,7 +138,7 @@ function LightNovelReaderInner({ id, volumeId, volume }) {
             >
                 <div className="w-full max-w-2xl px-6 py-4">
                     <div
-                        className="prose prose-invert max-w-none bg-neutral px-2"
+                        className="prose prose-invert max-w-none bg-white text-black text-xs px-2"
                         dangerouslySetInnerHTML={{ __html: content }}
                     />
                 </div>

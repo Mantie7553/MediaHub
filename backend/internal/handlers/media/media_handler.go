@@ -616,9 +616,14 @@ func (h *Handler) ServeVolume(w http.ResponseWriter, r *http.Request) {
 	// extract href values from manifest by id
 	manifestHrefs := map[string]string{}
 	opfStr := string(opfContent)
-	itemRe := regexp.MustCompile(`<item\s+id="([^"]+)"\s+href="([^"]+)"`)
+	itemRe := regexp.MustCompile(`<item\s[^>]*\bid="([^"]+)"[^>]*\bhref="([^"]+)"`)
+	altItemRe := regexp.MustCompile(`<item\s[^>]*\bhref="([^"]+)"[^>]*\bid="([^"]+)"`)
+
 	for _, match := range itemRe.FindAllStringSubmatch(opfStr, -1) {
 		manifestHrefs[match[1]] = match[2]
+	}
+	for _, match := range altItemRe.FindAllStringSubmatch(opfStr, -1) {
+		manifestHrefs[match[2]] = match[1]
 	}
 
 	// extract spine order
@@ -685,6 +690,10 @@ func (h *Handler) ServeVolume(w http.ResponseWriter, r *http.Request) {
 		html = strings.ReplaceAll(html, `src="../Images/`,
 			fmt.Sprintf(`src="%s/light-novels/%s/volumes/%s/images/`, apiURL, id, volumeId))
 		html = strings.ReplaceAll(html, `src="../images/`,
+			fmt.Sprintf(`src="%s/light-novels/%s/volumes/%s/images/`, apiURL, id, volumeId))
+		html = strings.ReplaceAll(html, `src="images/`,
+			fmt.Sprintf(`src="%s/light-novels/%s/volumes/%s/images/`, apiURL, id, volumeId))
+		html = strings.ReplaceAll(html, `src="Images/`,
 			fmt.Sprintf(`src="%s/light-novels/%s/volumes/%s/images/`, apiURL, id, volumeId))
 
 		body.WriteString(html)
