@@ -123,7 +123,7 @@ export default function MangaDetailsPage() {
                                 <div className="relative flex-1 max-w-48">
                                     <progress
                                         className="progress progress-primary w-full"
-                                        value={pageProgress[chapter.id] ?? chapter.last_page_read ?? 0}
+                                        value={(pageProgress[chapter.id] ?? 0) + 1}
                                         max={chapter.page_count}
                                     />
                                     <span className="absolute inset-0 flex items-center justify-center text-xs font-bold">

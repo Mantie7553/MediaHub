@@ -1,3 +1,4 @@
+import { ChevronDown, ChevronUp, ArrowLeft } from 'lucide-react'
 import { useState, useEffect, useRef } from "react"
 import { useParams, NavLink } from "react-router-dom"
 import api from "../../services/api"
@@ -94,28 +95,52 @@ function LightNovelReaderInner({ id, volumeId, volume }) {
 
     return (
         <div className="flex flex-col h-screen">
+            <div className="sticky top-0 z-10 bg-base-200 border-b border-base-300">
+                <div className="max-w-2xl mx-auto px-6">
+                    <div className="flex justify-center pt-2">
+                        <span className="text-xs text-neutral-content">{Math.round(scrollPct * 100)}%</span>
+                    </div>
+                    <div className="relative w-full h-1 my-1">
+                        <progress
+                            className="progress progress-primary w-full h-1"
+                            value={Math.round(scrollPct * 100)}
+                            max="100"
+                        />
+                    </div>
+                    <div className="flex justify-center items-center gap-4 p-3">
+                        <NavLink to={`/light-novels/${id}`} className="btn btn-sm">
+                            <ArrowLeft size={16} strokeWidth={3}/>
+                            To Volumes
+                        </NavLink>
+                        <button
+                            className="btn btn-sm"
+                            disabled={scrollPct <= 0}
+                            onClick={() => contentRef.current?.scrollTo({ top: 0, behavior: 'smooth' })}>
+                                <ChevronUp size={20} strokeWidth={3}/>
+                                Top
+                        </button>
+                        <button
+                            className="btn btn-sm"
+                            disabled={scrollPct >= 1}
+                            onClick={() => {
+                                const el = contentRef.current;
+                                if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+                            }}>
+                                <ChevronDown size={20} strokeWidth={3}/>
+                                Bottom
+                        </button>
+                    </div>
+                </div>
+            </div>
             <div
                 ref={contentRef}
-                className="flex-1 overflow-y-auto flex flex-col items-center pb-16"
+                className="flex-1 overflow-y-auto flex flex-col items-center"
             >
-                <div className="w-full max-w-2xl px-6">
+                <div className="w-full max-w-2xl px-6 py-4">
                     <div
                         className="prose prose-invert max-w-none bg-neutral px-2"
                         dangerouslySetInnerHTML={{ __html: content }}
                     />
-                </div>
-            </div>
-            <div className="fixed bottom-0 left-0 right-0 bg-base-200 border-t border-base-300">
-                <div className="relative w-full h-1">
-                    <progress
-                        className="progress progress-primary w-full h-1"
-                        value={Math.round(scrollPct * 100)}
-                        max="100"
-                    />
-                </div>
-                <div className="flex justify-center items-center gap-4 p-3">
-                    <NavLink to={`/light-novels/${id}`} className="btn btn-sm">Back to Volumes</NavLink>
-                    <span className="text-xs text-neutral-content">{Math.round(scrollPct * 100)}%</span>
                 </div>
             </div>
         </div>

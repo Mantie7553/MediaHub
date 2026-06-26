@@ -1,6 +1,6 @@
 import { useRef, useEffect } from "react";
-import { useParams } from "react-router-dom"
-import { ChevronLeft, ChevronRight } from "lucide-react"
+import { NavLink, useParams } from "react-router-dom"
+import { ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react"
 import { useMediaItem, usePages } from "../../hooks";
 import Loading from "../../components/states/Loading";
 import Error from "../../components/states/Error";
@@ -75,21 +75,39 @@ function MangaReaderInner({ id, chapterId, chapter }) {
     if (loading) return <Loading />
     if (error) return <Error error={error} />
 
-    const progressPct = totalPages ? Math.round((currentPage / totalPages) * 100) : 0;
+    const progressPct = totalPages ? Math.round(((currentPage + 1) / totalPages) * 100) : 0;
 
     return (
-        <div className="flex flex-col items-center">
-            <div className="flex-1 overflow-hidden relative">
-                <img src={imageSrc} className="max-h-[calc(100vh-5rem)] max-w-full object-contain"/>
-                <div className="absolute inset-y-0 left-0 w-1/2 cursor-pointer hover:bg-black/10" onClick={handlePageDown}></div>
-                <div className="absolute inset-y-0 right-0 w-1/2 cursor-pointer hover:bg-black/10" onClick={handlePageUp}></div>
+        <div className="flex flex-col">
+            <div className="sticky top-0 z-10 bg-base-200 border-b border-base-300 w-full">
+                <div className="max-w-2xl mx-auto px-6 py-2">
+                    <div className="flex items-center gap-3">
+                        <NavLink to={`/manga/${id}`} className="btn btn-sm shrink-0">
+                            <ArrowLeft size={16} strokeWidth={3}/>
+                            To Chapters
+                        </NavLink>
+                        <div className="flex-1 flex flex-col gap-1">
+                            <p className={`text-xs text-center ${currentPage !== totalPages - 1 ? "text-neutral-content" : ""}`}>
+                                {currentPage + 1} / <strong>{totalPages}</strong>
+                            </p>
+                            <progress className="progress progress-primary w-full" value={progressPct} max="100"/>
+                        </div>
+                        <div className="flex gap-2 shrink-0">
+                            <button onClick={handlePageDown} disabled={currentPage === 0} className="btn btn-sm">
+                                <ChevronLeft size={16} strokeWidth={4}/>
+                            </button>
+                            <button onClick={handlePageUp} disabled={currentPage >= totalPages - 1} className="btn btn-sm">
+                                <ChevronRight size={16} strokeWidth={4}/>
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div className="flex flex-col items-center gap-2 w-full max-w-md">
-                <progress className="progress progress-primary w-full" value={progressPct} max="100"/>
-                <div className="flex gap-2 items-center">
-                    <button onClick={handlePageDown} disabled={currentPage === 0} className="btn"><ChevronLeft size={24} strokeWidth={4}/></button>
-                    <p className={currentPage !== totalPages - 1 ? "text-neutral-content" : ""}>{currentPage + 1} / <strong>{totalPages}</strong></p>
-                    <button onClick={handlePageUp} disabled={currentPage >= totalPages - 1} className="btn"><ChevronRight size={24} strokeWidth={4}/></button>
+            <div className="flex flex-col items-center">
+                <div className="flex-1 overflow-hidden relative">
+                    <img src={imageSrc} className="max-h-[calc(100vh-5rem)] max-w-full object-contain mt-2"/>
+                    <div className="absolute inset-y-0 left-0 w-1/2 cursor-pointer hover:bg-black/10" onClick={handlePageDown}></div>
+                    <div className="absolute inset-y-0 right-0 w-1/2 cursor-pointer hover:bg-black/10" onClick={handlePageUp}></div>
                 </div>
             </div>
         </div>

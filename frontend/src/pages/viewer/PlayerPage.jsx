@@ -92,7 +92,7 @@ export default function PlayerPage() {
     if (error) return <Error error={error} />
 
     return (
-        <div className="flex items-center justify-center w-full h-full bg-black">
+        <div className="flex items-center justify-center w-full h-screen bg-black">
             <video
                 ref={videoRef}
                 controls

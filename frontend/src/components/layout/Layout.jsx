@@ -9,7 +9,7 @@ import AudioPlayer from "../../pages/viewer/AudioPlayer";
 export default function Layout({children}) {
     return <div className="flex gap-2">
         <Sidebar/>
-        <main className="w-full p-2 pb-20">
+        <main className="w-full p-2">
             {children}
         </main>
         <AudioPlayer />
