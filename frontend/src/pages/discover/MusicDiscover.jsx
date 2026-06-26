@@ -1,20 +1,28 @@
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 import { Search, Clock, Music, Plus } from "lucide-react"
 import api from "../../services/api"
 import Loading from "../../components/states/Loading"
 import Error from "../../components/states/Error"
 import MusicRequestModal from "../../components/modals/MusicRequestModal"
 import useAudioStore from "../../stores/useAudioStore"
+import AlbumList from "../../components/layout/AlbumList"
 
 export default function MusicDiscover({ userContentMap, onListChange }) {
-    const [query, setQuery] = useState("")
-    const [loading, setLoading] = useState(false)
-    const [error, setError] = useState("")
-    const [ytResults, setYtResults] = useState([])
-    const dialogRef = useRef(null)
-    const [limitVal, setLimitVal] = useState(15)
-    const [selectedTrack, setSelectedTrack] = useState(null)
-    const play = useAudioStore(state => state.play)
+    const [albums, setAlbums] = useState([]);
+const [recommended, setRecommended] = useState([]);
+    const [query, setQuery] = useState("");
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState("");
+    const [ytResults, setYtResults] = useState([]);
+    const dialogRef = useRef(null);
+    const [limitVal, setLimitVal] = useState(15);
+    const [selectedTrack, setSelectedTrack] = useState(null);
+    const play = useAudioStore(state => state.play);
+
+    useEffect(() => {
+        api.get("/albums").then(res => setAlbums(res.data ?? []))
+        api.get("/music/recommended").then(res => setRecommended(res.data ?? []))
+    }, []);
 
     function handleSearch() {
         if (!query.trim()) return
@@ -105,5 +113,9 @@ export default function MusicDiscover({ userContentMap, onListChange }) {
             </div>
         )}
         <MusicRequestModal dialogRef={dialogRef} track={selectedTrack} onConfirm={handleRequest} />
+
+        <AlbumList albums={albums} heading="Available Now" />
+        {recommended.length > 0 && <AlbumList albums={recommended} heading="Recommended" />}
+
     </div>
 }

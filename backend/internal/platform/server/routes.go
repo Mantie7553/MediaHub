@@ -96,6 +96,7 @@ func (s *Server) routes() {
 		//Music Handler Endpoints
 		r.Get("/albums", musicHandler.GetAlbums)
 		r.Get("/albums/{id}", musicHandler.GetAlbum)
+		r.Get("/music/recommended", musicHandler.GetRecommended)
 
 		// List Handler endpoints
 		r.Get("/light-novels/{id}/volumes/{volumeId}/content", mediaHandler.ServeVolume)

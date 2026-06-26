@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"net/http"
 
+	"github.com/Mantie7553/MediaHub/backend/internal/platform/auth"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/utils"
 	"github.com/go-chi/chi/v5"
 )
@@ -136,4 +137,61 @@ func (h *Handler) GetAlbum(w http.ResponseWriter, r *http.Request) {
 	}
 
 	utils.JSON(w, album)
+}
+
+/*
+Function:	GetRecommended
+Purpose:	Get albums from artists the user has saved that they haven't added to their list yet
+Params:
+  - w: http response writer
+  - r: http request
+*/
+func (h *Handler) GetRecommended(w http.ResponseWriter, r *http.Request) {
+	user := auth.GetUser(r)
+
+	rows, err := h.db.Query(`
+		SELECT a.id, a.title, a.artist,
+			COALESCE(a.cover_image_url, (
+				SELECT mi.cover_image_url FROM music_metadata mm2
+				JOIN media_items mi ON mi.id = mm2.media_item_id
+				WHERE mm2.album_id = a.id AND mi.cover_image_url IS NOT NULL
+				LIMIT 1
+			)) as cover_image_url,
+			COUNT(mm.media_item_id) as track_count
+		FROM albums a
+		JOIN music_metadata mm ON mm.album_id = a.id AND mm.file_path IS NOT NULL
+		WHERE a.artist IN (
+			SELECT DISTINCT a2.artist
+			FROM user_media_status ums
+			JOIN albums a2 ON a2.id = ums.album_id
+			WHERE ums.user_id = $1
+		)
+		AND a.id NOT IN (
+			SELECT album_id FROM user_media_status
+			WHERE user_id = $1 AND album_id IS NOT NULL
+		)
+		GROUP BY a.id
+		ORDER BY a.title`,
+		user.UserID,
+	)
+	if utils.InternalError(w, err) {
+		return
+	}
+	defer rows.Close()
+
+	albums := []AlbumSummary{}
+	for rows.Next() {
+		var a AlbumSummary
+		if err := rows.Scan(&a.ID, &a.Title, &a.Artist, &a.CoverURL, &a.TrackCount); err != nil {
+			utils.InternalError(w, err)
+			return
+		}
+		albums = append(albums, a)
+	}
+
+	if utils.InternalError(w, rows.Err()) {
+		return
+	}
+
+	utils.JSON(w, albums)
 }
