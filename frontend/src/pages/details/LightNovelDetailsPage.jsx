@@ -1,14 +1,15 @@
 import { useState, useEffect } from "react";
-import { NavLink, useParams } from "react-router-dom";
+import { NavLink, useLocation, useParams } from "react-router-dom";
 import Loading from "../../components/states/Loading";
 import Error from "../../components/states/Error";
 import { useMediaItem, useUserContent } from "../../hooks";
 import { mediaStatusBadge } from "../../utils/status";
 import api from "../../services/api";
-import { Check } from "lucide-react";
+import { ArrowLeft, Check } from "lucide-react";
 import Format from "../../utils/format";
 
 export default function LightNovelDetailsPage() {
+    const navigate = useNavigate();
     const { userContentMap, refresh } = useUserContent();
     const { id } = useParams();
     const { item: ln, loading, error } = useMediaItem(id);
@@ -69,6 +70,9 @@ export default function LightNovelDetailsPage() {
 
     return (
         <div className="flex flex-col">
+            <button className="btn btn-ghost btn-sm self-start" onClick={() => navigate("/")}>
+                <ArrowLeft size={18} strokeWidth={2}/> Back
+            </button>
             <div className="flex gap-6">
                 <img src={ln.cover_image_url} className="w-48 h-64 object-contain rounded-md" />
                 <div className="flex flex-col gap-3">

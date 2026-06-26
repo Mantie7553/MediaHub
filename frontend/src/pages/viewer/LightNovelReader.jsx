@@ -1,6 +1,6 @@
 import { ChevronDown, ChevronUp, ArrowLeft } from 'lucide-react'
 import { useState, useEffect, useRef } from "react"
-import { useParams, NavLink } from "react-router-dom"
+import { useParams, NavLink, useNavigate } from "react-router-dom"
 import api from "../../services/api"
 import { useMediaItem } from "../../hooks"
 import Loading from "../../components/states/Loading"
@@ -14,21 +14,26 @@ export default function LightNovelReader() {
     if (error) return <Error error={error} />
     if (!ln) return null
 
-    const volume = ln.metadata?.volumes?.find(v => v.id === volumeId)
-    return <LightNovelReaderInner id={id} volumeId={volumeId} volume={volume} />
+    const volumes = ln.metadata?.volumes ?? [];
+    const volume = volumes.find(v => v.id === volumeId);
+    return <LightNovelReaderInner key={volumeId} id={id} volumeId={volumeId} volume={volume} volumes={volumes} />
 }
 
-function LightNovelReaderInner({ id, volumeId, volume }) {
+function LightNovelReaderInner({ id, volumeId, volume, volumes }) {
+    const navigate = useNavigate();
     const initialScroll = volume?.scroll_position ?? 0;
 
-    const [content, setContent] = useState(null)
-    const [loading, setLoading] = useState(true)
-    const [error, setError] = useState(null)
-    const [scrollPct, setScrollPct] = useState(initialScroll)
-    const contentRef = useRef(null)
-    const scrollPctRef = useRef(initialScroll)
-    const debounceTimer = useRef(null)
-    const hasRestored = useRef(false)
+    const [content, setContent] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+    const [scrollPct, setScrollPct] = useState(initialScroll);
+    const contentRef = useRef(null);
+    const scrollPctRef = useRef(initialScroll);
+    const debounceTimer = useRef(null);
+    const hasRestored = useRef(false);
+    const currentIndex = volumes.findIndex(v => v.id === volumeId);
+    const nextVolume = volumes[currentIndex + 1] ?? null;
+    const prevVolume = volumes[currentIndex - 1] ?? null;
 
     useEffect(() => {
         setLoading(true)
@@ -114,20 +119,32 @@ function LightNovelReaderInner({ id, volumeId, volume }) {
                         </NavLink>
                         <button
                             className="btn btn-sm"
-                            disabled={scrollPct <= 0}
-                            onClick={() => contentRef.current?.scrollTo({ top: 0, behavior: 'smooth' })}>
-                                <ChevronUp size={20} strokeWidth={3}/>
-                                Top
+                            disabled={scrollPct <= 0 && !prevVolume}
+                            onClick={() => {
+                                if (scrollPct <= 0 && prevVolume) {
+                                    saveProgress(scrollPctRef.current);
+                                    navigate(`/light-novels/${id}/volumes/${prevVolume.id}/read`);
+                                } else {
+                                    contentRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+                                }
+                            }}>
+                            <ChevronUp size={20} strokeWidth={3}/>
+                            {scrollPct <= 0 && prevVolume ? "Prev Volume" : "Top"}
                         </button>
                         <button
                             className="btn btn-sm"
-                            disabled={scrollPct >= 1}
+                            disabled={scrollPct >= 1 && !nextVolume}
                             onClick={() => {
-                                const el = contentRef.current;
-                                if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+                                if (scrollPct >= 1 && nextVolume) {
+                                    saveProgress(scrollPctRef.current);
+                                    navigate(`/light-novels/${id}/volumes/${nextVolume.id}/read`);
+                                } else {
+                                    const el = contentRef.current;
+                                    if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+                                }
                             }}>
-                                <ChevronDown size={20} strokeWidth={3}/>
-                                Bottom
+                            <ChevronDown size={20} strokeWidth={3}/>
+                            {scrollPct >= 1 && nextVolume ? "Next Volume" : "Bottom"}
                         </button>
                     </div>
                 </div>

@@ -1,18 +1,25 @@
 import { useState, useEffect, useRef } from "react"
-import { useParams, useLocation } from "react-router-dom"
+import { useParams, useLocation, useNavigate } from "react-router-dom"
 import Hls from "hls.js"
 import api from "../../services/api"
 import Loading from "../../components/states/Loading"
 import Error from "../../components/states/Error"
+import { ArrowLeft, ArrowRight } from "lucide-react"
 
 export default function PlayerPage() {
     const location = useLocation();
+    const navigate = useNavigate();
     const { type, id } = useParams();
     const videoRef = useRef(null);
     const [playlistUrl, setPlaylistUrl] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const initialPosition = location.state?.position ?? 0;
+    const animeId = location.state?.animeId ?? null;
+    const episodeList = location.state?.episodes ?? [];
+    const currentIndex = episodeList.findIndex(ep => ep.id === id);
+    const nextEpisode = episodeList[currentIndex + 1] ?? null;
+    const prevEpisode = episodeList[currentIndex - 1] ?? null;
     const saveIntervalRef = useRef(null);
     const positionRef = useRef(0);
     const durationRef = useRef(0);
@@ -88,11 +95,46 @@ export default function PlayerPage() {
         }).catch(() => {})
     }
 
+    function goToEpisode(ep) {
+        navigate(`/watch/episode/${ep.id}`, {
+            state: {
+                position: 0,
+                animeId,
+                episodes: episodeList,
+            }
+        });
+    }
+
     if (loading) return <Loading />
     if (error) return <Error error={error} />
 
     return (
-        <div className="flex items-center justify-center w-full h-screen bg-black">
+    <div className="flex flex-col h-screen bg-black">
+        <div className="flex items-center justify-between px-4 py-2 bg-black/80">
+            <button
+                className="btn btn-ghost btn-sm text-white"
+                onClick={() => animeId ? navigate(`/anime/${animeId}`) : navigate(-1)}
+            >
+                <ArrowLeft size={18} strokeWidth={2}/> Back
+            </button>
+            <div className="flex gap-2">
+                <button
+                    className="btn btn-ghost btn-sm text-white"
+                    disabled={!prevEpisode}
+                    onClick={() => prevEpisode && goToEpisode(prevEpisode)}
+                >
+                    <ArrowLeft size={18} strokeWidth={2}/> Prev
+                </button>
+                <button
+                    className="btn btn-ghost btn-sm text-white"
+                    disabled={!nextEpisode}
+                    onClick={() => nextEpisode && goToEpisode(nextEpisode)}
+                >
+                    Next <ArrowRight  size={18} strokeWidth={2}/>
+                </button>
+            </div>
+        </div>
+        <div className="flex flex-1 items-center justify-center">
             <video
                 ref={videoRef}
                 controls
@@ -110,5 +152,6 @@ export default function PlayerPage() {
                 )}
             </video>
         </div>
-    )
+    </div>
+)
 }

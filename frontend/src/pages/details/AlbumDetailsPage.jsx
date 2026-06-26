@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react"
-import { useParams } from "react-router-dom"
-import { Play, Clock, Music } from "lucide-react"
+import { useLocation, useParams } from "react-router-dom"
+import { Play, Clock, Music, ArrowLeft } from "lucide-react"
 import api from "../../services/api"
 import Loading from "../../components/states/Loading"
 import Error from "../../components/states/Error"
 import useAudioStore from "../../stores/useAudioStore"
 
 export default function AlbumDetailsPage() {
+    const navigate = useNavigate();
     const { id } = useParams()
     const [album, setAlbum] = useState(null)
     const [loading, setLoading] = useState(true)
@@ -40,6 +41,9 @@ export default function AlbumDetailsPage() {
 
     return (
         <div className="flex flex-col gap-8">
+            <button className="btn btn-ghost btn-sm self-start" onClick={() => navigate("/")}>
+                <ArrowLeft size={18} strokeWidth={2}/> Back
+            </button>
             {/* Album Header */}
             <div className="flex gap-6">
                 {album.cover_image_url ? (

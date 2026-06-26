@@ -6,7 +6,7 @@ import Error from "../../components/states/Error";
 import { useMediaItem, useUserContent } from "../../hooks";
 import { animeBadge, mediaStatusBadge } from "../../utils/status";
 import Format from "../../utils/format";
-import { Check } from "lucide-react";
+import { Check, ArrowLeft } from "lucide-react";
 
 export default function AnimeDetailsPage() {
     const { id } = useParams();
@@ -92,6 +92,9 @@ export default function AnimeDetailsPage() {
 
     return (
         <div className="flex flex-col gap-8">
+            <button className="btn btn-ghost btn-sm self-start" onClick={() => navigate("/")}>
+                <ArrowLeft size={18} strokeWidth={2}/> Back
+            </button>
             <div className="flex gap-6">
                 <img src={anime.cover_image_url} className="w-48 h-64 object-cover rounded-md" />
                 <div className="flex flex-col gap-3">
@@ -173,7 +176,7 @@ export default function AnimeDetailsPage() {
                                         </div>
                                         <button
                                             className="btn btn-sm btn-primary"
-                                            onClick={() => navigate(`/watch/episode/${ep.id}`, { state: { position: episodeProgress[ep.id]?.position ?? ep.position_secs } }) }
+                                            onClick={() => navigate(`/watch/episode/${ep.id}`, { state: { position: episodeProgress[ep.id]?.position ?? ep.position_secs, animeId: id, episodes: episodes } }) }
                                         >
                                             Watch
                                         </button>

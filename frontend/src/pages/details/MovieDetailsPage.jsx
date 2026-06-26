@@ -5,11 +5,12 @@ import { useMediaItem, useUserContent } from "../../hooks";
 import Format from "../../utils/format";
 import api from "../../services/api";
 import { mediaStatusBadge } from "../../utils/status";
+import { ArrowLeft } from "lucide-react";
 
 export default function MovieDetailsPage() {
+    const navigate = useNavigate();
     const { userContentMap, refresh } = useUserContent();
     const { id } = useParams();
-    const navigate = useNavigate();
     const { item: movie, loading, error } = useMediaItem(id);
     const userEntry = userContentMap[id];
 
@@ -27,6 +28,9 @@ export default function MovieDetailsPage() {
 
     return (
         <div className="flex flex-col gap-8">
+            <button className="btn btn-ghost btn-sm self-start" onClick={() => navigate("/")}>
+                <ArrowLeft size={18} strokeWidth={2}/> Back
+            </button>
             <div className="flex gap-6">
                 <img src={movie.cover_image_url} className="w-48 h-64 object-cover rounded-md" />
                 <div className="flex flex-col gap-3">

@@ -26,17 +26,19 @@ export default function DashboardPage() {
         .catch(err => setError(err.message ?? "Unable to retrieve server library"));
     }, [])
 
-    const userAnime = userContent.filter(item => item.media_type === "anime");
-    const userMovies = userContent.filter(item => item.media_type === "movie");
-    const userMusic = userContent.filter(item => item.media_type === "music_track");
-    const userManga = userContent.filter(item => item.media_type === "manga");
-    const userLightNovels = userContent.filter(item => item.media_type === "light_novel");
+    const sortOrder = (a, b) => a.title.localeCompare(b.title);
 
-    const serverAnime = libraryContent.filter(item => item.type === "anime");
-    const serverMovies = libraryContent.filter(item => item.type === "movie");
-    const serverMusic = libraryContent.filter(item => item.type === "music_track");
-    const serverManga = libraryContent.filter(item => item.type === "manga");
-    const serverLightNovels = libraryContent.filter(item => item.type === "light_novel");
+    const userAnime = userContent.filter(item => item.media_type === "anime").sort(sortOrder);
+    const userMovies = userContent.filter(item => item.media_type === "movie").sort(sortOrder);
+    const userMusic = userContent.filter(item => item.media_type === "music_track").sort(sortOrder);
+    const userManga = userContent.filter(item => item.media_type === "manga").sort(sortOrder);
+    const userLightNovels = userContent.filter(item => item.media_type === "light_novel").sort(sortOrder);
+
+    const serverAnime = libraryContent.filter(item => item.type === "anime").sort(sortOrder);
+    const serverMovies = libraryContent.filter(item => item.type === "movie").sort(sortOrder);
+    const serverMusic = libraryContent.filter(item => item.type === "music_track").sort(sortOrder);
+    const serverManga = libraryContent.filter(item => item.type === "manga").sort(sortOrder);
+    const serverLightNovels = libraryContent.filter(item => item.type === "light_novel").sort(sortOrder);
 
     if (error) return <Error error={error} />
 

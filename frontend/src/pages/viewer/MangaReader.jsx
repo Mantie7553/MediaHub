@@ -1,5 +1,5 @@
 import { useRef, useEffect } from "react";
-import { NavLink, useParams } from "react-router-dom"
+import { NavLink, useNavigate, useParams } from "react-router-dom"
 import { ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react"
 import { useMediaItem, usePages } from "../../hooks";
 import Loading from "../../components/states/Loading";
@@ -14,16 +14,21 @@ export default function MangaReader() {
     if (error) return <Error error={error} />
     if (!item) return null
 
-    const chapter = item.metadata?.chapters?.find(c => c.id === chapterId);
-    return <MangaReaderInner id={id} chapterId={chapterId} chapter={chapter} />
+    const chapters = item.metadata?.chapters ?? [];
+    const chapter = chapters.find(c => c.id === chapterId);
+    return <MangaReaderInner key={chapterId} id={id} chapterId={chapterId} chapter={chapter} chapters={chapters} />
 }
 
-function MangaReaderInner({ id, chapterId, chapter }) {
+function MangaReaderInner({ id, chapterId, chapter, chapters }) {
+    const navigate = useNavigate();
     const initialPage = chapter?.last_page_read ?? 0;
     const totalPages = chapter?.page_count ?? 0;
     const { currentPage, setCurrentPage, imageSrc, loading, error } = usePages(id, chapterId, initialPage);
     const pagesSinceLastSave = useRef(0);
     const currentPageRef = useRef(currentPage);
+    const currentIndex = chapters.findIndex(c => c.id === chapterId);
+    const nextChapter = chapters[currentIndex + 1] ?? null;
+    const prevChapter = chapters[currentIndex - 1] ?? null;
 
     useEffect(() => {
         currentPageRef.current = currentPage;
@@ -54,13 +59,21 @@ function MangaReaderInner({ id, chapterId, chapter }) {
     }
 
     function handlePageUp() {
-        const newPage = currentPage + 1 < totalPages ? currentPage + 1 : currentPage;
-        changePage(newPage);
+        if (currentPage + 1 < totalPages) {
+            changePage(currentPage + 1);
+        } else if (nextChapter) {
+            saveProgress(currentPage);
+            navigate(`/manga/${id}/chapters/${nextChapter.id}/read`);
+        }
     }
 
     function handlePageDown() {
-        const newPage = currentPage - 1 >= 0 ? currentPage - 1 : currentPage;
-        changePage(newPage);
+        if (currentPage - 1 >= 0) {
+            changePage(currentPage - 1);
+        } else if (prevChapter) {
+            saveProgress(currentPage);
+            navigate(`/manga/${id}/chapters/${prevChapter.id}/read`);
+        }
     }
 
     useEffect(() => {
@@ -93,10 +106,10 @@ function MangaReaderInner({ id, chapterId, chapter }) {
                             <progress className="progress progress-primary w-full" value={progressPct} max="100"/>
                         </div>
                         <div className="flex gap-2 shrink-0">
-                            <button onClick={handlePageDown} disabled={currentPage === 0} className="btn btn-sm">
+                            <button onClick={handlePageDown} disabled={currentPage === 0 && !prevChapter} className="btn btn-sm">
                                 <ChevronLeft size={16} strokeWidth={4}/>
                             </button>
-                            <button onClick={handlePageUp} disabled={currentPage >= totalPages - 1} className="btn btn-sm">
+                            <button onClick={handlePageUp} disabled={currentPage >= totalPages - 1 && !nextChapter} className="btn btn-sm">
                                 <ChevronRight size={16} strokeWidth={4}/>
                             </button>
                         </div>
