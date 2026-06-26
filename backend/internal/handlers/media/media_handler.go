@@ -332,7 +332,8 @@ func (h *Handler) GetSpecific(w http.ResponseWriter, r *http.Request) {
 		// also get the chapters for the manga
 		rows, err := h.db.Query(
 			`SELECT mc.id, mc.chapter_number, mc.title, mc.file_path, mc.page_count, mc.created_at,
-			COALESCE(mp.completed, false)
+			COALESCE(mp.completed, false),
+			mp.last_page_read
 			FROM manga_chapters mc
 			LEFT JOIN manga_progress mp ON mp.chapter_id = mc.id AND mp.user_id = $2
 			WHERE mc.media_item_id = $1 ORDER BY mc.chapter_number`,
@@ -349,7 +350,7 @@ func (h *Handler) GetSpecific(w http.ResponseWriter, r *http.Request) {
 			err := rows.Scan(
 				&chapter.ID, &chapter.ChapterNumber, &chapter.Title,
 				&chapter.FilePath, &chapter.PageCount, &chapter.CreatedAt,
-				&chapter.Completed,
+				&chapter.Completed, &chapter.LastPageRead,
 			)
 
 			if utils.InternalError(w, err) {

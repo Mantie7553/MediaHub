@@ -110,6 +110,7 @@ type MangaChapter struct {
 	PageCount     *int       `json:"page_count"`
 	CreatedAt     *time.Time `json:"created_at"`
 	Completed 	  bool 	     `json:"completed"`
+	LastPageRead  *int       `json:"last_page_read"`
 }
 
 type MangaProgress struct {

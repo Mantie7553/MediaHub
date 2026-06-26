@@ -96,20 +96,30 @@ export default function MangaDetailsPage() {
                 <h3 className="font-bold text-lg mt-4">Chapters</h3>
                 <div className="flex flex-col gap-2 mt-2">
                     {manga.metadata.chapters.map(chapter => (
-                        <div key={chapter.id} className="flex items-center justify-between p-3 rounded-lg bg-base-200">
-                            <div className="flex items-center gap-3">
-                                <button
-                                    className={`btn btn-circle btn-xs ${readChapters.has(chapter.id) ? "btn-primary" : "btn-outline"}`}
-                                    onClick={() => toggleChapter(chapter)}
-                                >
-                                    <Check size={10} strokeWidth={3} />
-                                </button>
-                                <NavLink to={`/manga/${id}/chapters/${chapter.id}/read`} className="text-sm">
-                                    {chapter.title ?? `Chapter ${chapter.chapter_number}`}
-                                </NavLink>
-                            </div>
+                        <div key={chapter.id} className="flex items-center gap-3 p-3 rounded-lg bg-base-200">
+                            <button
+                                className={`btn btn-circle btn-xs ${readChapters.has(chapter.id) ? "btn-primary" : "btn-outline"}`}
+                                onClick={() => toggleChapter(chapter)}
+                            >
+                                <Check size={10} strokeWidth={3} />
+                            </button>
+                            <NavLink to={`/manga/${id}/chapters/${chapter.id}/read`} className="text-sm w-24 shrink-0">
+                                {chapter.title ?? `Chapter ${chapter.chapter_number}`}
+                            </NavLink>
+                            {chapter.page_count && (
+                                <div className="relative flex-1 max-w-48">
+                                    <progress
+                                        className="progress progress-primary w-full"
+                                        value={chapter.last_page_read ?? 0}
+                                        max={chapter.page_count}
+                                    />
+                                    <span className="absolute inset-0 flex items-center justify-center text-xs font-bold">
+                                        {(chapter.last_page_read ?? 0) + 1} / {chapter.page_count}
+                                    </span>
+                                </div>
+                            )}
                         </div>
-                    ))}
+                                            ))}
                 </div>
             </>}
         </div>

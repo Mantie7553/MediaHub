@@ -8,8 +8,8 @@ import api from '../services/api'
  * @param {*} chapterId 
  * @returns 
  */
-export default function usePages(id, chapterId) {
-    const [currentPage, setCurrentPage] = useState(0);
+export default function usePages(id, chapterId, initialPage = 0) {
+    const [currentPage, setCurrentPage] = useState(initialPage);
     const [imageSrc, setImageSrc] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
