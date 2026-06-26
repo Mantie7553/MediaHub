@@ -1,18 +1,23 @@
-import { useEffect, useState } from "react"
-import { useLocation, useParams } from "react-router-dom"
-import { Play, Clock, Music, ArrowLeft } from "lucide-react"
+import { useEffect, useState, useRef } from "react"
+import { useNavigate, useParams } from "react-router-dom"
+import { Play, Clock, Music, ArrowLeft, BookmarkPlus } from "lucide-react"
 import api from "../../services/api"
 import Loading from "../../components/states/Loading"
 import Error from "../../components/states/Error"
 import useAudioStore from "../../stores/useAudioStore"
+import { useUserContent } from "../../hooks"
+import AddToListModal from "../../components/modals/AddToListModal"
 
 export default function AlbumDetailsPage() {
     const navigate = useNavigate();
-    const { id } = useParams()
-    const [album, setAlbum] = useState(null)
-    const [loading, setLoading] = useState(true)
-    const [error, setError] = useState("")
-    const playAlbum = useAudioStore(state => state.playAlbum)
+    const dialogRef = useRef(null);
+    const { id } = useParams();
+    const { userContentMap, refresh } = useUserContent();
+    const userContent = userContentMap[id];
+    const [album, setAlbum] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState("");
+    const playAlbum = useAudioStore(state => state.playAlbum);
 
     useEffect(() => {
         api.get(`/albums/${id}`)
@@ -27,6 +32,15 @@ export default function AlbumDetailsPage() {
         const s = secs % 60
         return `${m}:${String(s).padStart(2, "0")}`
     }
+
+    function handleAddToList({ status, score }) {
+       const payload = { album_id: id, status, rating: score || null }
+       if (userContent) {
+           api.put(`/me/media/${userContent.id}`, { status, rating: score || null }).then(() => refresh())
+       } else {
+           api.post("/me/media", payload).then(() => refresh())
+       }
+   }
 
     if (loading) return <Loading />
     if (error) return <Error error={error} />
@@ -60,6 +74,9 @@ export default function AlbumDetailsPage() {
                     <button className="btn btn-primary btn-sm w-fit" onClick={() => playAlbum(queueTracks, 0)}>
                         <Play size={16} /> Play
                     </button>
+                    <button className="btn btn-outline btn-sm w-fit" onClick={() => dialogRef.current.showModal()}>
+                        <BookmarkPlus size={16} /> {userContent ? "Edit List" : "Add to List"}
+                    </button>
                 </div>
             </div>
 
@@ -87,6 +104,13 @@ export default function AlbumDetailsPage() {
                     </div>
                 ))}
             </div>
+
+            <AddToListModal
+                dialogRef={dialogRef}
+                item={{ title: album.title, type: "music_album" }}
+                initialValues={userContent}
+                onConfirm={handleAddToList}
+            />
         </div>
     )
 }

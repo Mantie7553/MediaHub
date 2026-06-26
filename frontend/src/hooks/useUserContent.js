@@ -18,6 +18,7 @@ export default function useUserContent() {
     const userContentMap = Object.fromEntries([
         ...userContent.map(item => [item.media_item_id, item]),
         ...userContent.filter(item => item.external_id != null).map(item => [String(item.external_id), item]),
+        ...userContent.filter(item => item.album_id != null).map(item => [item.album_id, item]),
     ]);
 
     return { userContent, userContentMap, error, refresh };

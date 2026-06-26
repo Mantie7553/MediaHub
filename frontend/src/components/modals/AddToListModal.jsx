@@ -15,6 +15,7 @@ export default function AddToListModal({item, onConfirm, dialogRef, initialValue
 
     function statusOptions(type) {
         switch(type) {
+            case "music_album": return ["completed", "wishlist"]
             case "movie": return ["completed", "current", "wishlist"]
             default: return ["completed", "current", "dropped", "planned", "wishlist"]
         }

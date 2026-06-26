@@ -37,7 +37,7 @@ func (h *Handler) Add(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// confirm the media item id and status have been provided
-	if req.MediaItemId == "" || req.Status == "" {
+	if (req.MediaItemId == "" && req.AlbumId == nil) || req.Status == "" {
 		utils.Error(w, http.StatusBadRequest, "status is required")
 		return
 	}
@@ -45,10 +45,10 @@ func (h *Handler) Add(w http.ResponseWriter, r *http.Request) {
 	// add the new entry in the database
 	var statusId string
 	err := h.db.QueryRow(
-		`INSERT INTO user_media_status (user_id, media_item_id, status, rating)
- 		VALUES ($1, $2, $3, $4) 
+		`INSERT INTO user_media_status (user_id, media_item_id, album_id, status, rating)
+		VALUES ($1, $2, $3, $4, $5) 
 		RETURNING id`,
-		user.UserID, req.MediaItemId, req.Status, req.Rating,
+		user.UserID, utils.NullString(req.MediaItemId), req.AlbumId, req.Status, req.Rating,
 	).Scan(&statusId)
 	if err != nil {
 		if pqErr, ok := err.(*pq.Error); ok && pqErr.Code == "23505" {
@@ -75,10 +75,11 @@ func (h *Handler) GetAll(w http.ResponseWriter, r *http.Request) {
 
 	items := []UserMediaEntry{}
 
-	queryString := `SELECT ums.id, ums.status, ums.rating, ums.updated_at,
-	mi.id, mi.type, mi.title, mi.cover_image_url, mi.release_date, mi.external_id,
-	mm.artist,
-	anime_progress.active_season, anime_progress.season_watched, anime_progress.season_total
+	queryString := `
+	SELECT ums.id, ums.status, ums.rating, ums.updated_at, ums.album_id,
+		mi.id, mi.type, mi.title, mi.cover_image_url, mi.release_date, mi.external_id,
+		mm.artist,
+		anime_progress.active_season, anime_progress.season_watched, anime_progress.season_total
 	FROM user_media_status ums
 	JOIN media_items mi ON mi.id = ums.media_item_id
 	LEFT JOIN music_metadata mm ON mm.media_item_id = mi.id
@@ -99,7 +100,17 @@ func (h *Handler) GetAll(w http.ResponseWriter, r *http.Request) {
 		)
 		GROUP BY e.season_number
 	) anime_progress ON true
-	WHERE ums.user_id = $1`
+	WHERE ums.user_id = $1 AND ums.media_item_id IS NOT NULL
+
+	UNION ALL
+
+	SELECT ums.id, ums.status, ums.rating, ums.updated_at, ums.album_id,
+		NULL, 'music_album', a.title, a.cover_image_url, NULL, NULL,
+		a.artist,
+		NULL, NULL, NULL
+	FROM user_media_status ums
+	JOIN albums a ON a.id = ums.album_id
+	WHERE ums.user_id = $1 AND ums.album_id IS NOT NULL`
 
 	rows, err := h.db.Query(queryString, user.UserID)
 	if utils.InternalError(w, err) {
@@ -110,7 +121,7 @@ func (h *Handler) GetAll(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var item UserMediaEntry
 		err := rows.Scan(
-			&item.ID, &item.Status, &item.Rating, &item.UpdatedAt,
+			&item.ID, &item.Status, &item.Rating, &item.UpdatedAt, &item.AlbumID,
 			&item.MediaItemID, &item.MediaType, &item.MediaTitle, &item.CoverImageURL,
 			&item.ReleaseDate, &item.ExternalID, &item.Artist,
 			&item.ActiveSeason, &item.SeasonWatched, &item.SeasonTotal,

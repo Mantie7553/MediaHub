@@ -1,7 +1,7 @@
 -- +goose Up
 CREATE TYPE user_role AS ENUM ('admin', 'user');
 CREATE TYPE download_permission AS ENUM ('vetted', 'auto_approved');
-CREATE TYPE media_type AS ENUM ('anime', 'movie', 'manga', 'music_track');
+CREATE TYPE media_type AS ENUM ('anime', 'movie', 'manga', 'music_track', 'music_album');
 CREATE TYPE external_source AS ENUM ('anilist', 'tmdb', 'ytdlp', 'manual', 'mangadex');
 CREATE TYPE anime_status AS ENUM ('airing', 'finished', 'upcoming');
 CREATE TYPE media_status AS ENUM ('current', 'planned', 'completed', 'dropped', 'wishlist');

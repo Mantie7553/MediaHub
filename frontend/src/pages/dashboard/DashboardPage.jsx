@@ -30,7 +30,16 @@ export default function DashboardPage() {
 
     const userAnime = userContent.filter(item => item.media_type === "anime").sort(sortOrder);
     const userMovies = userContent.filter(item => item.media_type === "movie").sort(sortOrder);
-    const userMusic = userContent.filter(item => item.media_type === "music_track").sort(sortOrder);
+    const userMusic = userContent
+    .filter(item => item.media_type === "music_album")
+        .map(item => ({
+            id: item.album_id,
+            title: item.media_title,
+            artist: item.artist,
+            cover_image_url: item.cover_image_url,
+            track_count: null,
+        }))
+        .sort(sortOrder)
     const userManga = userContent.filter(item => item.media_type === "manga").sort(sortOrder);
     const userLightNovels = userContent.filter(item => item.media_type === "light_novel").sort(sortOrder);
 
@@ -50,7 +59,7 @@ export default function DashboardPage() {
                 <ContentList items={userAnime} heading="Anime" userContentMap={userContentMap} onListChange={refresh}/>
                 <ContentList items={userMovies} heading="Movies" userContentMap={userContentMap} onListChange={refresh}/>
                 <ContentList items={userManga} heading="Manga" userContentMap={userContentMap} onListChange={refresh}/>
-                <AlbumList albums={[]} heading="Music" />
+                <AlbumList albums={userMusic} heading="Music" />
                 <ContentList items={userLightNovels} heading="Light Novels" userContentMap={userContentMap} onListChange={refresh}/>
 
             </div>
