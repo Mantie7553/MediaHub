@@ -17,7 +17,7 @@ export default function Card({item, showActions=false, userContentMap={}, onList
             <figure className="relative">
                 {(userEntry?.status || item.status) && 
                     <span className={`badge ${mediaStatusBadge(userEntry?.status ?? item.status)} absolute top-2 left-2 z-10 text-xs p-1`}>
-                        {Format.cleanString(userEntry?.status ?? item.status)}
+                        {Format.statusLabel(userEntry?.status ?? item.status, item.type ?? item.media_type)}
                     </span>}
                 {item.cover_image_url ? (
                     <img src={item.cover_image_url} className="w-full h-56 object-contain"/>
@@ -60,7 +60,7 @@ function mediaInfo(item) {
 
             info = <>
                     <span>{progressLabel}</span>
-                    <progress className="progress" value={progressPct} max="100"></progress>
+                    <progress className="progress progress-primary" value={progressPct} max="100"></progress>
                 </>
             path = "/anime/"
             break
@@ -115,8 +115,18 @@ function ActionButtons({item, userEntry, onListChange}) {
             .then(() => { setMsg("Updated!"); onListChange?.(); })
             .catch(err => setMsg(err.response?.data?.error ?? err.message))
             .finally(() => setLoading(false))
+        } else if (item.id) {
+            // already in DB — just add to list, no download
+            api.post("/me/media", {
+                media_item_id: item.id,
+                status,
+                rating: score === 0 ? null : score,
+            })
+            .then(() => { setMsg("Added to list!"); onListChange?.(); })
+            .catch(err => setMsg(err.response?.data?.error ?? err.message))
+            .finally(() => setLoading(false))
         } else if (item.external_source) {
-            // search result — needs full save with external metadata
+            // not in DB yet — save and dispatch download if permitted
             api.post("/search/save", {
                 external_id: item.external_id,
                 external_source: item.external_source,
@@ -127,16 +137,6 @@ function ActionButtons({item, userEntry, onListChange}) {
                 status,
                 rating: score === 0 ? null : score,
                 progress,
-            })
-            .then(() => { setMsg("Added to list!"); onListChange?.(); })
-            .catch(err => setMsg(err.response?.data?.error ?? err.message))
-            .finally(() => setLoading(false))
-        } else {
-            // library item — already in DB, just add to list
-            api.post("/me/media", {
-                media_item_id: item.id,
-                status,
-                rating: score === 0 ? null : score,
             })
             .then(() => { setMsg("Added to list!"); onListChange?.(); })
             .catch(err => setMsg(err.response?.data?.error ?? err.message))

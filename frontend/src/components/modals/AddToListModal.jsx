@@ -33,7 +33,7 @@ export default function AddToListModal({item, onConfirm, dialogRef, initialValue
                             className={`btn btn-sm ${option === status ? "btn-primary" : "btn-outline"}`}
                             onClick={() => setStatus(option)}
                         >
-                            {Format.statusLabel(option, item.type)}
+                            {Format.statusLabel(option, item.type ?? item.media_type)}
                         </button>
                     ))}
                 </div>
