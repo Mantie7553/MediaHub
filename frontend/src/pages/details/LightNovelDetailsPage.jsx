@@ -14,10 +14,14 @@ export default function LightNovelDetailsPage() {
     const { item: ln, loading, error } = useMediaItem(id);
     const userEntry = userContentMap[id];
     const [readVolumes, setReadVolumes] = useState(new Set());
+    const [scrollPosition, setScrollPosition] = useState({});
 
     useEffect(() => {
         if (ln?.metadata?.volumes) {
             setReadVolumes(new Set(ln.metadata.volumes.filter(v => v.completed).map(v => v.id)));
+            const initial = {};
+            ln.metadata.volumes.forEach(v => { initial[v.id] = v.scroll_position ?? 0; });
+            setScrollPosition(initial);
         }
     }, [ln]);
 
@@ -40,6 +44,8 @@ export default function LightNovelDetailsPage() {
                 updateStatus(status);
             })
             .catch(() => {});
+        api.put(`/light-novels/volumes/${volume.id}/progress`, { scroll_position: read ? 1 : 0 })
+            .then(() => setScrollPosition(prev => ({ ...prev, [volume.id]: read ? 1 : 0 })));
     }
 
     function markAll(read) {
@@ -47,6 +53,12 @@ export default function LightNovelDetailsPage() {
             .then(() => {
                 setReadVolumes(read ? new Set(ln.metadata.volumes.map(v => v.id)) : new Set());
                 updateStatus(read ? "completed" : "planned");
+                const newScrollPositions = {};
+                ln.metadata.volumes.forEach(v => { newScrollPositions[v.id] = read ? 1 : 0; });
+                setScrollPosition(newScrollPositions);
+                Promise.all(ln.metadata.volumes.map(v =>
+                    api.put(`/light-novels/volumes/${v.id}/progress`, { scroll_position: read ? 1 : 0 })
+                )).catch(() => {});
             })
             .catch(() => {});
     }
@@ -107,15 +119,15 @@ export default function LightNovelDetailsPage() {
                         <NavLink to={`/light-novels/${id}/volumes/${volume.id}/read`} className="text-sm w-24 shrink-0">
                             {volume.title ?? `Volume ${volume.volume_number}`}
                         </NavLink>
-                        {volume.scroll_position != null && (
+                        {scrollPosition[volume.id] != null && (
                             <div className="relative flex-1 max-w-48">
                                 <progress
                                     className="progress progress-primary w-full"
-                                    value={Math.round((volume.scroll_position ?? 0) * 100)}
+                                    value={Math.round((scrollPosition[volume.id] ?? 0) * 100)}
                                     max="100"
                                 />
                                 <span className="absolute inset-0 flex items-center justify-center text-xs font-bold">
-                                    {Math.round((volume.scroll_position ?? 0) * 100)}%
+                                    {Math.round((scrollPosition[volume.id] ?? 0) * 100)}%
                                 </span>
                             </div>
                         )}

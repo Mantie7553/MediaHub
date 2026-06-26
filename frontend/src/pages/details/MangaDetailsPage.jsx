@@ -14,9 +14,13 @@ export default function MangaDetailsPage() {
     const { item: manga, loading, error } = useMediaItem(id);
     const userEntry = userContentMap[id];
     const [readChapters, setReadChapters] = useState(new Set());
+    const [pageProgress, setPageProgress] = useState({});
 
     useEffect(() => {
         if (manga?.metadata?.chapters) {
+            const initial = {};
+            manga.metadata.chapters.forEach(c => { initial[c.id] = c.last_page_read ?? 0; });
+            setPageProgress(initial);
             setReadChapters(new Set(manga.metadata.chapters.filter(c => c.completed).map(c => c.id)));
         }
     }, [manga]);
@@ -40,6 +44,9 @@ export default function MangaDetailsPage() {
                 updateStatus(status);
             })
             .catch(() => {});
+        api.put(`/manga/${id}/chapters/${chapter.id}/progress`, 
+            { last_page_read: read ? chapter.page_count -1 : 0, completed: read })
+        .then(() => setPageProgress(prev => ({ ...prev, [chapter.id]: read ? (chapter.page_count - 1) : 0 })));
     }
 
     function markAll(read) {
@@ -47,6 +54,12 @@ export default function MangaDetailsPage() {
             .then(() => {
                 setReadChapters(read ? new Set(manga.metadata.chapters.map(c => c.id)) : new Set());
                 updateStatus(read ? "completed" : "planned");
+                const newPageProgress = {};
+                manga.metadata.chapters.forEach(c => { newPageProgress[c.id] = read ? (c.page_count - 1) : 0; });
+                setPageProgress(newPageProgress);
+                Promise.all(manga.metadata.chapters.map(c =>
+                    api.put(`/manga/${id}/chapters/${c.id}/progress`, { last_page_read: read ? (c.page_count - 1) : 0, completed: read })
+                )).catch(() => {});
             })
             .catch(() => {});
     }
@@ -110,11 +123,11 @@ export default function MangaDetailsPage() {
                                 <div className="relative flex-1 max-w-48">
                                     <progress
                                         className="progress progress-primary w-full"
-                                        value={chapter.last_page_read ?? 0}
+                                        value={pageProgress[chapter.id] ?? chapter.last_page_read ?? 0}
                                         max={chapter.page_count}
                                     />
                                     <span className="absolute inset-0 flex items-center justify-center text-xs font-bold">
-                                        {(chapter.last_page_read ?? 0) + 1} / {chapter.page_count}
+                                        {(pageProgress[chapter.id] ?? 0) + 1} / {chapter.page_count}
                                     </span>
                                 </div>
                             )}

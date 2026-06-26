@@ -84,6 +84,9 @@ function LightNovelReaderInner({ id, volumeId, volume }) {
         api.put(`/light-novels/volumes/${volumeId}/progress`, {
             scroll_position: pct,
         }).catch(() => {})
+        if (pct >= 1) {
+            api.put(`/light-novels/volumes/${volumeId}/read`, { read: true })
+        }
     }
 
     if (loading) return <Loading />

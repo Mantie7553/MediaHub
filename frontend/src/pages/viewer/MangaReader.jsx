@@ -40,6 +40,9 @@ function MangaReaderInner({ id, chapterId, chapter }) {
             completed,
         }).catch(() => {});
         pagesSinceLastSave.current = 0;
+        if (completed) {
+            api.put(`/manga/chapters/${chapterId}/read`, { read: true })
+        }
     }
 
     function changePage(newPage) {
