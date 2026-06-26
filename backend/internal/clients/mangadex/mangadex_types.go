@@ -41,3 +41,9 @@ type TagAttributes struct {
 type Name struct {
 	En string `json:"en"`
 }
+
+type DiscoveryResult struct {
+    Trending []Manga
+    Popular  []Manga
+    Latest   []Manga
+}

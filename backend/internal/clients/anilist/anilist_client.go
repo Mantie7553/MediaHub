@@ -108,6 +108,42 @@ const getByIDQuery = `query ($id: Int) {
   }
 }`
 
+const discoveryQuery = `query ($perPage: Int, $type: MediaType, $format: MediaFormat) {
+  trending: Page(perPage: $perPage) {
+    media(sort: TRENDING_DESC, type: $type, format: $format) {
+      id type format status
+      title { romaji english native }
+      description episodes chapters volumes
+      coverImage { large medium }
+      genres
+      studios { nodes { name } }
+      startDate { year month day }
+    }
+  }
+  popular: Page(perPage: $perPage) {
+    media(sort: POPULARITY_DESC, type: $type, format: $format) {
+      id type format status
+      title { romaji english native }
+      description episodes chapters volumes
+      coverImage { large medium }
+      genres
+      studios { nodes { name } }
+      startDate { year month day }
+    }
+  }
+  topRated: Page(perPage: $perPage) {
+    media(sort: SCORE_DESC, type: $type, format: $format) {
+      id type format status
+      title { romaji english native }
+      description episodes chapters volumes
+      coverImage { large medium }
+      genres
+      studios { nodes { name } }
+      startDate { year month day }
+    }
+  }
+}`
+
 /*
 Function:	Search
 Purpose:	Search Anilist for media of a given type matching the query
@@ -149,6 +185,51 @@ func (c *AnilistClient) Search(mediaType, query string, perPage int, format stri
 		out = append(out, m.toDomain())
 	}
 	return out, nil
+}
+
+func (c *AnilistClient) Discovery(mediaType string, format string, perPage int) (*DiscoveryResult, error) {
+	if perPage <= 0 {
+		perPage = 10
+	}
+
+	vars := map[string]any{
+		"perPage": perPage,
+	}
+	if mediaType != "" {
+		vars["type"] = mediaType
+	}
+	if format != "" {
+		vars["format"] = format
+	}
+
+	var env struct {
+		Trending struct {
+			Media []wireMedia `json:"media"`
+		} `json:"trending"`
+		Popular struct {
+			Media []wireMedia `json:"media"`
+		} `json:"popular"`
+		TopRated struct {
+			Media []wireMedia `json:"media"`
+		} `json:"topRated"`
+	}
+	if err := c.query(discoveryQuery, vars, &env); err != nil {
+		return nil, err
+	}
+
+	toMediaSlice := func(wires []wireMedia) []Media {
+		out := make([]Media, 0, len(wires))
+		for _, m := range wires {
+			out = append(out, m.toDomain())
+		}
+		return out
+	}
+
+	return &DiscoveryResult{
+		Trending: toMediaSlice(env.Trending.Media),
+		Popular:  toMediaSlice(env.Popular.Media),
+		TopRated: toMediaSlice(env.TopRated.Media),
+	}, nil
 }
 
 /*
@@ -221,6 +302,12 @@ func (c *AnilistClient) GetByID(id int) (*Media, error) {
 type graphQLRequest struct {
 	Query     string         `json:"query"`
 	Variables map[string]any `json:"variables,omitempty"`
+}
+
+type DiscoveryResult struct {
+	Trending []Media `json:"trending"`
+	Popular  []Media `json:"popular"`
+	TopRated []Media `json:"top_rated"`
 }
 
 // graphQLError mirrors a single entry in the errors array Anilist returns when

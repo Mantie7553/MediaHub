@@ -45,6 +45,76 @@ func NewMangaDexClient(urlEnvKey string) *MangaDexClient {
 	}
 }
 
+func (c *MangaDexClient) fetch(params url.Values) ([]Manga, error) {
+    params.Add("includes[]", "cover_art")
+    params.Add("includes[]", "tag")
+    params.Add("excludedTags[]", "b13b2a48-c720-44a9-9c77-39c9979373fb") // doujinshi
+
+    req, err := http.NewRequest("GET", c.config.BaseURL+"/manga?"+params.Encode(), nil)
+    if err != nil {
+        return nil, err
+    }
+    req.Header.Set("Accept", "application/json")
+
+    resp, err := c.http.Do(req)
+    if err != nil {
+        return nil, err
+    }
+    defer resp.Body.Close()
+
+    if resp.StatusCode >= 400 {
+        return nil, fmt.Errorf("mangadex returned %d", resp.StatusCode)
+    }
+
+    var result struct {
+        Data []Manga `json:"data"`
+    }
+    if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+        return nil, err
+    }
+    return result.Data, nil
+}
+
+func (c *MangaDexClient) Discovery(limit int) (*DiscoveryResult, error) {
+    if limit <= 0 {
+        limit = 20
+    }
+    limitStr := fmt.Sprintf("%d", limit)
+
+    trendingParams := url.Values{}
+    trendingParams.Set("limit", limitStr)
+    trendingParams.Add("order[followedCount]", "desc")
+
+    popularParams := url.Values{}
+    popularParams.Set("limit", limitStr)
+    popularParams.Add("order[rating]", "desc")
+
+    latestParams := url.Values{}
+    latestParams.Set("limit", limitStr)
+    latestParams.Add("order[latestUploadedChapter]", "desc")
+
+    trending, err := c.fetch(trendingParams)
+    if err != nil {
+        return nil, fmt.Errorf("trending: %w", err)
+    }
+
+    popular, err := c.fetch(popularParams)
+    if err != nil {
+        return nil, fmt.Errorf("popular: %w", err)
+    }
+
+    latest, err := c.fetch(latestParams)
+    if err != nil {
+        return nil, fmt.Errorf("latest: %w", err)
+    }
+
+    return &DiscoveryResult{
+        Trending: trending,
+        Popular:  popular,
+        Latest:   latest,
+    }, nil
+}
+
 /*
 Function:	Search
 Purpose:	Search MangaDex for manga matching the query

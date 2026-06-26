@@ -1,29 +1,34 @@
 import { useEffect, useState } from "react"
 import Loading from "../../components/states/Loading";
+import Error from "../../components/states/Error";
 import api from "../../services/api";
 import ContentList from "../../components/layout/ContentList";
 import ContentGrid from "../../components/layout/ContentGrid";
 import useUserContent from "../../hooks/useUserContent";
 import MusicDiscover from "./MusicDiscover";
 
-/**
- * Discover page layout
- * @returns 
- */
+const emptySections = { trending: [], popular: [], top_rated: [] };
+
 export default function Discover() {
     const { userContentMap, refresh } = useUserContent();
     const [activeTab, setActiveTab] = useState("anime");
     const [library, setLibrary] = useState([]);
     const [query, setQuery] = useState("");
-    const [results, setResults] = useState([]);
+    const [sections, setSections] = useState(emptySections);
+    const [searchResults, setSearchResults] = useState([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
 
     useEffect(() => {
         if (activeTab === "music_track") return
+        setSections(emptySections);
+        setSearchResults([]);
         api.get(`/search?type=${activeTab}`)
-        .then(resp => setResults(resp.data))
-        .catch(err => setError(err));
+            .then(resp => {
+                const data = resp.data;
+                setSections(data);
+            })
+            .catch(err => setError(err));
     }, [activeTab])
 
     useEffect(() => {
@@ -33,39 +38,43 @@ export default function Discover() {
             .catch(() => {})
     }, [activeTab])
 
-    /**
-     * Make an API request to search for some content
-     * @returns 
-     */
     function handleSearch() {
-        setResults([]);
+        setSections(emptySections);
+        setSearchResults([]);
         if (!query.trim()) return;
         setLoading(true);
         setError("");
         api.get(`/search?type=${activeTab}&q=${query}`)
-            .then(resp => setResults(resp.data))
+            .then(resp => setSearchResults(resp.data))
             .catch(err => setError(err.message))
             .finally(() => setLoading(false))
     }
 
-return <div className="flex flex-col gap-6">
+    function handleTabChange(tab) {
+        setActiveTab(tab);
+        setSections(emptySections);
+        setSearchResults([]);
+        setQuery("");
+    }
+
+    return <div className="flex flex-col gap-6">
         {/* Tabs */}
         <div className="tabs tabs-lift">
             <input type="radio" name="tabs" className="tab" aria-label="Anime"
-            checked={activeTab === "anime"}
-            onChange={() => { setActiveTab("anime"); setResults([]); setQuery(""); }}
+                checked={activeTab === "anime"}
+                onChange={() => handleTabChange("anime")}
             />
             <input type="radio" name="tabs" className="tab" aria-label="Manga"
-            checked={activeTab === "manga"}
-            onChange={() => { setActiveTab("manga"); setResults([]); setQuery(""); }}
+                checked={activeTab === "manga"}
+                onChange={() => handleTabChange("manga")}
             />
             <input type="radio" name="tabs" className="tab" aria-label="Movies"
-            checked={activeTab === "movie"}
-            onChange={() => { setActiveTab("movie"); setResults([]); setQuery(""); }}
+                checked={activeTab === "movie"}
+                onChange={() => handleTabChange("movie")}
             />
             <input type="radio" name="tabs" className="tab" aria-label="Music"
-            checked={activeTab === "music_track"}
-            onChange={() => { setActiveTab("music_track"); setResults([]); setQuery(""); }}
+                checked={activeTab === "music_track"}
+                onChange={() => handleTabChange("music_track")}
             />
         </div>
 
@@ -75,27 +84,33 @@ return <div className="flex flex-col gap-6">
             <>
                 {/* Search */}
                 <div className="flex gap-2">
-                    <input 
-                        className="input input-bordered flex-1 max-w-1/2" 
+                    <input
+                        className="input input-bordered flex-1 max-w-1/2"
                         placeholder={`Search ${activeTab}...`}
-                        value={query} 
+                        value={query}
                         onChange={(e) => setQuery(e.target.value)}
                         onKeyDown={(e) => e.key === "Enter" && handleSearch()}
                     />
                     <button className="btn btn-primary" onClick={handleSearch}>Search</button>
                 </div>
 
+                {loading && <Loading />}
+                {error && <Error error={error} />}
+
                 {/* Available Now */}
-                <ContentList items={library} heading="Available Now" userContentMap={userContentMap} onListChange={refresh}/>
+                <ContentList items={library} heading="Available Now" userContentMap={userContentMap} onListChange={refresh} />
 
                 {/* Search Results */}
-                <div>
-                    {loading && <Loading />}
-                    {error && <Error error={error}/>}
-                    <ContentGrid items={results} heading="Trending Now" showActions={true}  userContentMap={userContentMap} onListChange={refresh}/>
-                </div>
+                {searchResults.length > 0 ? (
+                    <ContentGrid items={searchResults} heading="Search Results" showActions={true} userContentMap={userContentMap} onListChange={refresh} />
+                ) : (
+                    <>
+                        <ContentList items={sections.trending} heading="Trending" showActions={true} userContentMap={userContentMap} onListChange={refresh} />
+                        <ContentList items={sections.popular} heading="Popular" showActions={true} userContentMap={userContentMap} onListChange={refresh} />
+                        <ContentList items={sections.top_rated} heading={activeTab === "manga" ? "Latest Updates" : "Top Rated"} showActions={true} userContentMap={userContentMap} onListChange={refresh} />
+                    </>
+                )}
             </>
         )}
     </div>
 }
-

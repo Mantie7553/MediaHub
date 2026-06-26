@@ -67,108 +67,198 @@ func (h *Handler) Search(w http.ResponseWriter, r *http.Request) {
 
 	switch mediaType {
 	case "anime":
-		// query anilist
-		var results []anilist.Media
-		var err error
 		client := anilist.NewAnilistClient("")
 		if q == "" {
-			results, err = client.Trending("ANIME", 20, "TV")
-		} else {
-			results, err = client.Search("ANIME", q, 20, "TV")
-		}
-		if err != nil {
-			utils.Error(w, http.StatusInternalServerError, "search failed")
-			return
-		}
-		// go through the items returned
-		out := make([]SearchResult, 0, len(results))
-		for _, m := range results {
-			title := m.Title.English
-			if title == "" {
-				title = m.Title.Romaji
+			discovery, err := client.Discovery("ANIME", "TV", 100)
+			if err != nil {
+				utils.Error(w, http.StatusInternalServerError, "search failed")
+				return
 			}
-			// format entries to return
-			out = append(out, SearchResult{
-				ExternalID:     strconv.Itoa(m.ID),
-				ExternalSource: "anilist",
-				Title:          title,
-				CoverImageURL:  m.CoverImage.Large,
-				Type:           "anime",
+			type DiscoveryResponse struct {
+				Trending []SearchResult `json:"trending"`
+				Popular  []SearchResult `json:"popular"`
+				TopRated []SearchResult `json:"top_rated"`
+			}
+			toResults := func(media []anilist.Media, mediaType string) []SearchResult {
+				out := make([]SearchResult, 0, len(media))
+				for _, m := range media {
+					title := m.Title.English
+					if title == "" {
+						title = m.Title.Romaji
+					}
+					out = append(out, SearchResult{
+						ExternalID:     strconv.Itoa(m.ID),
+						ExternalSource: "anilist",
+						Title:          title,
+						CoverImageURL:  m.CoverImage.Large,
+						Type:           mediaType,
+					})
+				}
+				return out
+			}
+			utils.JSON(w, DiscoveryResponse{
+				Trending: toResults(discovery.Trending, "anime"),
+				Popular:  toResults(discovery.Popular, "anime"),
+				TopRated: toResults(discovery.TopRated, "anime"),
 			})
+		} else {
+			results, err := client.Search("ANIME", q, 100, "TV")
+			if err != nil {
+				utils.Error(w, http.StatusInternalServerError, "search failed")
+				return
+			}
+			out := make([]SearchResult, 0, len(results))
+			for _, m := range results {
+				title := m.Title.English
+				if title == "" {
+					title = m.Title.Romaji
+				}
+				out = append(out, SearchResult{
+					ExternalID:     strconv.Itoa(m.ID),
+					ExternalSource: "anilist",
+					Title:          title,
+					CoverImageURL:  m.CoverImage.Large,
+					Type:           "anime",
+				})
+			}
+			utils.JSON(w, out)
 		}
-		utils.JSON(w, out)
 
 	case "movie":
-		var results []anilist.Media
-		var err error
 		client := anilist.NewAnilistClient("")
 		if q == "" {
-			results, err = client.Trending("ANIME", 20, "MOVIE")
-		} else {
-			results, err = client.Search("ANIME", q, 20, "MOVIE")
-		}
-		if err != nil {
-			utils.Error(w, http.StatusInternalServerError, "search failed")
-			return
-		}
-		// go through the items returned
-		out := make([]SearchResult, 0, len(results))
-		for _, m := range results {
-			title := m.Title.English
-			if title == "" {
-				title = m.Title.Romaji
+			discovery, err := client.Discovery("ANIME", "MOVIE", 100)
+			if err != nil {
+				utils.Error(w, http.StatusInternalServerError, "search failed")
+				return
 			}
-			// format entries to return
-			out = append(out, SearchResult{
-				ExternalID:     strconv.Itoa(m.ID),
-				ExternalSource: "anilist",
-				Title:          title,
-				CoverImageURL:  m.CoverImage.Large,
-				Type:           "movie",
-			})
-		}
-		utils.JSON(w, out)
-	case "manga":
-		// query mangadex
-		client := mangadex.NewMangaDexClient("")
-		var results []mangadex.Manga
-		var err error
-		if q == "" {
-			results, err = client.Trending()
-		} else {
-			results, err = client.Search(q)
-		}
-		if utils.InternalError(w, err) {
-			return
-		}
-		// go through the items returned
-		out := make([]SearchResult, 0, len(results))
-		for _, m := range results {
-			var fileName string
-			for _, rel := range m.Relationships {
-				if rel.Type == "cover_art" {
-					fileName = rel.Attributes.FileName
-					break
+			type DiscoveryResponse struct {
+				Trending []SearchResult `json:"trending"`
+				Popular  []SearchResult `json:"popular"`
+				TopRated []SearchResult `json:"top_rated"`
+			}
+			toResults := func(media []anilist.Media, mediaType string) []SearchResult {
+				out := make([]SearchResult, 0, len(media))
+				for _, m := range media {
+					title := m.Title.English
+					if title == "" {
+						title = m.Title.Romaji
+					}
+					out = append(out, SearchResult{
+						ExternalID:     strconv.Itoa(m.ID),
+						ExternalSource: "anilist",
+						Title:          title,
+						CoverImageURL:  m.CoverImage.Large,
+						Type:           mediaType,
+					})
 				}
+				return out
 			}
-			// format entries to return
-			coverURL := fmt.Sprintf("https://uploads.mangadex.org/covers/%s/%s", m.ID, fileName)
-			title := m.Attributes.Title.En
-			if title == "" {
-				title = m.Attributes.Title.JaRo
-			}
-			if title == "" {
-				title = m.Attributes.Title.Ja
-			}
-			out = append(out, SearchResult{
-				ExternalID:     m.ID,
-				ExternalSource: "mangadex",
-				Title:          title,
-				CoverImageURL:  coverURL,
-				Type:           "manga",
+			utils.JSON(w, DiscoveryResponse{
+				Trending: toResults(discovery.Trending, "movie"),
+				Popular:  toResults(discovery.Popular, "movie"),
+				TopRated: toResults(discovery.TopRated, "movie"),
 			})
+		} else {
+			results, err := client.Search("ANIME", q, 100, "MOVIE")
+			if err != nil {
+				utils.Error(w, http.StatusInternalServerError, "search failed")
+				return
+			}
+			out := make([]SearchResult, 0, len(results))
+			for _, m := range results {
+				title := m.Title.English
+				if title == "" {
+					title = m.Title.Romaji
+				}
+				out = append(out, SearchResult{
+					ExternalID:     strconv.Itoa(m.ID),
+					ExternalSource: "anilist",
+					Title:          title,
+					CoverImageURL:  m.CoverImage.Large,
+					Type:           "movie",
+				})
+			}
+			utils.JSON(w, out)
 		}
-		utils.JSON(w, out)
+	case "manga":
+		client := mangadex.NewMangaDexClient("")
+		if q == "" {
+			discovery, err := client.Discovery(100)
+			if err != nil {
+				utils.Error(w, http.StatusInternalServerError, "search failed")
+				return
+			}
+			type DiscoveryResponse struct {
+				Trending []SearchResult `json:"trending"`
+				Popular  []SearchResult `json:"popular"`
+				TopRated []SearchResult `json:"top_rated"`
+			}
+			toResults := func(manga []mangadex.Manga) []SearchResult {
+				out := make([]SearchResult, 0, len(manga))
+				for _, m := range manga {
+					var fileName string
+					for _, rel := range m.Relationships {
+						if rel.Type == "cover_art" {
+							fileName = rel.Attributes.FileName
+							break
+						}
+					}
+					coverURL := fmt.Sprintf("https://uploads.mangadex.org/covers/%s/%s", m.ID, fileName)
+					title := m.Attributes.Title.En
+					if title == "" {
+						title = m.Attributes.Title.JaRo
+					}
+					if title == "" {
+						title = m.Attributes.Title.Ja
+					}
+					out = append(out, SearchResult{
+						ExternalID:     m.ID,
+						ExternalSource: "mangadex",
+						Title:          title,
+						CoverImageURL:  coverURL,
+						Type:           "manga",
+					})
+				}
+				return out
+			}
+			utils.JSON(w, DiscoveryResponse{
+				Trending: toResults(discovery.Trending),
+				Popular:  toResults(discovery.Popular),
+				TopRated: toResults(discovery.Latest),
+			})
+		} else {
+			results, err := client.Search(q)
+			if utils.InternalError(w, err) {
+				return
+			}
+			out := make([]SearchResult, 0, len(results))
+			for _, m := range results {
+				var fileName string
+				for _, rel := range m.Relationships {
+					if rel.Type == "cover_art" {
+						fileName = rel.Attributes.FileName
+						break
+					}
+				}
+				coverURL := fmt.Sprintf("https://uploads.mangadex.org/covers/%s/%s", m.ID, fileName)
+				title := m.Attributes.Title.En
+				if title == "" {
+					title = m.Attributes.Title.JaRo
+				}
+				if title == "" {
+					title = m.Attributes.Title.Ja
+				}
+				out = append(out, SearchResult{
+					ExternalID:     m.ID,
+					ExternalSource: "mangadex",
+					Title:          title,
+					CoverImageURL:  coverURL,
+					Type:           "manga",
+				})
+			}
+			utils.JSON(w, out)
+		}
 
 	default:
 		utils.Error(w, http.StatusBadRequest, "type must be anime or manga")
