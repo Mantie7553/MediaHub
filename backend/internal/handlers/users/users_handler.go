@@ -8,7 +8,6 @@ import (
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/auth"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/utils"
 	"github.com/go-chi/chi/v5"
-	"golang.org/x/crypto/bcrypt"
 )
 
 type Handler struct {
@@ -72,7 +71,12 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	if err := auth.ValidatePassword(req.Password); err != nil {
+		utils.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	hash, err := auth.HashPassword(req.Password)
 	if utils.InternalError(w, err) {
 		return
 	}
@@ -114,7 +118,12 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.Password != "" {
-		hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+		if err := auth.ValidatePassword(req.Password); err != nil {
+			utils.Error(w, http.StatusBadRequest, err.Error())
+			return
+		}
+
+		hash, err := auth.HashPassword(req.Password)
 		if utils.InternalError(w, err) {
 			return
 		}

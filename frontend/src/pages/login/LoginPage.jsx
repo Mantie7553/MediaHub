@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { useNavigate } from "react-router-dom"
 import api from "../../services/api"
+import { validatePassword } from "../../utils/validate";
 
 /**
  * Login page layout
@@ -51,6 +52,9 @@ export default function Login() {
             return;
         }
 
+        const passwordError = validatePassword(password);
+        if (passwordError) { setError(passwordError); return; }
+        
         api.post("/auth/register", {username, email, password})
         .then(res => {
             localStorage.setItem("token", res.data.token);

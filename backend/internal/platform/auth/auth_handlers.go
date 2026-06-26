@@ -76,6 +76,11 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := ValidatePassword(req.Password); err != nil {
+		utils.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
 	// hash the password
 	hash, err := HashPassword(req.Password)
 	if utils.InternalError(w, err) {

@@ -5,16 +5,18 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"fmt"
 	"os"
 	"time"
+	"unicode"
 
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
 )
 
 /*
-	UserID: The id for the current user
-	Role: the role for the user
+UserID: The id for the current user
+Role: the role for the user
 */
 type Claims struct {
 	UserID string `json:"user_id"`
@@ -23,10 +25,10 @@ type Claims struct {
 }
 
 /*
-	Function:	HashPassword
-	Purpose:	Hash function for hashing a users password
-	Params:
-		- password: the password we are hashing
+Function:	HashPassword
+Purpose:	Hash function for hashing a users password
+Params:
+  - password: the password we are hashing
 */
 func HashPassword(password string) (string, error) {
 	bytes, err := bcrypt.GenerateFromPassword([]byte(password), 14)
@@ -34,23 +36,59 @@ func HashPassword(password string) (string, error) {
 }
 
 /*
-	Function:	CheckPassword
-	Purpose:	Check the hashed password against the raw password
-	Params:
-		- password: the password we are checking against
-		- hash: the hash we are checking
+Function:	CheckPassword
+Purpose:	Check the hashed password against the raw password
+Params:
+  - password: the password we are checking against
+  - hash: the hash we are checking
 */
 func CheckPassword(password, hash string) bool {
 	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
 	return err == nil
 }
 
+// ValidatePassword checks that a password meets the minimum security requirements
+func ValidatePassword(password string) error {
+	if len(password) < 12 {
+		return fmt.Errorf("password must be at least 12 characters")
+	}
+
+	var hasUpper, hasLower, hasNumber, hasSpecial bool
+	for _, c := range password {
+		switch {
+		case unicode.IsUpper(c):
+			hasUpper = true
+		case unicode.IsLower(c):
+			hasLower = true
+		case unicode.IsNumber(c):
+			hasNumber = true
+		case unicode.IsPunct(c) || unicode.IsSymbol(c):
+			hasSpecial = true
+		}
+	}
+
+	if !hasUpper {
+		return fmt.Errorf("password must contain at least one uppercase letter")
+	}
+	if !hasLower {
+		return fmt.Errorf("password must contain at least one lowercase letter")
+	}
+	if !hasNumber {
+		return fmt.Errorf("password must contain at least one number")
+	}
+	if !hasSpecial {
+		return fmt.Errorf("password must contain at least one special character")
+	}
+
+	return nil
+}
+
 /*
-	Function:	GenerateToken
-	Purpose:	Create a JWT token for a user
-	Params:
-		- userID: the id of the current user
-		- role: the role of the current user
+Function:	GenerateToken
+Purpose:	Create a JWT token for a user
+Params:
+  - userID: the id of the current user
+  - role: the role of the current user
 */
 func GenerateToken(userID, role string) (string, error) {
 	claims := Claims{
@@ -67,10 +105,10 @@ func GenerateToken(userID, role string) (string, error) {
 }
 
 /*
-	Function:	ValidateToken
-	Purpose:	Check that a token is valid
-	Params:
-		- tokenStr: the token we are checking
+Function:	ValidateToken
+Purpose:	Check that a token is valid
+Params:
+  - tokenStr: the token we are checking
 */
 func ValidateToken(tokenStr string) (*Claims, error) {
 	claims := &Claims{}
@@ -84,10 +122,10 @@ func ValidateToken(tokenStr string) (*Claims, error) {
 }
 
 /*
-	Function:	hashToken
-	Purpose:	Hash function for hashing a JWT token
-	Params:
-		- token: the token we are hashing
+Function:	hashToken
+Purpose:	Hash function for hashing a JWT token
+Params:
+  - token: the token we are hashing
 */
 func hashToken(token string) string {
 	sum := sha256.Sum256([]byte(token))
@@ -95,11 +133,11 @@ func hashToken(token string) string {
 }
 
 /*
-	Function:	GenerateRefreshToken
-	Purpose:	Create a new token for a user
-	Params:
-		- db: a connection to the database
-		- userID: the id of the current user
+Function:	GenerateRefreshToken
+Purpose:	Create a new token for a user
+Params:
+  - db: a connection to the database
+  - userID: the id of the current user
 */
 func GenerateRefreshToken(db *sql.DB, userID string) (string, error) {
 	raw := make([]byte, 32)

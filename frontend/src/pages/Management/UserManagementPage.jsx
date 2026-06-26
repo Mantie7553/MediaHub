@@ -3,6 +3,7 @@ import api from "../../services/api";
 import Format from "../../utils/format";
 import Loading from "../../components/states/Loading";
 import Error from "../../components/states/Error";
+import { validatePassword } from "../../utils/validate";
 
 /**
  * Admin page for managing users
@@ -140,16 +141,22 @@ const UserModal = forwardRef(function UserModal({ user, onSave }, ref) {
     function handleConfirm() {
         setError("");
         const isEdit = !!user;
+
         if (!isEdit && (!username || !email || !password)) {
             setError("Username, email, and password are required.");
             return;
         }
 
+        if (password) {
+            const passwordError = validatePassword(password);
+            if (passwordError) { setError(passwordError); return; }
+        }
+
+        setLoading(true);
         const payload = isEdit
             ? { role, download_permission: downloadPermission, ...(password ? { password } : {}) }
             : { username, email, password, role, download_permission: downloadPermission };
 
-        setLoading(true);
         onSave(payload)
             .then(() => ref.current.close())
             .catch(err => setError(err.response?.data ?? err.message))
