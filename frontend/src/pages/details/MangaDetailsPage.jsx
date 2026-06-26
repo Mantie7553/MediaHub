@@ -2,7 +2,7 @@ import { NavLink, useParams} from "react-router-dom";
 import { mangaBadge } from "../../utils/status";
 import Loading from "../../components/states/Loading";
 import Error from "../../components/states/Error";
-import { useMediaItem, useCreateRequest } from "../../hooks";
+import { useMediaItem } from "../../hooks";
 
 /**
  * Manga view page layout
@@ -11,7 +11,6 @@ import { useMediaItem, useCreateRequest } from "../../hooks";
 export default function MangaDetailsPage() {
     const { id } = useParams();
     const { item: manga, loading, error } = useMediaItem(id);
-    const { requesting, requestMsg, createRequest } = useCreateRequest(id);
 
     if (loading) return <Loading />
     if (error) return <Error error={error} />
@@ -32,12 +31,6 @@ export default function MangaDetailsPage() {
                 {manga.description && (
                         <p className="text-sm max-w-xl">{manga.description}</p>
                     )}
-                <div>
-                    <button className="btn btn-primary" onClick={createRequest} disabled={requesting}>
-                        {requesting ? <Loading /> : "Request Download"}
-                    </button>
-                    {requestMsg && <p className="mt-2 text-sm">{requestMsg}</p>}
-                </div>
             </div>
         </div>
 

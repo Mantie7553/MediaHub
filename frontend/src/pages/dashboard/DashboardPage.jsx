@@ -48,7 +48,7 @@ export default function DashboardPage() {
                 <ContentList items={userAnime} heading="Anime" userContentMap={userContentMap} onListChange={refresh}/>
                 <ContentList items={userMovies} heading="Movies" userContentMap={userContentMap} onListChange={refresh}/>
                 <ContentList items={userManga} heading="Manga" userContentMap={userContentMap} onListChange={refresh}/>
-                <AlbumList albums={albums} heading="Music" />
+                <AlbumList albums={[]} heading="Music" />
                 <ContentList items={userLightNovels} heading="Light Novels" userContentMap={userContentMap} onListChange={refresh}/>
 
             </div>

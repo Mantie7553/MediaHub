@@ -1,14 +1,13 @@
 import { useParams, useNavigate } from "react-router-dom";
 import Loading from "../../components/states/Loading";
 import Error from "../../components/states/Error";
-import { useMediaItem, useCreateRequest } from "../../hooks";
+import { useMediaItem } from "../../hooks";
 import Format from "../../utils/format";
 
 export default function MovieDetailsPage() {
     const { id } = useParams();
     const navigate = useNavigate();
     const { item: movie, loading, error } = useMediaItem(id);
-    const { requesting, requestMsg, createRequest } = useCreateRequest(id);
 
     if (loading) return <Loading />
     if (error) return <Error error={error} />
@@ -54,15 +53,7 @@ export default function MovieDetailsPage() {
                                 Watch
                             </button>
                         )}
-                        <button
-                            className="btn btn-outline btn-primary"
-                            onClick={createRequest}
-                            disabled={requesting}
-                        >
-                            {requesting ? <Loading /> : "Request Download"}
-                        </button>
                     </div>
-                    {requestMsg && <p className="mt-2 text-sm">{requestMsg}</p>}
                 </div>
             </div>
         </div>
