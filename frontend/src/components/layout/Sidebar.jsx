@@ -28,10 +28,10 @@ export default function Sidebar() {
         }
     }
 
-    return <div className="drawer lg:drawer-open w-fit h-screen sticky top-0">
-        <input id="my-drawer-3" type="checkbox" className="drawer-toggle" />
-        <div className=" flex flex-col h-full drawer-side bg-base-200 p-2 items-center">
-            <h1 className="text-lg font-bold">Media<span className="text-primary">Hub</span></h1>
+    return <div className="drawer-side z-40">
+        <label htmlFor="my-drawer-3" className="drawer-overlay"></label>
+        <div className="flex flex-col h-full bg-base-200 p-2 items-center w-48">
+            <h1 className="text-lg font-bold hidden lg:block">Media<span className="text-primary">Hub</span></h1>
             <ul className="menu flex-1">
                 <NavItem path="/" title="Dashboard"/>
                 {role === "admin" && <NavItem path="/downloads" title="Downloads"/>}

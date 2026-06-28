@@ -25,6 +25,9 @@ export default function Login() {
      */
     function handleLogin(e) {
         e.preventDefault()
+
+        if (!email || !password) { setError("Email and password are required"); return; }
+
         api.post("/auth/login", {email, password})
         .then(res => {
             localStorage.setItem("token", res.data.token);
@@ -32,7 +35,7 @@ export default function Login() {
             navigate("/");
         })
         .catch(err => {
-            setError(err.message ?? "Invalid email or password");
+            setError(err.response?.data?.error ?? "Invalid email or password");
         })
     }
 
@@ -47,13 +50,15 @@ export default function Login() {
     function handleSignUp(e) {
         e.preventDefault()
 
+        if (!username || !email || !password) { setError("All fields are required"); return; }
+
+        const passwordError = validatePassword(password);
+        if (passwordError) { setError(passwordError); return; }
+
         if (!confirmPass || confirmPass != password) {
             setError("Passwords must match");
             return;
         }
-
-        const passwordError = validatePassword(password);
-        if (passwordError) { setError(passwordError); return; }
         
         api.post("/auth/register", {username, email, password})
         .then(res => {
@@ -62,7 +67,7 @@ export default function Login() {
             navigate("/");
         })
         .catch(err => {
-            setError(err.message ?? "Invalid email or password");
+            setError(err.response?.data?.error ?? "Something went wrong");
         })
     }
 
@@ -94,7 +99,7 @@ export default function Login() {
             {error && <p className="text-error">{error}</p>}
             <button type="submit" className="btn btn-primary w-full">{signUp ? "Sign Up" : "Login"}</button>
             <div className="divider">OR</div>
-            <button type="button" className="link" onClick={() => setSignUp(!signUp)}>{signUp ? "Login" : "Sign Up"}</button>
+            <button type="button" className="link" onClick={() => { setSignUp(!signUp); setError(null); }}>{signUp ? "Login" : "Sign Up"}</button>
         </form>
     </div>
     </div>
