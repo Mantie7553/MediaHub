@@ -10,6 +10,14 @@ export default function AudioPlayer() {
 
     const baseURL = import.meta.env.VITE_API_URL
 
+    useEffect(() => {
+        if (!audioRef.current || !currentTrack) return
+        audioRef.current.src = `${baseURL}/stream/music/${currentTrack.id}`
+        if (isPlaying) {
+            audioRef.current.play().catch(() => {})
+        }
+    }, [])
+
     // play/pause when store state changes
     useEffect(() => {
         if (!audioRef.current) return
@@ -24,7 +32,9 @@ export default function AudioPlayer() {
     useEffect(() => {
         if (!audioRef.current || !currentTrack) return
         audioRef.current.src = `${baseURL}/stream/music/${currentTrack.id}`
-        audioRef.current.play().catch(() => {})
+        if (isPlaying) {
+            audioRef.current.play().catch(() => {})
+        }
     }, [currentTrack?.id])
 
     function handleTimeUpdate() {
@@ -50,7 +60,7 @@ export default function AudioPlayer() {
 
     return <>
         <audio ref={audioRef} onTimeUpdate={handleTimeUpdate} onEnded={next} />
-        <div className="fixed bottom-0 left-0 right-0 bg-base-300 border-t border-base-content/10 px-4 py-2 flex items-center gap-4 z-50">
+        <div className="fixed bottom-0 right-0 left-0 lg:left-48 bg-base-300 border-t border-base-content/10 px-4 py-2 flex items-center gap-4 z-50">
             {/* Track Info */}
             <div className="flex items-center gap-3 min-w-0 w-64">
                 {currentTrack.thumbnail ? (

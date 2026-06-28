@@ -14,6 +14,7 @@ import {
 } from './pages/details'
 import { LightNovelReader, MangaReader, PlayerPage } from './pages/viewer'
 import UserManagementPage from './pages/Management/UserManagementPage'
+import AudioPlayer from './pages/viewer/AudioPlayer'
 
 function App() {
   return (
@@ -39,6 +40,7 @@ function App() {
           <Route path='manga/:id/chapters/:chapterId/read' element={<MangaReader/>} />
         </Route>
       </Routes>
+      <AudioPlayer/>
     </BrowserRouter>
   )
 }

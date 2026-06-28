@@ -18,6 +18,7 @@ export default function AlbumDetailsPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const playAlbum = useAudioStore(state => state.playAlbum);
+    const currentTrack = useAudioStore(state => state.currentTrack);
 
     useEffect(() => {
         api.get(`/albums/${id}`)
@@ -94,7 +95,9 @@ export default function AlbumDetailsPage() {
                         onClick={() => playAlbum(queueTracks, i)}
                     >
                         <span className="w-8 text-right text-sm opacity-50 group-hover:hidden">
-                            {track.track_number ?? i + 1}
+                            {currentTrack?.id === track.media_item_id 
+                                ? <Music size={14} className="text-primary ml-auto" />
+                                : track.track_number ?? i + 1}
                         </span>
                         <span className="w-8 text-right hidden group-hover:block text-primary">
                             <Play size={14} />
