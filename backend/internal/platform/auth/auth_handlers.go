@@ -210,6 +210,15 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if _, err := h.db.Exec(`DELETE FROM refresh_tokens WHERE token_hash = $1`, tokenHash); err != nil {
+		utils.InternalError(w, err)
+		return
+	}
+	newRefresh, err := GenerateRefreshToken(h.db, userID)
+	if utils.InternalError(w, err) {
+		return
+	}
+
 	// if the token is still valid generate a new JWT
 	token, err := GenerateToken(userID, role)
 	if utils.InternalError(w, err) {
@@ -217,7 +226,7 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// return the tokens
-	utils.JSON(w, authResponse{Token: token, RefreshToken: req.RefreshToken})
+	utils.JSON(w, authResponse{Token: token, RefreshToken: newRefresh})
 }
 
 /*

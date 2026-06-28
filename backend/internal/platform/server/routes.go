@@ -3,7 +3,9 @@ package server
 import (
 	"database/sql"
 	"fmt"
+	"log"
 	"net/http"
+	"os"
 
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/jobs"
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/lists"
@@ -39,6 +41,10 @@ func (s *Server) Start(addr string) error {
 }
 
 func (s *Server) routes() {
+	corsOrigin := os.Getenv("CORS_ORIGIN")
+	if corsOrigin == "" {
+		log.Fatal("CORS_ORIGIN not set")
+	}
 	authHandler := auth.NewHandler(s.db)
 	jobsHandler := jobs.NewHandler(s.db)
 	listsHandler := lists.NewHandler(s.db)
@@ -52,7 +58,7 @@ func (s *Server) routes() {
 	usersHandler := users.NewHandler(s.db)
 
 	s.router.Use(cors.Handler(cors.Options{
-		AllowedOrigins: []string{"http://localhost:5173"},
+		AllowedOrigins: []string{corsOrigin},
 		AllowedMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders: []string{"Authorization", "Content-Type"},
 	}))
@@ -61,8 +67,6 @@ func (s *Server) routes() {
 		fmt.Fprintln(w, "ok")
 	})
 
-	s.router.Post("/auth/register", authHandler.Register)
-	s.router.Post("/auth/login", authHandler.Login)
 	s.router.Delete("/auth/logout", authHandler.Logout)
 	s.router.Post("/auth/refresh", authHandler.Refresh)
 
@@ -76,6 +80,14 @@ func (s *Server) routes() {
 	s.router.Get("/stream/segments/{type}/{id}/{file}", streamHandler.ServeSegment)
 	s.router.Get("/stream/music/{id}", streamHandler.ServeTrack)
 	s.router.Get("/stream/music/{id}/cover", streamHandler.ServeCover)
+
+	// Endpoints that are rate limited
+	s.router.Group(func(r chi.Router) {
+		r.Use(auth.RateLimit)
+
+		r.Post("/auth/register", authHandler.Register)
+		r.Post("/auth/login", authHandler.Login)
+	})
 
 	// Endpoints for all authenticated users
 	s.router.Group(func(r chi.Router) {
