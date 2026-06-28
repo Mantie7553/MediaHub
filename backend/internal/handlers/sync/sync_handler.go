@@ -628,8 +628,8 @@ func (h *Handler) SyncLightNovel(w http.ResponseWriter, r *http.Request) {
 				if err != nil {
 					logger.Warn("failed to extract cover for %s: %v", file.Name(), err)
 				} else if coverFile != "" {
-					coverURL := fmt.Sprintf("%s/light-novels/%s/volumes/%s/images/%s",
-						os.Getenv("API_URL"), mediaItemID, volumeID, coverFile)
+					coverURL := fmt.Sprintf("/api/light-novels/%s/volumes/%s/images/%s",
+						mediaItemID, volumeID, coverFile)
 					h.db.Exec(
 						`UPDATE media_items SET cover_image_url = $1 WHERE id = $2 AND cover_image_url IS NULL`,
 						coverURL, mediaItemID,
@@ -843,8 +843,7 @@ func (h *Handler) SyncMusic(w http.ResponseWriter, r *http.Request) {
 
 		// Set cover_image_url if cover exists
 		if _, coverErr := os.Stat(coverPath); coverErr == nil {
-			apiURL := os.Getenv("API_URL")
-			coverURL := fmt.Sprintf("%s/stream/music/%s/cover", apiURL, mediaItemID)
+			coverURL := fmt.Sprintf("/api/stream/music/%s/cover", mediaItemID)
 			h.db.Exec(
 				`UPDATE media_items SET cover_image_url = $1 WHERE id = $2 AND cover_image_url IS NULL`,
 				coverURL, mediaItemID,
@@ -853,8 +852,7 @@ func (h *Handler) SyncMusic(w http.ResponseWriter, r *http.Request) {
 
 		if albumID != nil {
 			if _, coverErr := os.Stat(coverPath); coverErr == nil {
-				apiURL := os.Getenv("API_URL")
-				coverURL := fmt.Sprintf("%s/stream/music/%s/cover", apiURL, mediaItemID)
+				coverURL := fmt.Sprintf("/api/stream/music/%s/cover", mediaItemID)
 				h.db.Exec(
 					`UPDATE albums SET cover_image_url = $1 WHERE id = $2 AND cover_image_url IS NULL`,
 					coverURL, *albumID,

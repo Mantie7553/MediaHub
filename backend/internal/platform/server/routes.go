@@ -67,100 +67,103 @@ func (s *Server) routes() {
 		fmt.Fprintln(w, "ok")
 	})
 
-	s.router.Delete("/auth/logout", authHandler.Logout)
-	s.router.Post("/auth/refresh", authHandler.Refresh)
+	s.router.Route("/api", func(r chi.Router) {
+		r.Delete("/auth/logout", authHandler.Logout)
+		r.Post("/auth/refresh", authHandler.Refresh)
 
-	s.router.Get("/light-novels/{id}/volumes/{volumeId}/images/{imageName}", mediaHandler.ServeVolumeImage)
+		r.Get("/light-novels/{id}/volumes/{volumeId}/images/{imageName}", mediaHandler.ServeVolumeImage)
+		r.Get("/proxy/cover", mediaHandler.ProxyCover)
 
-	s.router.Post("/webhooks/sonarr", webhooksHandler.SonarrWebhook)
-	s.router.Post("/webhooks/radarr", webhooksHandler.RadarrWebhook)
+		r.Post("/webhooks/sonarr", webhooksHandler.SonarrWebhook)
+		r.Post("/webhooks/radarr", webhooksHandler.RadarrWebhook)
 
-	// Media streaming endpoints
-	s.router.Get("/stream/media/{type}/{id}", streamHandler.StreamMedia)
-	s.router.Get("/stream/segments/{type}/{id}/{file}", streamHandler.ServeSegment)
-	s.router.Get("/stream/music/{id}", streamHandler.ServeTrack)
-	s.router.Get("/stream/music/{id}/cover", streamHandler.ServeCover)
+		// Media streaming endpoints
+		r.Get("/stream/media/{type}/{id}", streamHandler.StreamMedia)
+		r.Get("/stream/segments/{type}/{id}/{file}", streamHandler.ServeSegment)
+		r.Get("/stream/music/{id}", streamHandler.ServeTrack)
+		r.Get("/stream/music/{id}/cover", streamHandler.ServeCover)
 
-	// Endpoints that are rate limited
-	s.router.Group(func(r chi.Router) {
-		r.Use(auth.RateLimit)
+		// Endpoints that are rate limited
+		r.Group(func(r chi.Router) {
+			r.Use(auth.RateLimit)
 
-		r.Post("/auth/register", authHandler.Register)
-		r.Post("/auth/login", authHandler.Login)
-	})
+			r.Post("/auth/register", authHandler.Register)
+			r.Post("/auth/login", authHandler.Login)
+		})
 
-	// Endpoints for all authenticated users
-	s.router.Group(func(r chi.Router) {
-		r.Use(auth.Middleware)
-		r.Get("/me", authHandler.Me)
+		// Endpoints for all authenticated users
+		r.Group(func(r chi.Router) {
+			r.Use(auth.Middleware)
+			r.Get("/me", authHandler.Me)
 
-		// Media Handler Endpoints
-		r.Get("/media", mediaHandler.GetAll)
-		r.Get("/media/{id}", mediaHandler.GetSpecific)
-		r.Put("/episodes/{id}/progress", mediaHandler.UpdateEpisodeProgress)
-		r.Get("/manga/{id}/chapters/{chapterId}/pages/{pageNum}", mediaHandler.ServePage)
-		r.Put("/manga/{id}/chapters/{chapterId}/progress", mediaHandler.MangaProgress)
-		r.Get("/media/{id}/episodes", mediaHandler.GetEpisodes)
-		r.Put("/manga/chapters/{chapterId}/read", mediaHandler.MarkChapterRead)
-		r.Put("/manga/{id}/read", mediaHandler.MarkMangaRead)
-		r.Put("/light-novels/volumes/{volumeId}/read", mediaHandler.MarkVolumeRead)
-		r.Put("/light-novels/volumes/{volumeId}/progress", mediaHandler.UpdateLightNovelProgress)
-		r.Put("/light-novels/{id}/read", mediaHandler.MarkLightNovelRead)
+			// Media Handler Endpoints
+			r.Get("/media", mediaHandler.GetAll)
+			r.Get("/media/{id}", mediaHandler.GetSpecific)
+			r.Put("/episodes/{id}/progress", mediaHandler.UpdateEpisodeProgress)
+			r.Get("/manga/{id}/chapters/{chapterId}/pages/{pageNum}", mediaHandler.ServePage)
+			r.Put("/manga/{id}/chapters/{chapterId}/progress", mediaHandler.MangaProgress)
+			r.Get("/media/{id}/episodes", mediaHandler.GetEpisodes)
+			r.Put("/manga/chapters/{chapterId}/read", mediaHandler.MarkChapterRead)
+			r.Put("/manga/{id}/read", mediaHandler.MarkMangaRead)
+			r.Put("/light-novels/volumes/{volumeId}/read", mediaHandler.MarkVolumeRead)
+			r.Put("/light-novels/volumes/{volumeId}/progress", mediaHandler.UpdateLightNovelProgress)
+			r.Put("/light-novels/{id}/read", mediaHandler.MarkLightNovelRead)
 
-		//Music Handler Endpoints
-		r.Get("/albums", musicHandler.GetAlbums)
-		r.Get("/albums/{id}", musicHandler.GetAlbum)
-		r.Get("/music/recommended", musicHandler.GetRecommended)
+			//Music Handler Endpoints
+			r.Get("/albums", musicHandler.GetAlbums)
+			r.Get("/albums/{id}", musicHandler.GetAlbum)
+			r.Get("/music/recommended", musicHandler.GetRecommended)
 
-		// List Handler endpoints
-		r.Get("/light-novels/{id}/volumes/{volumeId}/content", mediaHandler.ServeVolume)
-		r.Post("/me/media", listsHandler.Add)
-		r.Get("/me/media", listsHandler.GetAll)
-		r.Put("/me/media/{id}", listsHandler.Update)
-		r.Delete("/me/media/{id}", listsHandler.Delete)
-		r.Put("/episodes/{id}/watched", listsHandler.UpdateProgress)
-		r.Put("/anime/{id}/watched", listsHandler.MarkShowWatched)
-		r.Put("/anime/{id}/seasons/{seasonNumber}/watched", listsHandler.MarkSeasonWatched)
+			// List Handler endpoints
+			r.Get("/light-novels/{id}/volumes/{volumeId}/content", mediaHandler.ServeVolume)
+			r.Post("/me/media", listsHandler.Add)
+			r.Get("/me/media", listsHandler.GetAll)
+			r.Put("/me/media/{id}", listsHandler.Update)
+			r.Delete("/me/media/{id}", listsHandler.Delete)
+			r.Put("/episodes/{id}/watched", listsHandler.UpdateProgress)
+			r.Put("/anime/{id}/watched", listsHandler.MarkShowWatched)
+			r.Put("/anime/{id}/seasons/{seasonNumber}/watched", listsHandler.MarkSeasonWatched)
 
-		// Request Handler endpoints
-		r.Get("/requests", requestsHandler.GetAll)
-		r.Post("/requests", requestsHandler.Add)
+			// Request Handler endpoints
+			r.Get("/requests", requestsHandler.GetAll)
+			r.Post("/requests", requestsHandler.Add)
 
-		// Job Handler endpoints
-		r.Get("/me/jobs", jobsHandler.GetMine)
+			// Job Handler endpoints
+			r.Get("/me/jobs", jobsHandler.GetMine)
 
-		// Search Handler endpoints
-		r.Get("/search", searchHandler.Search)
-		r.Post("/search/save", searchHandler.Save)
-		r.Get("/music/yt-search", searchHandler.YTSearch)
+			// Search Handler endpoints
+			r.Get("/search", searchHandler.Search)
+			r.Post("/search/save", searchHandler.Save)
+			r.Get("/music/yt-search", searchHandler.YTSearch)
 
-	})
+		})
 
-	// Endpoints for admin users
-	s.router.Group(func(r chi.Router) {
-		r.Use(auth.Middleware)
-		r.Use(auth.RequireAdmin)
-		r.Post("/media", mediaHandler.Upload)
-		// Request Handler endpoints
-		r.Get("/requests/all", requestsHandler.GetAllAdmin)
-		r.Put("/requests/{id}/approve", requestsHandler.Approve)
-		r.Put("/requests/{id}/reject", requestsHandler.Reject)
+		// Endpoints for admin users
+		r.Group(func(r chi.Router) {
+			r.Use(auth.Middleware)
+			r.Use(auth.RequireAdmin)
+			r.Post("/media", mediaHandler.Upload)
+			// Request Handler endpoints
+			r.Get("/requests/all", requestsHandler.GetAllAdmin)
+			r.Put("/requests/{id}/approve", requestsHandler.Approve)
+			r.Put("/requests/{id}/reject", requestsHandler.Reject)
 
-		// Job Handler endpoints
-		r.Get("/admin/jobs", jobsHandler.GetAll)
-		r.Post("/admin/jobs", jobsHandler.Create)
+			// Job Handler endpoints
+			r.Get("/admin/jobs", jobsHandler.GetAll)
+			r.Post("/admin/jobs", jobsHandler.Create)
 
-		// Sync Handler endpoints
-		r.Post("/admin/sync/sonarr", syncHandler.SyncSonar)
-		r.Post("/admin/sync/radarr", syncHandler.SyncRadarr)
-		r.Post("/admin/sync/manga", syncHandler.SyncManga)
-		r.Post("/admin/sync/light-novels", syncHandler.SyncLightNovel)
-		r.Post("/admin/sync/music", syncHandler.SyncMusic)
+			// Sync Handler endpoints
+			r.Post("/admin/sync/sonarr", syncHandler.SyncSonar)
+			r.Post("/admin/sync/radarr", syncHandler.SyncRadarr)
+			r.Post("/admin/sync/manga", syncHandler.SyncManga)
+			r.Post("/admin/sync/light-novels", syncHandler.SyncLightNovel)
+			r.Post("/admin/sync/music", syncHandler.SyncMusic)
 
-		// User Handler endpoints
-		r.Get("/admin/users", usersHandler.GetAll)
-		r.Post("/admin/users", usersHandler.Create)
-		r.Put("/admin/users/{id}", usersHandler.Update)
-		r.Delete("/admin/users/{id}", usersHandler.Delete)
+			// User Handler endpoints
+			r.Get("/admin/users", usersHandler.GetAll)
+			r.Post("/admin/users", usersHandler.Create)
+			r.Put("/admin/users/{id}", usersHandler.Update)
+			r.Delete("/admin/users/{id}", usersHandler.Delete)
+		})
 	})
 }

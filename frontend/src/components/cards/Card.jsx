@@ -12,6 +12,10 @@ export default function Card({item, showActions=false, userContentMap={}, onList
     const userEntry = userContentMap[String(item.external_id ?? item.media_item_id ?? item.id)];
     const play = useAudioStore(state => state.play);
 
+    const coverSrc = item.external_source === "mangadex" && item.cover_image_url
+    ? `/api/proxy/cover?url=${encodeURIComponent(item.cover_image_url)}`
+    : item.cover_image_url;
+
     const card = (
         <li className="card border border-base-300 w-44 shrink-0 bg-base-300 h-full">
             <figure className="relative">
@@ -20,7 +24,7 @@ export default function Card({item, showActions=false, userContentMap={}, onList
                         {Format.statusLabel(userEntry?.status ?? item.status, item.type ?? item.media_type)}
                     </span>}
                 {item.cover_image_url ? (
-                    <img src={item.cover_image_url} className="w-full h-56 object-contain"/>
+                    <img src={coverSrc} className="w-full h-56 object-contain"/>
                 ) : (
                     <div className="skeleton h-64 w-full"></div>
                 )}

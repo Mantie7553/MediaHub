@@ -17,6 +17,10 @@ export default function MangaDetailsPage() {
     const [readChapters, setReadChapters] = useState(new Set());
     const [pageProgress, setPageProgress] = useState({});
 
+    const coverSrc = manga?.external_source === "mangadex" && manga?.cover_image_url
+    ? `/api/proxy/cover?url=${encodeURIComponent(manga.cover_image_url)}`
+    : manga?.cover_image_url;
+
     useEffect(() => {
         if (manga?.metadata?.chapters) {
             const initial = {};
@@ -75,7 +79,7 @@ export default function MangaDetailsPage() {
                 <ArrowLeft size={18} strokeWidth={2}/> Back
             </button>
             <div className="flex gap-6">
-                <img src={manga.cover_image_url} className="w-48 h-64 object-cover rounded-md" />
+                <img src={coverSrc} className="w-48 h-64 object-cover rounded-md" />
                 <div className="flex flex-col gap-3">
                     <h2 className="text-2xl font-bold">{manga.title}</h2>
                     <span className={`badge ${mangaBadge(manga.metadata.status)}`}>{manga.metadata.status}</span>

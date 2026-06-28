@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -442,29 +441,29 @@ func (h *Handler) MangaProgress(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) UpdateLightNovelProgress(w http.ResponseWriter, r *http.Request) {
-    var req struct {
-        ScrollPosition float64 `json:"scroll_position"`
-    }
-    user := auth.GetUser(r)
-    volumeId := chi.URLParam(r, "volumeId")
+	var req struct {
+		ScrollPosition float64 `json:"scroll_position"`
+	}
+	user := auth.GetUser(r)
+	volumeId := chi.URLParam(r, "volumeId")
 
-    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-        utils.Error(w, http.StatusBadRequest, "invalid request body")
-        return
-    }
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utils.Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
 
-    _, err := h.db.Exec(
-        `INSERT INTO light_novel_progress (user_id, volume_id, media_item_id, scroll_position, updated_at)
+	_, err := h.db.Exec(
+		`INSERT INTO light_novel_progress (user_id, volume_id, media_item_id, scroll_position, updated_at)
         VALUES ($1, $2, (SELECT media_item_id FROM light_novel_volumes WHERE id = $2), $3, NOW())
         ON CONFLICT (user_id, volume_id) DO UPDATE SET scroll_position = $3, updated_at = NOW()`,
-        user.UserID, volumeId, req.ScrollPosition,
-    )
+		user.UserID, volumeId, req.ScrollPosition,
+	)
 
-    if utils.InternalError(w, err) {
-        return
-    }
+	if utils.InternalError(w, err) {
+		return
+	}
 
-    w.WriteHeader(http.StatusNoContent)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 /*
@@ -644,8 +643,6 @@ func (h *Handler) ServeVolume(w http.ResponseWriter, r *http.Request) {
 		zipEntries[f.Name] = f
 	}
 
-	apiURL := os.Getenv("API_URL")
-
 	var body strings.Builder
 	body.WriteString(`<!DOCTYPE html><html><body style="max-width:720px;margin:0 auto;padding:1rem;font-family:serif;line-height:1.8;">`)
 
@@ -688,13 +685,13 @@ func (h *Handler) ServeVolume(w http.ResponseWriter, r *http.Request) {
 
 		// rewrite image paths
 		html = strings.ReplaceAll(html, `src="../Images/`,
-			fmt.Sprintf(`src="%s/light-novels/%s/volumes/%s/images/`, apiURL, id, volumeId))
+			fmt.Sprintf(`src="/api/light-novels/%s/volumes/%s/images/`, id, volumeId))
 		html = strings.ReplaceAll(html, `src="../images/`,
-			fmt.Sprintf(`src="%s/light-novels/%s/volumes/%s/images/`, apiURL, id, volumeId))
+			fmt.Sprintf(`src="/api/light-novels/%s/volumes/%s/images/`, id, volumeId))
 		html = strings.ReplaceAll(html, `src="images/`,
-			fmt.Sprintf(`src="%s/light-novels/%s/volumes/%s/images/`, apiURL, id, volumeId))
+			fmt.Sprintf(`src="/api/light-novels/%s/volumes/%s/images/`, id, volumeId))
 		html = strings.ReplaceAll(html, `src="Images/`,
-			fmt.Sprintf(`src="%s/light-novels/%s/volumes/%s/images/`, apiURL, id, volumeId))
+			fmt.Sprintf(`src="/api/light-novels/%s/volumes/%s/images/`, id, volumeId))
 
 		body.WriteString(html)
 		body.WriteString(`<div style="height:1px;background:#333;margin:2rem 0;"></div>`)
@@ -800,31 +797,31 @@ func (h *Handler) GetEpisodes(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) UpdateEpisodeProgress(w http.ResponseWriter, r *http.Request) {
-    var req struct {
-        PositionSecs float64 `json:"position_secs"`
-        DurationSecs float64 `json:"duration_secs"`
-    }
-    user := auth.GetUser(r)
-    episodeId := chi.URLParam(r, "id")
+	var req struct {
+		PositionSecs float64 `json:"position_secs"`
+		DurationSecs float64 `json:"duration_secs"`
+	}
+	user := auth.GetUser(r)
+	episodeId := chi.URLParam(r, "id")
 
-    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-        utils.Error(w, http.StatusBadRequest, "invalid request body")
-        return
-    }
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utils.Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
 
-    _, err := h.db.Exec(
-        `INSERT INTO user_episode_progress (user_id, episode_id, position_secs, duration_secs, updated_at)
+	_, err := h.db.Exec(
+		`INSERT INTO user_episode_progress (user_id, episode_id, position_secs, duration_secs, updated_at)
         VALUES ($1, $2, $3, $4, NOW())
         ON CONFLICT (user_id, episode_id) DO UPDATE SET
         position_secs = $3, duration_secs = $4, updated_at = NOW()`,
-        user.UserID, episodeId, req.PositionSecs, req.DurationSecs,
-    )
+		user.UserID, episodeId, req.PositionSecs, req.DurationSecs,
+	)
 
-    if utils.InternalError(w, err) {
-        return
-    }
+	if utils.InternalError(w, err) {
+		return
+	}
 
-    w.WriteHeader(http.StatusNoContent)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *Handler) MarkChapterRead(w http.ResponseWriter, r *http.Request) {
@@ -873,7 +870,7 @@ func (h *Handler) MarkMangaRead(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
-	
+
 }
 
 func (h *Handler) MarkVolumeRead(w http.ResponseWriter, r *http.Request) {
@@ -922,5 +919,29 @@ func (h *Handler) MarkLightNovelRead(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
-	
+
+}
+
+func (h *Handler) ProxyCover(w http.ResponseWriter, r *http.Request) {
+	rawURL := r.URL.Query().Get("url")
+	if rawURL == "" {
+		utils.Error(w, http.StatusBadRequest, "url parameter required")
+		return
+	}
+
+	if !strings.HasPrefix(rawURL, "https://uploads.mangadex.org/") {
+		utils.Error(w, http.StatusBadRequest, "invalid url")
+		return
+	}
+
+	resp, err := http.Get(rawURL)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		utils.Error(w, http.StatusBadGateway, "failed to fetch image")
+		return
+	}
+	defer resp.Body.Close()
+
+	w.Header().Set("Content-Type", resp.Header.Get("Content-Type"))
+	w.Header().Set("Cache-Control", "public, max-age=86400")
+	io.Copy(w, resp.Body)
 }
