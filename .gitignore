@@ -156,6 +156,10 @@ postman/
 dist-ssr
 *.local
 
+# Build files
+dist/
+mediahub
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

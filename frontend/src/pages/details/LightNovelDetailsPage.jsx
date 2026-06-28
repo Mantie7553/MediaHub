@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { NavLink, useLocation, useParams } from "react-router-dom";
+import { NavLink, useLocation, useNavigate, useParams } from "react-router-dom";
 import Loading from "../../components/states/Loading";
 import Error from "../../components/states/Error";
 import { useMediaItem, useUserContent } from "../../hooks";
