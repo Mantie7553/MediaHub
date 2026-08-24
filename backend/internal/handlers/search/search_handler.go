@@ -467,12 +467,22 @@ func (h *Handler) Save(w http.ResponseWriter, r *http.Request) {
 			err := h.db.QueryRow(
 				`INSERT INTO albums (title, artist)
 				VALUES ($1, $2)
-				ON CONFLICT DO NOTHING
+				ON CONFLICT (LOWER(title), LOWER(artist)) DO NOTHING
 				RETURNING id`,
 				req.Album, req.Artist,
 			).Scan(&id)
 			if err == nil {
 				albumID = &id
+			}
+
+			if err == sql.ErrNoRows {
+				err = h.db.QueryRow(
+					`SELECT id FROM albums WHERE LOWER(title) = LOWER($1) AND LOWER(artist) = LOWER($2)`,
+					req.Album, req.Artist,
+				).Scan(&id)
+				if err == nil {
+					albumID = &id
+				}
 			}
 		}
 		_, err = h.db.Exec(
