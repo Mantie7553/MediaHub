@@ -4,6 +4,7 @@ import Format from "../../utils/format";
 import Loading from "../../components/states/Loading";
 import Error from "../../components/states/Error";
 import { validatePassword } from "../../utils/validate";
+import InvitesSection from "./InvitesSection";
 
 /**
  * Admin page for managing users
@@ -84,6 +85,8 @@ export default function UserManagementPage() {
                     items={users}
                 />
             </section>
+
+            <InvitesSection />
 
             <UserModal ref={modalRef} user={selectedUser} onSave={handleSave} />
             <DeleteModal ref={deleteModalRef} user={deleteTarget} onConfirm={handleDeleteConfirm} />

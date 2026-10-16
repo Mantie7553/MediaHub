@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { useNavigate } from "react-router-dom"
+import { useNavigate, useSearchParams } from "react-router-dom"
 import api from "../../services/api"
 import { validatePassword } from "../../utils/validate";
 
@@ -9,12 +9,15 @@ import { validatePassword } from "../../utils/validate";
  */
 export default function Login() {
     const navigate = useNavigate();
+    // invite links look like /login?invite=XXXX-XXXX-XXXX-XXXX and open straight to sign up
+    const [searchParams] = useSearchParams();
+    const [inviteCode, setInviteCode] = useState(searchParams.get("invite") ?? "");
     const [username, setUserName] = useState("");
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [confirmPass, setConfirmPass] = useState("");
     const [error, setError] = useState(null);
-    const [signUp, setSignUp] = useState(false);
+    const [signUp, setSignUp] = useState(searchParams.has("invite"));
 
     /**
      * Login a user
@@ -50,7 +53,7 @@ export default function Login() {
     function handleSignUp(e) {
         e.preventDefault()
 
-        if (!username || !email || !password) { setError("All fields are required"); return; }
+        if (!inviteCode || !username || !email || !password) { setError("All fields are required"); return; }
 
         const passwordError = validatePassword(password);
         if (passwordError) { setError(passwordError); return; }
@@ -60,14 +63,16 @@ export default function Login() {
             return;
         }
         
-        api.post("/auth/register", {username, email, password})
+        api.post("/auth/register", {username, email, password, invite_code: inviteCode})
         .then(res => {
             localStorage.setItem("token", res.data.token);
             localStorage.setItem("refresh_token", res.data.refresh_token);
             navigate("/");
         })
         .catch(err => {
-            setError(err.response?.data?.error ?? "Something went wrong");
+            // the API returns plain text errors, e.g. "invalid or expired invite code"
+            const data = err.response?.data;
+            setError(typeof data === "string" && data.trim() ? data.trim() : "Something went wrong");
         })
     }
 
@@ -76,6 +81,12 @@ export default function Login() {
         <div className="card card-border">
         <form onSubmit={signUp ? handleSignUp : handleLogin} className="card-body items-center">
             <h2 className="card-title">{signUp ? "Sign Up" : "Login"}</h2>
+            {signUp && (
+                <label className="input w-full">
+                    <span className="label">Invite Code</span>
+                    <input value={inviteCode} onChange={e => setInviteCode(e.target.value)} placeholder="XXXX-XXXX-XXXX-XXXX" autoComplete="off"/>
+                </label>
+            )}
             {signUp && (
                 <label className="input w-full">
                     <span className="label">Username</span>
