@@ -714,6 +714,11 @@ func (h *Handler) ServeVolumeImage(w http.ResponseWriter, r *http.Request) {
 	volumeId := chi.URLParam(r, "volumeId")
 	imageName := chi.URLParam(r, "imageName")
 
+	if !utils.SafeFileName(imageName) {
+		utils.Error(w, http.StatusBadRequest, "invalid image name")
+		return
+	}
+
 	var filePath string
 	err := h.db.QueryRow(
 		`SELECT file_path FROM light_novel_volumes WHERE id = $1`,
@@ -936,19 +941,67 @@ func (h *Handler) ProxyCover(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !strings.HasPrefix(rawURL, "https://uploads.mangadex.org/") {
+	coverURL, ok := parseCoverURL(rawURL)
+	if !ok {
 		utils.Error(w, http.StatusBadRequest, "invalid url")
 		return
 	}
 
-	resp, err := http.Get(rawURL)
-	if err != nil || resp.StatusCode != http.StatusOK {
+	resp, err := coverClient.Get(coverURL.String())
+	if err != nil {
 		utils.Error(w, http.StatusBadGateway, "failed to fetch image")
 		return
 	}
 	defer resp.Body.Close()
 
-	w.Header().Set("Content-Type", resp.Header.Get("Content-Type"))
+	contentType := resp.Header.Get("Content-Type")
+	if resp.StatusCode != http.StatusOK || !strings.HasPrefix(contentType, "image/") {
+		utils.Error(w, http.StatusBadGateway, "failed to fetch image")
+		return
+	}
+
+	w.Header().Set("Content-Type", contentType)
 	w.Header().Set("Cache-Control", "public, max-age=86400")
-	io.Copy(w, resp.Body)
+	io.Copy(w, io.LimitReader(resp.Body, maxCoverBytes))
+}
+
+const (
+	coverHost     = "uploads.mangadex.org"
+	maxCoverBytes = 20 << 20
+)
+
+var coverClient = &http.Client{
+	Timeout:       15 * time.Second,
+	CheckRedirect: sameHostRedirects,
+}
+
+/*
+Function:	parseCoverURL
+Purpose:	only allow https URLs on the exact MangaDex uploads host
+Params:
+  - raw: the url from the query string
+*/
+func parseCoverURL(raw string) (*url.URL, bool) {
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme != "https" || u.Host != coverHost || u.User != nil {
+		return nil, false
+	}
+	return u, true
+}
+
+/*
+Function:	sameHostRedirects
+Purpose:	http.Client redirect policy that never leaves the original scheme and host
+Params:
+  - req: the redirect about to be followed
+  - via: the requests made so far, oldest first
+*/
+func sameHostRedirects(req *http.Request, via []*http.Request) error {
+	if len(via) >= 3 {
+		return fmt.Errorf("too many redirects")
+	}
+	if req.URL.Scheme != via[0].URL.Scheme || req.URL.Host != via[0].URL.Host {
+		return fmt.Errorf("redirect to %s not allowed", req.URL.Host)
+	}
+	return nil
 }

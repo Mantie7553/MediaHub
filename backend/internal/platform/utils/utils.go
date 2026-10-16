@@ -3,6 +3,8 @@ package utils
 import (
 	"encoding/json"
 	"net/http"
+	"path/filepath"
+	"strings"
 
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/logger"
 )
@@ -46,7 +48,7 @@ Params:
 */
 func InternalError(w http.ResponseWriter, err error) bool {
 	if err != nil {
-		logger.ErrorDepth(3, err.Error())
+		logger.ErrorDepth(3, "%s", err.Error())
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return true
 	}
@@ -91,4 +93,21 @@ func SafeDay(d *int) int {
 		return 1
 	}
 	return *d
+}
+
+/*
+Function:	SafeFileName
+Purpose:	check that a name from the URL is a single plain file name that can't escape its directory
+Params:
+  - name: the file name we are checking
+*/
+func SafeFileName(name string) bool {
+	if name == "" || name == "." || name == ".." {
+		return false
+	}
+	// reject both separators regardless of OS, plus NUL
+	if strings.ContainsAny(name, "/\\\x00") {
+		return false
+	}
+	return name == filepath.Base(name)
 }

@@ -1,8 +1,15 @@
 package stream
 
 import (
+	"context"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/go-chi/chi/v5"
 )
 
 func TestSignPlaylist(t *testing.T) {
@@ -15,5 +22,76 @@ func TestSignPlaylist(t *testing.T) {
 	}
 	if strings.Contains(got, "#EXTM3U?") {
 		t.Fatal("tag lines must not be signed")
+	}
+}
+
+func TestServeSegmentRejectsTraversal(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("MEDIA_ROOT", root)
+
+	tempDir := filepath.Join(root, "temp", "episode-1")
+	if err := os.MkdirAll(tempDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tempDir, "playlist0.ts"), []byte("segment"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "secret.txt"), []byte("secret"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	h := NewHandler(nil)
+	tests := []struct {
+		name      string
+		mediaType string
+		id        string
+		file      string
+		status    int
+	}{
+		{"valid", "episode", "1", "playlist0.ts", http.StatusOK},
+		{"dot dot", "episode", "1", "..", http.StatusBadRequest},
+		{"parent file", "episode", "1", "../../secret.txt", http.StatusBadRequest},
+		{"backslash", "episode", "1", `..\..\secret.txt`, http.StatusBadRequest},
+		{"id traversal", "episode", `1\..\..`, "secret.txt", http.StatusBadRequest},
+		{"bad type", "../temp", "1", "playlist0.ts", http.StatusBadRequest},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rctx := chi.NewRouteContext()
+			rctx.URLParams.Add("type", tt.mediaType)
+			rctx.URLParams.Add("id", tt.id)
+			rctx.URLParams.Add("file", tt.file)
+			req := httptest.NewRequest(http.MethodGet, "/segment", nil)
+			req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+			rec := httptest.NewRecorder()
+			h.ServeSegment(rec, req)
+			if rec.Code != tt.status {
+				t.Fatalf("status = %d, want %d", rec.Code, tt.status)
+			}
+			if strings.Contains(rec.Body.String(), "secret") && !strings.Contains(rec.Body.String(), "invalid") {
+				t.Fatal("served a file outside the temp dir")
+			}
+		})
+	}
+}
+
+func TestIsWithin(t *testing.T) {
+	dir := filepath.Join("media", "temp", "episode-1")
+	tests := []struct {
+		path string
+		ok   bool
+	}{
+		{filepath.Join(dir, "playlist.m3u8"), true},
+		{dir, false},
+		{filepath.Join(dir, ".."), false},
+		{filepath.Join(dir, "..", "episode-12", "playlist.m3u8"), false},
+		{filepath.Join("media", "temp", "episode-12", "playlist.m3u8"), false},
+	}
+	for _, tt := range tests {
+		if got := isWithin(dir, tt.path); got != tt.ok {
+			t.Errorf("isWithin(%q) = %v, want %v", tt.path, got, tt.ok)
+		}
 	}
 }
