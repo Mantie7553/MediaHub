@@ -79,8 +79,12 @@ func (s *Server) routes() {
 
 		r.Get("/proxy/cover", mediaHandler.ProxyCover)
 
-		r.Post("/webhooks/sonarr", webhooksHandler.SonarrWebhook)
-		r.Post("/webhooks/radarr", webhooksHandler.RadarrWebhook)
+		// Sonarr/Radarr webhooks, authorized by the shared secret header
+		r.Group(func(r chi.Router) {
+			r.Use(webhooks.RequireSecret)
+			r.Post("/webhooks/sonarr", webhooksHandler.SonarrWebhook)
+			r.Post("/webhooks/radarr", webhooksHandler.RadarrWebhook)
+		})
 
 		// Byte-serving endpoints loaded by <video>/<audio>/<img>, authorized by a
 		// short lived media token minted from the authenticated endpoints below

@@ -68,6 +68,7 @@ Users can be assigned one of two download permissions: `vetted` (requests requir
     | `RADARR_API_KEY` | API key for your Radarr instance |
     | `JWT_SECRET` | Secret key for signing JWTs |
     | `MEDIA_SIGNING_SECRET` | Secret key for signing short lived media URLs. Must be different from `JWT_SECRET` |
+    | `WEBHOOK_SECRET` | Shared secret Sonarr/Radarr send in the `X-MediaHub-Secret` header |
     | `DB_HOST` | Database hostname |
     | `DB_PORT` | Database port |
     | `DB_USER` | Database username |
@@ -75,7 +76,13 @@ Users can be assigned one of two download permissions: `vetted` (requests requir
     | `DB_NAME` | Database name |
     | `MEDIA_ROOT` | Root path where media will be downloaded |
     | `MANGAL_PATH` | Path to the mangal executable |
-2. Start the server from **"/MediaHub/backend"**:  
+2. In both Sonarr and Radarr, go to *Settings → Connect → + → Webhook*:
+    - **URL:** `<api_url>/api/webhooks/sonarr` (or `/radarr`)
+    - **Method:** `POST`
+    - **Headers:** add `X-MediaHub-Secret` with the value of `WEBHOOK_SECRET`
+
+    Webhook calls without the header are rejected. Don't put the secret in the URL, it would end up in access logs.
+3. Start the server from **"/MediaHub/backend"**:  
  ```go run .\cmd\api\main.go```
 
 ### *Front End*

@@ -56,7 +56,8 @@ Backend files follow a `<domain>_<role>.go` naming convention, for example `jobs
 ### Routing
 All routes are registered in `internal/platform/server/routes.go`. Every handler is created once at startup, then routes are grouped under `/api` by access level:
 
-- **Public:** auth refresh and logout, Sonarr/Radarr webhooks, the MangaDex cover proxy
+- **Public:** auth refresh and logout, the MangaDex cover proxy
+- **Webhook secret:** Sonarr/Radarr webhooks, which must send `X-MediaHub-Secret` matching `WEBHOOK_SECRET`. If `WEBHOOK_SECRET` is unset, every webhook is rejected
 - **Media token:** byte-serving routes loaded by `<video>`, `<audio>` and `<img>` (HLS segments, music tracks and covers, light novel images). These can't send a Bearer header, so they require a `media_token` query param instead (see [Media tokens](#media-tokens))
 - **Rate limited:** register and login, behind a per-IP token bucket
 - **Authenticated:** anything a normal user does (browsing, lists, progress, requests, search)
@@ -183,6 +184,7 @@ Backend variables live in `backend/.env`. Frontend variables live in `frontend/.
 | `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` | PostgreSQL connection |
 | `JWT_SECRET` | Signs and validates access tokens |
 | `MEDIA_SIGNING_SECRET` | Signs and validates media tokens. Required, and must differ from `JWT_SECRET` |
+| `WEBHOOK_SECRET` | Shared secret Sonarr/Radarr send in the `X-MediaHub-Secret` header. Webhooks are rejected while unset |
 | `CORS_ORIGIN` | Allowed frontend origin. The server won't start without it |
 | `MEDIA_ROOT` | Root media folder on the NAS. Expects `TV Shows`, `Movies`, `Music`, `Manga`, `Light Novels`, and holds `temp/` for transcodes |
 | `SONARR_URL`, `SONARR_API_KEY` | Sonarr API access |
