@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react"
 import { Play, Pause, X, Music, SkipBack, SkipForward } from "lucide-react"
 import useAudioStore from "../../stores/useAudioStore"
+import api from "../../services/api"
 
 export default function AudioPlayer() {
     const { currentTrack, isPlaying, pause, resume, stop, next, prev, queue } = useAudioStore()
@@ -8,15 +9,40 @@ export default function AudioPlayer() {
     const [progress, setProgress] = useState(0)
     const [duration, setDuration] = useState(0)
 
+    const remintedRef = useRef(false)
+
     const baseURL = import.meta.env.VITE_API_URL
 
-    useEffect(() => {
-        if (!audioRef.current || !currentTrack) return
-        audioRef.current.src = `${baseURL}/stream/music/${currentTrack.id}`
-        if (isPlaying) {
-            audioRef.current.play().catch(() => {})
+    // the audio element can't send the Bearer header, so fetch a signed URL for the track
+    async function loadTrack(trackId, resumeAt = 0) {
+        let res
+        try {
+            res = await api.get(`/stream/music/${trackId}/url`)
+        } catch {
+            return
         }
-    }, [])
+
+        const audio = audioRef.current
+        // the track may have changed while the URL was being fetched
+        if (!audio || useAudioStore.getState().currentTrack?.id !== trackId) return
+
+        audio.src = `${baseURL}${res.data.url}`
+        if (resumeAt > 0) {
+            audio.addEventListener("loadedmetadata", () => {
+                audio.currentTime = resumeAt
+            }, { once: true })
+        }
+        if (useAudioStore.getState().isPlaying) {
+            audio.play().catch(() => {})
+        }
+    }
+
+    // signed URL expired (or the load failed), get a new one once and resume where we were
+    function handleError() {
+        if (!audioRef.current || !currentTrack || remintedRef.current) return
+        remintedRef.current = true
+        loadTrack(currentTrack.id, audioRef.current.currentTime)
+    }
 
     // play/pause when store state changes
     useEffect(() => {
@@ -31,10 +57,8 @@ export default function AudioPlayer() {
     // load new track when currentTrack changes
     useEffect(() => {
         if (!audioRef.current || !currentTrack) return
-        audioRef.current.src = `${baseURL}/stream/music/${currentTrack.id}`
-        if (isPlaying) {
-            audioRef.current.play().catch(() => {})
-        }
+        remintedRef.current = false
+        loadTrack(currentTrack.id)
     }, [currentTrack?.id])
 
     function handleTimeUpdate() {
@@ -59,7 +83,13 @@ export default function AudioPlayer() {
     if (!currentTrack) return null
 
     return <>
-        <audio ref={audioRef} onTimeUpdate={handleTimeUpdate} onEnded={next} />
+        <audio
+            ref={audioRef}
+            onTimeUpdate={handleTimeUpdate}
+            onEnded={next}
+            onError={handleError}
+            onPlaying={() => { remintedRef.current = false }}
+        />
         <div className="fixed bottom-0 right-0 left-0 lg:left-48 bg-base-300 border-t border-base-content/10 px-4 py-2 flex items-center gap-4 z-50">
             {/* Track Info */}
             <div className="flex items-center gap-3 min-w-0 w-64">

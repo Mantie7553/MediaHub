@@ -9,4 +9,10 @@ export default defineConfig({
     react(),
     tailwindcss(),
   ],
+  // in dev, forward /api to the Go backend (Caddy does this in production)
+  server: {
+    proxy: {
+      '/api': 'http://localhost:9090',
+    },
+  },
 })
