@@ -303,9 +303,14 @@ func (h *Handler) GetSpecific(w http.ResponseWriter, r *http.Request) {
 	case "movie":
 		var meta MovieMetadata
 		err := h.db.QueryRow(
-			`SELECT runtime_mins, director, genres, file_path FROM movie_metadata WHERE media_item_id = $1`,
-			item.ID,
-		).Scan(&meta.RuntimeMins, &meta.Director, pq.Array(&meta.Genres), &meta.FilePath)
+			`SELECT mm.runtime_mins, mm.director, mm.genres, mm.file_path,
+			COALESCE(ump.position_secs, 0), COALESCE(ump.duration_secs, 0)
+			FROM movie_metadata mm
+			LEFT JOIN user_movie_progress ump ON ump.media_item_id = mm.media_item_id AND ump.user_id = $2
+			WHERE mm.media_item_id = $1`,
+			item.ID, user.UserID,
+		).Scan(&meta.RuntimeMins, &meta.Director, pq.Array(&meta.Genres), &meta.FilePath,
+			&meta.PositionSecs, &meta.DurationSecs)
 		if err != nil && err != sql.ErrNoRows {
 			utils.Error(w, http.StatusInternalServerError, "internal server error")
 			return
@@ -836,6 +841,44 @@ func (h *Handler) UpdateEpisodeProgress(w http.ResponseWriter, r *http.Request) 
 	)
 
 	if utils.InternalError(w, err) {
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+/*
+Function:	UpdateMovieProgress
+Purpose:	Save the current user's playback position in a movie
+Params:
+  - w: http response writer to respond to the front end
+  - r: http request coming from the frontend
+*/
+func (h *Handler) UpdateMovieProgress(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		PositionSecs float64 `json:"position_secs"`
+		DurationSecs float64 `json:"duration_secs"`
+	}
+	user := auth.GetUser(r)
+	movieId := chi.URLParam(r, "id")
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utils.Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	res, err := h.db.Exec(
+		`INSERT INTO user_movie_progress (user_id, media_item_id, position_secs, duration_secs, updated_at)
+		SELECT $1, media_item_id, $3, $4, NOW() FROM movie_metadata WHERE media_item_id = $2
+		ON CONFLICT (user_id, media_item_id) DO UPDATE SET
+		position_secs = $3, duration_secs = $4, updated_at = NOW()`,
+		user.UserID, movieId, req.PositionSecs, req.DurationSecs,
+	)
+	if utils.InternalError(w, err) {
+		return
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		utils.Error(w, http.StatusNotFound, "movie not found")
 		return
 	}
 

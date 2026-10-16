@@ -48,6 +48,19 @@ export default class Format {
         return string.replaceAll("_", " ").replace(/^\w/, c => c.toUpperCase());
     }
 
+    /**
+     * Format a playback position as -- H:MM:SS, or M:SS under an hour
+     * @param {number} secs seconds into the video
+     * @returns the position in the proper display format
+     */
+    static duration(secs) {
+        const total = Math.max(0, Math.floor(secs));
+        const h = Math.floor(total / 3600);
+        const m = Math.floor((total % 3600) / 60);
+        const s = String(total % 60).padStart(2, "0");
+        return h > 0 ? `${h}:${String(m).padStart(2, "0")}:${s}` : `${m}:${s}`;
+    }
+
     static statusLabel(status, type) {
         if (!status) return "Add to list";
         
