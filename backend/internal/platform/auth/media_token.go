@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"regexp"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -14,7 +15,8 @@ const (
 	TokenTypeAccess = "access"
 	TokenTypeMedia  = "media"
 
-	// MediaTokenTTL is how long a signed media URL stays valid. Players remint on 401.
+	// MediaTokenTTL is how long a signed media URL stays valid, counted from the start of
+	// the hour it was minted in. Players remint on 401.
 	MediaTokenTTL = 2 * time.Hour
 
 	MediaTokenParam = "media_token"
@@ -57,14 +59,16 @@ func GenerateMediaToken(userID string, scope MediaScope) (string, error) {
 		return "", errors.New("MEDIA_SIGNING_SECRET not set")
 	}
 
-	now := time.Now()
+	// issue on the hour so repeat requests get the same URL and the browser can cache
+	// covers/images; tokens are valid for between TTL-1h and TTL
+	issued := time.Now().Truncate(time.Hour)
 	claims := MediaClaims{
 		Type:       TokenTypeMedia,
 		MediaScope: scope,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Subject:   userID,
-			ExpiresAt: jwt.NewNumericDate(now.Add(MediaTokenTTL)),
-			IssuedAt:  jwt.NewNumericDate(now),
+			ExpiresAt: jwt.NewNumericDate(issued.Add(MediaTokenTTL)),
+			IssuedAt:  jwt.NewNumericDate(issued),
 		},
 	}
 
@@ -118,6 +122,32 @@ func SignMediaPath(path, userID string, scope MediaScope) (string, error) {
 		return "", err
 	}
 	return path + "?" + MediaTokenParam + "=" + url.QueryEscape(token), nil
+}
+
+var musicCoverPath = regexp.MustCompile(`^/api/stream/music/([^/?]+)/cover$`)
+
+/*
+Function:	SignCoverURL
+Purpose:	Sign a stored music cover URL in place so <img> tags can load it.
+            Any other cover URL (external hosts, the MangaDex proxy) is left unchanged
+Params:
+  - cover: the cover_image_url read from the database
+  - userID: the id of the user the token is minted for
+*/
+func SignCoverURL(cover *string, userID string) error {
+	if cover == nil {
+		return nil
+	}
+	m := musicCoverPath.FindStringSubmatch(*cover)
+	if m == nil {
+		return nil
+	}
+	signed, err := SignMediaPath(*cover, userID, MediaScope{MediaType: "music", MediaID: m[1]})
+	if err != nil {
+		return err
+	}
+	*cover = signed
+	return nil
 }
 
 /*

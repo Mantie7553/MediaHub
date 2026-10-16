@@ -75,6 +75,9 @@ func (h *Handler) GetAlbums(w http.ResponseWriter, r *http.Request) {
 			utils.InternalError(w, err)
 			return
 		}
+		if utils.InternalError(w, auth.SignCoverURL(a.CoverURL, auth.GetUser(r).UserID)) {
+			return
+		}
 		albums = append(albums, a)
 	}
 
@@ -106,6 +109,9 @@ func (h *Handler) GetAlbum(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if utils.InternalError(w, err) {
+		return
+	}
+	if utils.InternalError(w, auth.SignCoverURL(album.CoverURL, auth.GetUser(r).UserID)) {
 		return
 	}
 
@@ -184,6 +190,9 @@ func (h *Handler) GetRecommended(w http.ResponseWriter, r *http.Request) {
 		var a AlbumSummary
 		if err := rows.Scan(&a.ID, &a.Title, &a.Artist, &a.CoverURL, &a.TrackCount); err != nil {
 			utils.InternalError(w, err)
+			return
+		}
+		if utils.InternalError(w, auth.SignCoverURL(a.CoverURL, auth.GetUser(r).UserID)) {
 			return
 		}
 		albums = append(albums, a)

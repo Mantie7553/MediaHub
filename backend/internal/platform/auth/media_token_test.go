@@ -200,3 +200,79 @@ func TestSignMediaPath(t *testing.T) {
 		t.Fatalf("signed token invalid: %v", err)
 	}
 }
+
+func TestSignCoverURL(t *testing.T) {
+	setSecrets(t)
+
+	ptr := func(s string) *string { return &s }
+	tests := []struct {
+		name   string
+		cover  *string
+		signed bool
+	}{
+		{"nil", nil, false},
+		{"music cover", ptr("/api/stream/music/abc-123/cover"), true},
+		{"anilist", ptr("https://s4.anilist.co/file/cover.jpg"), false},
+		{"mangadex proxy", ptr("/api/proxy/cover?url=x"), false},
+		{"nested path", ptr("/api/stream/music/a/b/cover"), false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var before string
+			if tt.cover != nil {
+				before = *tt.cover
+			}
+			if err := SignCoverURL(tt.cover, "user-1"); err != nil {
+				t.Fatal(err)
+			}
+			if tt.cover == nil {
+				return
+			}
+			if !tt.signed {
+				if *tt.cover != before {
+					t.Fatalf("changed unsigned url to %q", *tt.cover)
+				}
+				return
+			}
+			u, err := url.Parse(*tt.cover)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if u.Path != before {
+				t.Fatalf("path = %q, want %q", u.Path, before)
+			}
+			scope := MediaScope{MediaType: "music", MediaID: "abc-123"}
+			if _, err := ValidateMediaToken(u.Query().Get(MediaTokenParam), scope); err != nil {
+				t.Fatalf("cover token invalid: %v", err)
+			}
+		})
+	}
+}
+
+func TestMediaTokenStableWithinHour(t *testing.T) {
+	setSecrets(t)
+	scope := MediaScope{MediaType: "music", MediaID: "1"}
+
+	a, err := GenerateMediaToken("user-1", scope)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := GenerateMediaToken("user-1", scope)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// could straddle an hour boundary, only compare when both were minted in the same hour
+	if a != b && time.Now().Minute() != 0 {
+		t.Fatal("tokens minted in the same hour should be identical so URLs stay cacheable")
+	}
+
+	claims, err := ValidateMediaToken(a, scope)
+	if err != nil {
+		t.Fatal(err)
+	}
+	remaining := time.Until(claims.ExpiresAt.Time)
+	if remaining < MediaTokenTTL-time.Hour || remaining > MediaTokenTTL {
+		t.Fatalf("remaining validity %v outside [%v, %v]", remaining, MediaTokenTTL-time.Hour, MediaTokenTTL)
+	}
+}

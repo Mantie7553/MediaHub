@@ -234,6 +234,9 @@ func (h *Handler) GetAll(w http.ResponseWriter, r *http.Request) {
 		if utils.InternalError(w, err) {
 			return
 		}
+		if utils.InternalError(w, auth.SignCoverURL(item.CoverImageURL, auth.GetUser(r).UserID)) {
+			return
+		}
 		items = append(items, item)
 	}
 
@@ -276,6 +279,9 @@ func (h *Handler) GetSpecific(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if utils.InternalError(w, err) {
+		return
+	}
+	if utils.InternalError(w, auth.SignCoverURL(item.CoverImageURL, user.UserID)) {
 		return
 	}
 
