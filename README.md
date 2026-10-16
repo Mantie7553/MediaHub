@@ -82,7 +82,12 @@ Users can be assigned one of two download permissions: `vetted` (requests requir
     - **Headers:** add `X-MediaHub-Secret` with the value of `WEBHOOK_SECRET`
 
     Webhook calls without the header are rejected. Don't put the secret in the URL, it would end up in access logs.
-3. Start the server from **"/MediaHub/backend"**:  
+3. *(Optional)* For local testing, create `/MediaHub/backend/.env.local`. Any variable in it overrides `.env`, and it is gitignored. For example, to use local storage with the same folder layout instead of the NAS:
+    ```
+    MEDIA_ROOT=S:/Media
+    ```
+    Delete or rename the file to go back to the values in `.env`. Use a trailing slash for a bare drive (`Z:/`, not `Z:`), otherwise Windows treats paths as relative to that drive's current folder.
+4. Start the server from **"/MediaHub/backend"**:  
  ```go run .\cmd\api\main.go```
 
 ### *Front End*

@@ -1,7 +1,9 @@
 package main
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"log"
 	"os"
 
@@ -12,6 +14,11 @@ import (
 )
 
 func main() {
+	// optional, gitignored overrides for local testing (e.g. MEDIA_ROOT on local storage).
+	// godotenv never overwrites a variable that is already set, so this must load before .env
+	if err := godotenv.Load(".env.local"); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		log.Fatal("Error loading .env.local file: ", err)
+	}
 	if err := godotenv.Load(); err != nil {
 		log.Fatal("Error loading .env file")
 	}
