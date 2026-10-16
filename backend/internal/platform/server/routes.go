@@ -131,6 +131,7 @@ func (s *Server) routes() {
 			r.Get("/media", mediaHandler.GetAll)
 			r.Get("/media/{id}", mediaHandler.GetSpecific)
 			r.Put("/episodes/{id}/progress", mediaHandler.UpdateEpisodeProgress)
+			r.Put("/movies/{id}/progress", mediaHandler.UpdateMovieProgress)
 			r.Get("/manga/{id}/chapters/{chapterId}/pages/{pageNum}", mediaHandler.ServePage)
 			r.Put("/manga/{id}/chapters/{chapterId}/progress", mediaHandler.MangaProgress)
 			r.Get("/media/{id}/episodes", mediaHandler.GetEpisodes)

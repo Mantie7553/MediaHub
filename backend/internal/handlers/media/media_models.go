@@ -132,10 +132,13 @@ type MangaDetail struct {
 
 // MOVIE
 type MovieMetadata struct {
-	RuntimeMins *int     `json:"runtime_mins"`
-	Director    *string  `json:"director"`
-	Genres      []string `json:"genres"`
-	FilePath    *string  `json:"file_path"`
+	RuntimeMins  *int     `json:"runtime_mins"`
+	Director     *string  `json:"director"`
+	Genres       []string `json:"genres"`
+	FilePath     *string  `json:"file_path"`
+	// the current user's saved playback position
+	PositionSecs float64  `json:"position_secs"`
+	DurationSecs float64  `json:"duration_secs"`
 }
 
 // MUSIC

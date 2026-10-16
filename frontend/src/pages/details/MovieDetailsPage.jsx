@@ -26,6 +26,11 @@ export default function MovieDetailsPage() {
     if (error) return <Error error={error} />
     if (!movie) return null
 
+    // resume unless barely started or within the last 2 minutes (credits)
+    const position = movie.metadata.position_secs ?? 0
+    const duration = movie.metadata.duration_secs ?? 0
+    const canResume = position > 30 && (!duration || position < duration - 120)
+
     return (
         <div className="flex flex-col gap-8">
             <button className="btn btn-ghost btn-sm self-start" onClick={() => navigate("/")}>
@@ -61,14 +66,22 @@ export default function MovieDetailsPage() {
                     )}
 
                     <div className="flex gap-2">
-                        {movie.metadata.file_path && (
+                        {movie.metadata.file_path && <>
                             <button
                                 className="btn btn-primary"
-                                onClick={() => navigate(`/watch/movie/${id}`)}
+                                onClick={() => navigate(`/watch/movie/${id}`, { state: { position: canResume ? position : 0 } })}
                             >
-                                Watch
+                                {canResume ? `Resume from ${Format.duration(position)}` : "Watch"}
                             </button>
-                        )}
+                            {canResume && (
+                                <button
+                                    className="btn btn-ghost"
+                                    onClick={() => navigate(`/watch/movie/${id}`, { state: { position: 0 } })}
+                                >
+                                    Start over
+                                </button>
+                            )}
+                        </>}
                         <div className="dropdown">
                             <div tabIndex={0} className={`badge ${mediaStatusBadge(userEntry?.status)} cursor-pointer`}>
                                 {Format.statusLabel(userEntry?.status, movie.type)}
