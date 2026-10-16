@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/auth"
@@ -45,6 +46,51 @@ func TestMediaRoutesRequireTokens(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			rec := httptest.NewRecorder()
 			s.router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, tt.path, nil))
+			if rec.Code != tt.status {
+				t.Fatalf("status = %d, want %d (%s)", rec.Code, tt.status, rec.Body.String())
+			}
+		})
+	}
+}
+
+// Exercises routing and validation only; none of these requests reach the database.
+func TestInviteRoutes(t *testing.T) {
+	t.Setenv("CORS_ORIGIN", "http://localhost")
+	t.Setenv("JWT_SECRET", "access-secret-for-tests")
+	t.Setenv("MEDIA_SIGNING_SECRET", "media-secret-for-tests")
+
+	s := New(nil)
+
+	userToken, err := auth.GenerateToken("user-1", "user")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name   string
+		method string
+		path   string
+		body   string
+		bearer string
+		status int
+	}{
+		{"register without invite", http.MethodPost, "/api/auth/register",
+			`{"username":"a","email":"a@b.c","password":"Valid-Passw0rd!"}`, "", http.StatusBadRequest},
+		{"list invites needs auth", http.MethodGet, "/api/admin/invites", "", "", http.StatusUnauthorized},
+		{"list invites needs admin", http.MethodGet, "/api/admin/invites", "", userToken, http.StatusForbidden},
+		{"create invite needs admin", http.MethodPost, "/api/admin/invites", "{}", userToken, http.StatusForbidden},
+		{"revoke invite needs admin", http.MethodDelete, "/api/admin/invites/1", "", userToken, http.StatusForbidden},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(tt.method, tt.path, strings.NewReader(tt.body))
+			req.RemoteAddr = "192.0.2.1:1234"
+			if tt.bearer != "" {
+				req.Header.Set("Authorization", "Bearer "+tt.bearer)
+			}
+			rec := httptest.NewRecorder()
+			s.router.ServeHTTP(rec, req)
 			if rec.Code != tt.status {
 				t.Fatalf("status = %d, want %d (%s)", rec.Code, tt.status, rec.Body.String())
 			}

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/Mantie7553/MediaHub/backend/internal/handlers/invites"
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/jobs"
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/lists"
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/media"
@@ -52,6 +53,7 @@ func (s *Server) routes() {
 		log.Fatal("MEDIA_SIGNING_SECRET must be different from JWT_SECRET")
 	}
 	authHandler := auth.NewHandler(s.db)
+	invitesHandler := invites.NewHandler(s.db)
 	jobsHandler := jobs.NewHandler(s.db)
 	listsHandler := lists.NewHandler(s.db)
 	mediaHandler := media.NewHandler(s.db)
@@ -193,6 +195,11 @@ func (s *Server) routes() {
 			r.Post("/admin/users", usersHandler.Create)
 			r.Put("/admin/users/{id}", usersHandler.Update)
 			r.Delete("/admin/users/{id}", usersHandler.Delete)
+
+			// Invite Handler endpoints
+			r.Get("/admin/invites", invitesHandler.GetAll)
+			r.Post("/admin/invites", invitesHandler.Create)
+			r.Delete("/admin/invites/{id}", invitesHandler.Revoke)
 		})
 	})
 }

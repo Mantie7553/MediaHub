@@ -59,7 +59,7 @@ All routes are registered in `internal/platform/server/routes.go`. Every handler
 - **Public:** auth refresh and logout, the MangaDex cover proxy
 - **Webhook secret:** Sonarr/Radarr webhooks, which must send `X-MediaHub-Secret` matching `WEBHOOK_SECRET`. If `WEBHOOK_SECRET` is unset, every webhook is rejected
 - **Media token:** byte-serving routes loaded by `<video>`, `<audio>` and `<img>` (HLS segments, music tracks and covers, light novel images). These can't send a Bearer header, so they require a `media_token` query param instead (see [Media tokens](#media-tokens))
-- **Rate limited:** register and login, behind a per-IP token bucket
+- **Rate limited:** register and login, behind a per-IP token bucket. Register also requires a valid invite code
 - **Authenticated:** anything a normal user does (browsing, lists, progress, requests, search)
 - **Admin:** request approval, job management, library syncs, user management
 
@@ -69,6 +69,7 @@ A `/health` route outside `/api` returns `ok`.
 Every domain package exposes a `Handler` struct built by `NewHandler(db *sql.DB)`. The handler only receives the database connection. Any external clients it needs (Sonarr, AniList, etc.) are created inside `NewHandler` rather than passed in from the router. Responses go through the helpers in `platform/utils` so errors are returned in a consistent shape.
 
 ### Auth and Permissions
+- **Sign up is invite only.** Admins create single use codes (`POST /api/admin/invites`) on the User Management page and share the code or a `/login?invite=CODE` link. Codes expire after 1 to 30 days (7 by default). Only a SHA-256 hash of each code is stored, in `invite_codes`, so a code is shown once when it is created. `Register` checks the code before hashing the password, then claims it and creates the user in one transaction: a code can't be used twice, and a failed sign up (for example a taken email) frees it again. Unused invites can be revoked; used ones are kept as a record of who invited whom.
 - **Login** checks the password with bcrypt and returns two tokens: a JWT access token (24 hours) and a random refresh token (30 days). Only a SHA-256 hash of the refresh token is stored, in `refresh_tokens`.
 - **Requests** send the access token as `Authorization: Bearer <token>`. `auth.Middleware` validates it and puts the user's ID and role into the request context.
 - **User identity** is always read from context with `auth.GetUser(r)`, never from the request body.
@@ -100,6 +101,7 @@ Routes are defined in `App.jsx` with React Router. `/login` is public. Everythin
 | Table | Holds |
 |-------|-------|
 | `users`, `refresh_tokens` | Accounts, role, download permission, hashed refresh tokens |
+| `invite_codes` | Hashed single use sign up codes, who created them, expiry, and which user used them |
 | `media_items` | One row per title of any type. Unique on `(external_id, external_source)` |
 | `anime_metadata`, `movie_metadata`, `manga_metadata`, `light_novel_metadata`, `music_metadata` | Type-specific details, one-to-one with `media_items` |
 | `albums` | Music albums. Tracks link to them through `music_metadata.album_id` |

@@ -32,9 +32,10 @@ Email: an email
 Password: raw password
 */
 type registerRequest struct {
-	Username string `json:"username"`
-	Email    string `json:"email"`
-	Password string `json:"password"`
+	Username   string `json:"username"`
+	Email      string `json:"email"`
+	Password   string `json:"password"`
+	InviteCode string `json:"invite_code"`
 }
 
 /*
@@ -71,13 +72,28 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// check that all fields have been provided if not return bad request
-	if req.Username == "" || req.Email == "" || req.Password == "" {
-		utils.Error(w, http.StatusBadRequest, "username, email and password are required")
+	if req.Username == "" || req.Email == "" || req.Password == "" || req.InviteCode == "" {
+		utils.Error(w, http.StatusBadRequest, "username, email, password and invite code are required")
 		return
 	}
 
 	if err := ValidatePassword(req.Password); err != nil {
 		utils.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	// check the invite before the (slow) password hash so bad codes are cheap to reject
+	codeHash := HashInviteCode(req.InviteCode)
+	var inviteValid bool
+	err := h.db.QueryRow(
+		`SELECT EXISTS (SELECT 1 FROM invite_codes WHERE code_hash = $1 AND used_at IS NULL AND expires_at > NOW())`,
+		codeHash,
+	).Scan(&inviteValid)
+	if utils.InternalError(w, err) {
+		return
+	}
+	if !inviteValid {
+		utils.Error(w, http.StatusForbidden, "invalid or expired invite code")
 		return
 	}
 
@@ -87,9 +103,32 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	tx, err := h.db.Begin()
+	if utils.InternalError(w, err) {
+		return
+	}
+	defer tx.Rollback()
+
+	// claim the invite, the row lock means only one sign up can use it.
+	// if creating the user fails the rollback releases the code again
+	var inviteID string
+	err = tx.QueryRow(
+		`UPDATE invite_codes SET used_at = NOW()
+		 WHERE code_hash = $1 AND used_at IS NULL AND expires_at > NOW()
+		 RETURNING id`,
+		codeHash,
+	).Scan(&inviteID)
+	if err == sql.ErrNoRows {
+		utils.Error(w, http.StatusForbidden, "invalid or expired invite code")
+		return
+	}
+	if utils.InternalError(w, err) {
+		return
+	}
+
 	// add the new user to the database, get back the id
 	var userID string
-	err = h.db.QueryRow(
+	err = tx.QueryRow(
 		`INSERT INTO users (username, email, password_hash)
 		 VALUES ($1, $2, $3)
 		 RETURNING id`,
@@ -97,6 +136,13 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	).Scan(&userID)
 	if err != nil {
 		utils.Error(w, http.StatusConflict, "username or email already taken")
+		return
+	}
+
+	if _, err := tx.Exec(`UPDATE invite_codes SET used_by = $1 WHERE id = $2`, userID, inviteID); utils.InternalError(w, err) {
+		return
+	}
+	if utils.InternalError(w, tx.Commit()) {
 		return
 	}
 
