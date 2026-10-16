@@ -29,7 +29,7 @@ func TestServeSegmentRejectsTraversal(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("MEDIA_ROOT", root)
 
-	tempDir := filepath.Join(root, "temp", "episode-1")
+	tempDir := filepath.Join(root, "temp", "episode-1-a1")
 	if err := os.MkdirAll(tempDir, 0755); err != nil {
 		t.Fatal(err)
 	}
@@ -45,15 +45,20 @@ func TestServeSegmentRejectsTraversal(t *testing.T) {
 		name      string
 		mediaType string
 		id        string
+		variant   string
 		file      string
 		status    int
 	}{
-		{"valid", "episode", "1", "playlist0.ts", http.StatusOK},
-		{"dot dot", "episode", "1", "..", http.StatusBadRequest},
-		{"parent file", "episode", "1", "../../secret.txt", http.StatusBadRequest},
-		{"backslash", "episode", "1", `..\..\secret.txt`, http.StatusBadRequest},
-		{"id traversal", "episode", `1\..\..`, "secret.txt", http.StatusBadRequest},
-		{"bad type", "../temp", "1", "playlist0.ts", http.StatusBadRequest},
+		{"valid", "episode", "1", "a1", "playlist0.ts", http.StatusOK},
+		{"dot dot", "episode", "1", "a1", "..", http.StatusBadRequest},
+		{"parent file", "episode", "1", "a1", "../../secret.txt", http.StatusBadRequest},
+		{"backslash", "episode", "1", "a1", `..\..\secret.txt`, http.StatusBadRequest},
+		{"id traversal", "episode", `1\..\..`, "a1", "secret.txt", http.StatusBadRequest},
+		{"bad type", "../temp", "1", "a1", "playlist0.ts", http.StatusBadRequest},
+		{"variant traversal", "episode", "1", "..", "playlist0.ts", http.StatusBadRequest},
+		{"variant not a track", "episode", "1", "x1", "playlist0.ts", http.StatusBadRequest},
+		{"internal file", "episode", "1", "a1", "stream.json", http.StatusBadRequest},
+		{"ffmpeg log", "episode", "1", "a1", "transcode.log", http.StatusBadRequest},
 	}
 
 	for _, tt := range tests {
@@ -61,6 +66,7 @@ func TestServeSegmentRejectsTraversal(t *testing.T) {
 			rctx := chi.NewRouteContext()
 			rctx.URLParams.Add("type", tt.mediaType)
 			rctx.URLParams.Add("id", tt.id)
+			rctx.URLParams.Add("variant", tt.variant)
 			rctx.URLParams.Add("file", tt.file)
 			req := httptest.NewRequest(http.MethodGet, "/segment", nil)
 			req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))

@@ -5,30 +5,38 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"os/exec"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
-	"time"
 	"sync"
 
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/auth"
+	"github.com/Mantie7553/MediaHub/backend/internal/platform/logger"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/utils"
 	"github.com/go-chi/chi/v5"
 )
 
 type Handler struct {
 	db *sql.DB
-	procs    map[string]*exec.Cmd
-    procsMu  sync.Mutex
+
+	mu         sync.Mutex
+	transcodes map[string]*transcode // running transcodes by type-id-a<audio>
+	probes     probeCache
 }
 
 func NewHandler(db *sql.DB) *Handler {
-	return &Handler{db: db}
+	return &Handler{db: db, transcodes: map[string]*transcode{}}
 }
+
+// one transcode folder per media and audio track, e.g. a2
+var variantRe = regexp.MustCompile(`^a(-1|\d+)$`)
 
 /*
 Function:	StreamMedia
-Purpose:	Start transcoding of an episode
+Purpose:	Start (or reuse) the transcode of an episode or movie and return signed playlist and
+            subtitle URLs once enough of it exists to play from the optional ?start= position.
+            ?audio= picks an audio stream, otherwise the user's preferred language is used
 Params:
   - w: http response writer to respond to the front end
   - r: http request coming from the frontend
@@ -63,88 +71,128 @@ func (h *Handler) StreamMedia(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	mediaRoot := os.Getenv("MEDIA_ROOT")
-	tempDir := filepath.Join(mediaRoot, "temp", mediaType+"-"+mediaID)
-
-	if _, err := os.Stat(tempDir); err == nil {
-		writeStreamURLs(w, r, mediaType, mediaID)
-		return
+	start, _ := strconv.ParseFloat(r.URL.Query().Get("start"), 64)
+	if start < 0 {
+		start = 0
 	}
 
-	if err := os.Mkdir(tempDir, 0755); err != nil {
-		utils.InternalError(w, err)
+	streams, err := h.probes.get(filePath)
+	if utils.InternalError(w, err) {
 		return
 	}
+	prefs := h.languagePreferences(auth.GetUser(r).UserID)
 
-	playlistPath := filepath.Join(tempDir, "playlist.m3u8")
-
-	cmd := exec.Command("ffmpeg",
-		"-i", filePath,
-		"-map", "0:v:0",
-		"-map", "0:a:0",
-		"-vf", "format=yuv420p",
-		"-c:v", "h264_amf",
-		"-c:a", "aac",
-		"-b:a", "192k",
-		"-hls_time", "10",
-		"-hls_list_size", "0",
-		"-f", "hls",
-		playlistPath,
-	)
-
-	if err := cmd.Start(); err != nil {
-		utils.InternalError(w, err)
-		return
-	}
-	go cmd.Wait()
-
-	subsPath := filepath.Join(tempDir, "subs.vtt")
-	subCmd := exec.Command("ffmpeg",
-		"-i", filePath,
-		"-map", "0:s:0",
-		"-c:s", "webvtt",
-		subsPath,
-	)
-
-	subCmd.Start()
-	go subCmd.Wait()
-
-	for i := 0; i < 30; i++ {
-		if _, err := os.Stat(playlistPath); err == nil {
-			break
+	audioIndex := -1
+	if requested := r.URL.Query().Get("audio"); requested != "" {
+		idx, err := strconv.Atoi(requested)
+		if err != nil || !hasAudioStream(streams, idx) {
+			utils.Error(w, http.StatusBadRequest, "invalid audio track")
+			return
 		}
-		time.Sleep(1 * time.Second)
+		audioIndex = idx
+	} else if audio := selectAudio(streams, prefs.Audio); audio != nil {
+		audioIndex = audio.Index
 	}
 
-	if _, err := os.Stat(playlistPath); err != nil {
+	variant := "a" + strconv.Itoa(audioIndex)
+	key := mediaType + "-" + mediaID + "-" + variant
+	tempDir := filepath.Join(os.Getenv("MEDIA_ROOT"), "temp", key)
+
+	tc, err := h.getOrStartTranscode(key, tempDir, filePath, buildManifest(streams, audioIndex))
+	if utils.InternalError(w, err) {
+		return
+	}
+
+	if err := waitForPlaylist(tc, start); err != nil {
+		logger.Error("transcode %s not ready: %v", key, err)
 		utils.Error(w, http.StatusInternalServerError, "transcode failed to start")
 		return
 	}
 
-	writeStreamURLs(w, r, mediaType, mediaID)
+	writeStreamURLs(w, r, mediaType, mediaID, variant, tc.manifest, audioTracks(streams), prefs)
+}
+
+/*
+Function:	languagePreferences
+Purpose:	the user's preferred audio and subtitle languages, falling back to Japanese/English
+Params:
+  - userID: the current user
+*/
+func (h *Handler) languagePreferences(userID string) languagePreferences {
+	prefs := languagePreferences{Audio: defaultAudioLanguage, Subtitle: defaultSubtitleLanguage}
+	if err := h.db.QueryRow(
+		`SELECT preferred_audio_language, preferred_subtitle_language FROM users WHERE id = $1`,
+		userID,
+	).Scan(&prefs.Audio, &prefs.Subtitle); err != nil {
+		logger.Warn("could not load language preferences for %s: %v", userID, err)
+	}
+	return prefs
+}
+
+/*
+Function:	hasAudioStream
+Purpose:	whether index is an audio stream in the file
+Params:
+  - streams: the file's streams from ffprobe
+  - index: the requested stream index
+*/
+func hasAudioStream(streams []probeStream, index int) bool {
+	for _, s := range streams {
+		if s.Index == index && s.CodecType == "audio" {
+			return true
+		}
+	}
+	return false
 }
 
 /*
 Function:	writeStreamURLs
-Purpose:	respond with playlist and subtitle URLs signed with a media token for this episode/movie
+Purpose:	respond with the playlist URL, the audio tracks to choose from, and the subtitle
+            tracks, all signed with a media token for this episode/movie
 Params:
   - w: http response writer to respond to the front end
   - r: http request coming from the frontend
   - mediaType: episode or movie
   - mediaID: the id of the episode or movie
+  - variant: the transcode folder suffix for the chosen audio, e.g. a2
+  - manifest: what the transcode contains
+  - audio: every audio track in the file
+  - prefs: the user's language preferences, used to pick the default subtitle
 */
-func writeStreamURLs(w http.ResponseWriter, r *http.Request, mediaType, mediaID string) {
+func writeStreamURLs(w http.ResponseWriter, r *http.Request, mediaType, mediaID, variant string,
+	manifest streamManifest, audio []audioTrack, prefs languagePreferences) {
 	token, err := auth.GenerateMediaToken(auth.GetUser(r).UserID, auth.MediaScope{MediaType: mediaType, MediaID: mediaID})
 	if utils.InternalError(w, err) {
 		return
 	}
 	query := "?" + auth.MediaTokenParam + "=" + url.QueryEscape(token)
-	base := "/stream/segments/" + mediaType + "/" + mediaID
+	base := "/stream/segments/" + mediaType + "/" + mediaID + "/" + variant
 
-	utils.JSON(w, map[string]string{
-		"playlist":  base + "/playlist.m3u8" + query,
-		"subtitles": base + "/subs.vtt" + query,
-	})
+	resp := streamResponse{
+		Playlist:  base + "/" + playlistFile + query,
+		Audio:     []audioResponse{},
+		Subtitles: []subtitleResponse{},
+	}
+	for _, a := range audio {
+		resp.Audio = append(resp.Audio, audioResponse{
+			Index:    a.Index,
+			Language: a.Language,
+			Label:    a.Label,
+			Selected: a.Index == manifest.AudioIndex,
+		})
+	}
+
+	defaultIndex := defaultSubtitle(manifest.Subtitles, manifest.AudioLanguage, prefs.Subtitle)
+	for _, s := range manifest.Subtitles {
+		resp.Subtitles = append(resp.Subtitles, subtitleResponse{
+			URL:      base + "/" + s.File + query,
+			Language: s.Language,
+			Label:    s.Label,
+			Default:  s.Index == defaultIndex,
+		})
+	}
+
+	utils.JSON(w, resp)
 }
 
 /*
@@ -216,15 +264,19 @@ Params:
 func (h *Handler) ServeSegment(w http.ResponseWriter, r *http.Request) {
 	mediaType := chi.URLParam(r, "type")
 	mediaID := chi.URLParam(r, "id")
+	variant := chi.URLParam(r, "variant")
 	file := chi.URLParam(r, "file")
 
-	if (mediaType != "episode" && mediaType != "movie") || !utils.SafeFileName(mediaID) || !utils.SafeFileName(file) {
+	// only playlist, segments and finished subtitles; not stream.json, transcode.log or .tmp files
+	servable := map[string]bool{".m3u8": true, ".ts": true, ".vtt": true}
+	if (mediaType != "episode" && mediaType != "movie") || !utils.SafeFileName(mediaID) ||
+		!variantRe.MatchString(variant) || !utils.SafeFileName(file) || !servable[filepath.Ext(file)] {
 		utils.Error(w, http.StatusBadRequest, "invalid segment path")
 		return
 	}
 
 	mediaRoot := os.Getenv("MEDIA_ROOT")
-	tempDir := filepath.Join(mediaRoot, "temp", mediaType+"-"+mediaID)
+	tempDir := filepath.Join(mediaRoot, "temp", mediaType+"-"+mediaID+"-"+variant)
 	filePath := filepath.Join(tempDir, file)
 	if !isWithin(tempDir, filePath) {
 		utils.Error(w, http.StatusBadRequest, "invalid segment path")

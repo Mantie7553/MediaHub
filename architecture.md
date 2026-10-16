@@ -111,7 +111,7 @@ Routes are defined in `App.jsx` with React Router. `/login` is public. Everythin
 | `download_requests` | A user asking for something to be downloaded, plus approval state |
 | `download_jobs` | The actual download work for an approved request, with handler, status, and progress |
 | `user_media_status` | A user's list entry (current, planned, completed, etc.) and rating |
-| `user_episode_progress`, `user_anime_progress`, `manga_progress`, `light_novel_progress` | Per-user watch and read progress |
+| `user_episode_progress`, `user_movie_progress`, `user_anime_progress`, `manga_progress`, `light_novel_progress` | Per-user watch and read progress |
 
 See [`backend/migrations/`](backend/migrations/) for the full schema.
 
@@ -130,11 +130,17 @@ See [`backend/migrations/`](backend/migrations/) for the full schema.
 6. When Sonarr or Radarr finishes, it calls `/api/webhooks/sonarr` or `/api/webhooks/radarr`. The webhook handler writes the file path into `episodes` or `movie_metadata`, which makes the content playable.
 
 ### Playback
-1. `PlayerPage` calls `GET /api/stream/media/{type}/{id}` with its access token.
-2. `stream_handler` looks up the file path and checks for an existing transcode in `MEDIA_ROOT/temp/<type>-<id>`. If there isn't one, it starts ffmpeg to produce HLS segments (`h264_amf` on the AMD GPU, `yuv420p` for 10-bit sources) and extracts subtitles to WebVTT.
-3. Once the playlist exists, the handler returns playlist and subtitle URLs signed with a media token. HLS.js loads segments from `/api/stream/segments/...`, and the token is carried on each segment URI in the rewritten playlist.
-4. The player resumes from the saved position and saves progress every 5 seconds and on unmount through `PUT /api/episodes/{id}/progress`.
-5. The `cleanup` package deletes transcode folders older than 48 hours, checking once an hour.
+1. `PlayerPage` calls `GET /api/stream/media/{type}/{id}?start=<resume seconds>[&audio=<stream index>]` with its access token.
+2. `ffprobe` lists the file's tracks (cached per file until it changes) and `stream_tracks.go` picks them using the user's language preferences (`preferred_audio_language`, `preferred_subtitle_language` on `users`, default Japanese / English):
+   - **Audio:** the `audio` parameter if given, otherwise the preferred language (default-flagged first), otherwise the file's default track, skipping commentary. A preference of `default` always uses the file's default track.
+   - **Subtitles:** every text track (ASS, SRT, ...) is extracted; image tracks (PGS, VobSub) can't become WebVTT and are skipped. The default shown is full dialogue in the preferred subtitle language, avoiding signs/songs-only, SDH and dubtitle tracks. If the audio is already in that language only a signs/songs track is turned on. A preference of `off` shows none.
+3. Each audio choice is its own transcode in `MEDIA_ROOT/temp/<type>-<id>-a<audio index>`. Concurrent requests share a running transcode; a finished one (playlist ends with `#EXT-X-ENDLIST` and `stream.json` exists) is reused. Anything else in the folder is left over from a failed or interrupted run and is deleted before starting again. `stream.json` records the audio and subtitle tracks so the default subtitle can be worked out per request.
+4. ffmpeg writes an `EVENT` HLS playlist with 4 second segments (keyframe forced at each), `h264_amf` capped at ~6 Mbps, and stereo AAC. AV1 sources are decoded on the GPU (`d3d11va` on Windows, `TRANSCODE_HWACCEL` elsewhere) because CPU AV1 decoding is the slowest step. ffmpeg's output goes to `transcode.log` in the folder and is logged if it fails.
+5. Subtitles are extracted in one pass to `subs_<index>.vtt`, written as `.tmp`, cleaned, then renamed so the player never loads a partial file. Cleaning strips leftover ASS override tags (`{...}`), drops ASS vector drawings used for typesetting (which WebVTT shows as walls of coordinates) and drops repeated lines (ASS draws some lines several times for styling).
+6. The handler waits until the playlist covers the start position plus 12 seconds (or the transcode finishes, up to 90 seconds), then returns the playlist URL, the file's audio tracks (with the one in use marked), and the subtitle tracks (with the default marked), all signed with a media token. Segment URLs are `/api/stream/segments/{type}/{id}/a<audio>/{file}`. `ServeSegment` only serves `.m3u8`, `.ts` and `.vtt` files.
+7. HLS.js starts at the resume position. The player downloads each subtitle file itself, retrying while it's still being extracted, and only adds a `<track>` once the file is there (a `<track>` that fails to load never retries). The **Languages** menu on the player switches subtitles instantly, switches audio by requesting the other audio transcode and resuming at the current time, and can save the current languages as the user's defaults (`PUT /api/me/preferences`).
+8. The player saves progress every 5 seconds and on unmount through `PUT /api/episodes/{id}/progress` or `PUT /api/movies/{id}/progress`. Movie details include the saved position so the page can offer Resume.
+9. The `cleanup` package deletes transcode folders older than 48 hours, checking once an hour.
 
 ### Library Sync
 Admins can trigger syncs from the backend for each media type (`/api/admin/sync/*`):
@@ -190,6 +196,7 @@ Backend variables live in `backend/.env`. Frontend variables live in `frontend/.
 | `WEBHOOK_SECRET` | Shared secret Sonarr/Radarr send in the `X-MediaHub-Secret` header. Webhooks are rejected while unset |
 | `CORS_ORIGIN` | Allowed frontend origin. The server won't start without it |
 | `MEDIA_ROOT` | Root media folder on the NAS. Expects `TV Shows`, `Movies`, `Music`, `Manga`, `Light Novels`, and holds `temp/` for transcodes |
+| `TRANSCODE_HWACCEL` | Optional. ffmpeg `-hwaccel` used to decode AV1 sources. Defaults to `d3d11va` on Windows and none elsewhere (e.g. set `vaapi` on Linux with an AMD GPU). `none` disables it |
 | `SONARR_URL`, `SONARR_API_KEY` | Sonarr API access |
 | `RADARR_URL`, `RADARR_API_KEY` | Radarr API access |
 | `MANGADEX_URL` | MangaDex API base URL |

@@ -92,7 +92,7 @@ func (s *Server) routes() {
 		// short lived media token minted from the authenticated endpoints below
 		r.With(auth.RequireMediaToken(func(r *http.Request) auth.MediaScope {
 			return auth.MediaScope{MediaType: chi.URLParam(r, "type"), MediaID: chi.URLParam(r, "id")}
-		})).Get("/stream/segments/{type}/{id}/{file}", streamHandler.ServeSegment)
+		})).Get("/stream/segments/{type}/{id}/{variant}/{file}", streamHandler.ServeSegment)
 
 		r.Group(func(r chi.Router) {
 			r.Use(auth.RequireMediaToken(func(r *http.Request) auth.MediaScope {
@@ -122,6 +122,8 @@ func (s *Server) routes() {
 		r.Group(func(r chi.Router) {
 			r.Use(auth.Middleware)
 			r.Get("/me", authHandler.Me)
+			r.Get("/me/preferences", usersHandler.GetPreferences)
+			r.Put("/me/preferences", usersHandler.UpdatePreferences)
 
 			// Media streaming endpoints, these mint the media tokens for the byte routes
 			r.Get("/stream/media/{type}/{id}", streamHandler.StreamMedia)

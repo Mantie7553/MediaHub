@@ -30,10 +30,10 @@ func TestMediaRoutesRequireTokens(t *testing.T) {
 		path   string
 		status int
 	}{
-		{"segment without token", "/api/stream/segments/episode/1/playlist0.ts", http.StatusUnauthorized},
-		{"segment with token", "/api/stream/segments/episode/1/playlist0.ts" + q, http.StatusNotFound},
-		{"segment sibling id", "/api/stream/segments/episode/12/playlist0.ts" + q, http.StatusUnauthorized},
-		{"segment other type", "/api/stream/segments/movie/1/playlist0.ts" + q, http.StatusUnauthorized},
+		{"segment without token", "/api/stream/segments/episode/1/a1/playlist0.ts", http.StatusUnauthorized},
+		{"segment with token", "/api/stream/segments/episode/1/a1/playlist0.ts" + q, http.StatusNotFound},
+		{"segment sibling id", "/api/stream/segments/episode/12/a1/playlist0.ts" + q, http.StatusUnauthorized},
+		{"segment other type", "/api/stream/segments/movie/1/a1/playlist0.ts" + q, http.StatusUnauthorized},
 		{"track with episode token", "/api/stream/music/1" + q, http.StatusUnauthorized},
 		{"cover with episode token", "/api/stream/music/1/cover" + q, http.StatusUnauthorized},
 		{"ln image with episode token", "/api/light-novels/1/volumes/1/images/a.jpg" + q, http.StatusUnauthorized},

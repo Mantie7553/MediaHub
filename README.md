@@ -76,6 +76,7 @@ Users can be assigned one of two download permissions: `vetted` (requests requir
     | `DB_NAME` | Database name |
     | `MEDIA_ROOT` | Root path where media will be downloaded |
     | `MANGAL_PATH` | Path to the mangal executable |
+    | `TRANSCODE_HWACCEL` | *(Optional)* GPU decoder for AV1 videos. Defaults to `d3d11va` on Windows; on Linux set e.g. `vaapi`, or `none` to decode on the CPU |
 2. In both Sonarr and Radarr, go to *Settings → Connect → + → Webhook*:
     - **URL:** `<api_url>/api/webhooks/sonarr` (or `/radarr`)
     - **Method:** `POST`
