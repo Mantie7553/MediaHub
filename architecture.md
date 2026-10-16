@@ -56,7 +56,8 @@ Backend files follow a `<domain>_<role>.go` naming convention, for example `jobs
 ### Routing
 All routes are registered in `internal/platform/server/routes.go`. Every handler is created once at startup, then routes are grouped under `/api` by access level:
 
-- **Public:** auth refresh and logout, Sonarr/Radarr webhooks, streaming endpoints, cover and light novel image serving
+- **Public:** auth refresh and logout, Sonarr/Radarr webhooks, the MangaDex cover proxy
+- **Media token:** byte-serving routes loaded by `<video>`, `<audio>` and `<img>` (HLS segments, music tracks and covers, light novel images). These can't send a Bearer header, so they require a `media_token` query param instead (see [Media tokens](#media-tokens))
 - **Rate limited:** register and login, behind a per-IP token bucket
 - **Authenticated:** anything a normal user does (browsing, lists, progress, requests, search)
 - **Admin:** request approval, job management, library syncs, user management
@@ -73,6 +74,14 @@ Every domain package exposes a `Handler` struct built by `NewHandler(db *sql.DB)
 - **Roles:** `user` or `admin`. `auth.RequireAdmin` blocks non-admins from the admin route group.
 - **Download permission** is separate from role. `vetted` users' requests wait for admin approval, `auto_approved` users' requests are dispatched immediately.
 - Passwords must be at least 12 characters with upper, lower, number, and special characters.
+
+### Media tokens
+- Authenticated endpoints (`GET /stream/media/{type}/{id}`, `GET /stream/music/{id}/url`, light novel `content`) mint a media token and return URLs with `?media_token=...` appended.
+- Media tokens are JWTs signed with `MEDIA_SIGNING_SECRET` (never `JWT_SECRET`) with `typ: "media"`. Access tokens carry `typ: "access"`. Each validator rejects the other type, so neither token works in place of the other.
+- A media token is scoped to one resource (`media_type`, `media_id`, and `volume_id` for light novels). `auth.RequireMediaToken` requires the route params to equal the scope exactly, so a token for episode `1` does not work for episode `12`.
+- Tokens last 2 hours. `PlayerPage` and `AudioPlayer` fetch a new one and resume at the current position when a load fails with 401.
+- When serving `playlist.m3u8`, the stream handler appends the request's token to each segment URI so HLS.js's relative segment fetches stay authorized.
+- Tokens in query strings show up in reverse proxy access logs and browser history. That's acceptable for 2-hour, single-resource, read-only tokens, but don't put longer lived secrets in URLs.
 
 ## Frontend
 
@@ -117,9 +126,9 @@ See [`backend/migrations/`](backend/migrations/) for the full schema.
 6. When Sonarr or Radarr finishes, it calls `/api/webhooks/sonarr` or `/api/webhooks/radarr`. The webhook handler writes the file path into `episodes` or `movie_metadata`, which makes the content playable.
 
 ### Playback
-1. `PlayerPage` calls `GET /api/stream/media/{type}/{id}`.
+1. `PlayerPage` calls `GET /api/stream/media/{type}/{id}` with its access token.
 2. `stream_handler` looks up the file path and checks for an existing transcode in `MEDIA_ROOT/temp/<type>-<id>`. If there isn't one, it starts ffmpeg to produce HLS segments (`h264_amf` on the AMD GPU, `yuv420p` for 10-bit sources) and extracts subtitles to WebVTT.
-3. Once the playlist exists, the handler returns the playlist and subtitle URLs. HLS.js loads segments from `/api/stream/segments/...`.
+3. Once the playlist exists, the handler returns playlist and subtitle URLs signed with a media token. HLS.js loads segments from `/api/stream/segments/...`, and the token is carried on each segment URI in the rewritten playlist.
 4. The player resumes from the saved position and saves progress every 5 seconds and on unmount through `PUT /api/episodes/{id}/progress`.
 5. The `cleanup` package deletes transcode folders older than 48 hours, checking once an hour.
 
@@ -173,6 +182,7 @@ Backend variables live in `backend/.env`. Frontend variables live in `frontend/.
 |----------|---------|
 | `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` | PostgreSQL connection |
 | `JWT_SECRET` | Signs and validates access tokens |
+| `MEDIA_SIGNING_SECRET` | Signs and validates media tokens. Required, and must differ from `JWT_SECRET` |
 | `CORS_ORIGIN` | Allowed frontend origin. The server won't start without it |
 | `MEDIA_ROOT` | Root media folder on the NAS. Expects `TV Shows`, `Movies`, `Music`, `Manga`, `Light Novels`, and holds `temp/` for transcodes |
 | `SONARR_URL`, `SONARR_API_KEY` | Sonarr API access |

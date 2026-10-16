@@ -12,6 +12,7 @@ export default function PlayerPage() {
     const { type, id } = useParams();
     const videoRef = useRef(null);
     const [playlistUrl, setPlaylistUrl] = useState(null);
+    const [subtitlesUrl, setSubtitlesUrl] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const initialPosition = location.state?.position ?? 0;
@@ -26,9 +27,17 @@ export default function PlayerPage() {
 
     const baseURL = import.meta.env.VITE_API_URL
 
+    // returns signed playlist/subtitle URLs, the media token in them expires after ~2 hours
+    function fetchStream() {
+        return api.get(`/stream/media/${type}/${id}`).then(res => {
+            setSubtitlesUrl(`${baseURL}${res.data.subtitles}`)
+            return `${baseURL}${res.data.playlist}`
+        })
+    }
+
     useEffect(() => {
-        api.get(`/stream/media/${type}/${id}`)
-            .then(res => setPlaylistUrl(`${baseURL}${res.data.playlist}`))
+        fetchStream()
+            .then(setPlaylistUrl)
             .catch(err => setError(err.message))
             .finally(() => setLoading(false))
     }, [id])
@@ -41,9 +50,22 @@ export default function PlayerPage() {
 
         if (Hls.isSupported()) {
             const hls = new Hls()
+            // one remint per expiry, cleared once a fragment loads with the new token
+            let reminted = false
+            let resume = null
+            let destroyed = false
+
             hls.loadSource(playlistUrl)
             hls.attachMedia(video)
             hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                // reloaded with a fresh token, put playback back where it was
+                if (resume) {
+                    video.currentTime = resume.position
+                    if (resume.playing) video.play().catch(() => {})
+                    resume = null
+                    return
+                }
+
                 video.play().catch(() => {})
                 if (initialPosition > 0) {
                     const seekOnce = () => {
@@ -55,7 +77,26 @@ export default function PlayerPage() {
                     video.addEventListener("canplay", seekOnce)
                 }
             })
+            hls.on(Hls.Events.FRAG_LOADED, () => {
+                reminted = false
+            })
+            hls.on(Hls.Events.ERROR, (_, data) => {
+                const status = data.response?.code ?? data.networkDetails?.status
+                if (status !== 401) return
+                if (reminted) {
+                    setError("Playback session expired")
+                    return
+                }
+                reminted = true
+                resume = { position: video.currentTime, playing: !video.paused }
+                fetchStream()
+                    .then(url => {
+                        if (!destroyed) hls.loadSource(url)
+                    })
+                    .catch(err => setError(err.message))
+            })
             return () => {
+                destroyed = true
                 hls.destroy()
                 video.src = ""
             }
@@ -141,10 +182,10 @@ export default function PlayerPage() {
                 crossOrigin="anonymous"
                 className="w-full max-w-6xl"
             >
-                {playlistUrl && (
+                {subtitlesUrl && (
                     <track
                         kind="subtitles"
-                        src={`${baseURL}/stream/segments/${type}/${id}/subs.vtt`}
+                        src={subtitlesUrl}
                         srcLang="en"
                         label="English"
                         default

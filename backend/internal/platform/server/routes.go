@@ -45,6 +45,12 @@ func (s *Server) routes() {
 	if corsOrigin == "" {
 		log.Fatal("CORS_ORIGIN not set")
 	}
+	if os.Getenv("MEDIA_SIGNING_SECRET") == "" {
+		log.Fatal("MEDIA_SIGNING_SECRET not set")
+	}
+	if os.Getenv("MEDIA_SIGNING_SECRET") == os.Getenv("JWT_SECRET") {
+		log.Fatal("MEDIA_SIGNING_SECRET must be different from JWT_SECRET")
+	}
 	authHandler := auth.NewHandler(s.db)
 	jobsHandler := jobs.NewHandler(s.db)
 	listsHandler := lists.NewHandler(s.db)
@@ -71,17 +77,32 @@ func (s *Server) routes() {
 		r.Delete("/auth/logout", authHandler.Logout)
 		r.Post("/auth/refresh", authHandler.Refresh)
 
-		r.Get("/light-novels/{id}/volumes/{volumeId}/images/{imageName}", mediaHandler.ServeVolumeImage)
 		r.Get("/proxy/cover", mediaHandler.ProxyCover)
 
 		r.Post("/webhooks/sonarr", webhooksHandler.SonarrWebhook)
 		r.Post("/webhooks/radarr", webhooksHandler.RadarrWebhook)
 
-		// Media streaming endpoints
-		r.Get("/stream/media/{type}/{id}", streamHandler.StreamMedia)
-		r.Get("/stream/segments/{type}/{id}/{file}", streamHandler.ServeSegment)
-		r.Get("/stream/music/{id}", streamHandler.ServeTrack)
-		r.Get("/stream/music/{id}/cover", streamHandler.ServeCover)
+		// Byte-serving endpoints loaded by <video>/<audio>/<img>, authorized by a
+		// short lived media token minted from the authenticated endpoints below
+		r.With(auth.RequireMediaToken(func(r *http.Request) auth.MediaScope {
+			return auth.MediaScope{MediaType: chi.URLParam(r, "type"), MediaID: chi.URLParam(r, "id")}
+		})).Get("/stream/segments/{type}/{id}/{file}", streamHandler.ServeSegment)
+
+		r.Group(func(r chi.Router) {
+			r.Use(auth.RequireMediaToken(func(r *http.Request) auth.MediaScope {
+				return auth.MediaScope{MediaType: "music", MediaID: chi.URLParam(r, "id")}
+			}))
+			r.Get("/stream/music/{id}", streamHandler.ServeTrack)
+			r.Get("/stream/music/{id}/cover", streamHandler.ServeCover)
+		})
+
+		r.With(auth.RequireMediaToken(func(r *http.Request) auth.MediaScope {
+			return auth.MediaScope{
+				MediaType: "light_novel",
+				MediaID:   chi.URLParam(r, "id"),
+				VolumeID:  chi.URLParam(r, "volumeId"),
+			}
+		})).Get("/light-novels/{id}/volumes/{volumeId}/images/{imageName}", mediaHandler.ServeVolumeImage)
 
 		// Endpoints that are rate limited
 		r.Group(func(r chi.Router) {
@@ -95,6 +116,10 @@ func (s *Server) routes() {
 		r.Group(func(r chi.Router) {
 			r.Use(auth.Middleware)
 			r.Get("/me", authHandler.Me)
+
+			// Media streaming endpoints, these mint the media tokens for the byte routes
+			r.Get("/stream/media/{type}/{id}", streamHandler.StreamMedia)
+			r.Get("/stream/music/{id}/url", streamHandler.SignTrackURL)
 
 			// Media Handler Endpoints
 			r.Get("/media", mediaHandler.GetAll)

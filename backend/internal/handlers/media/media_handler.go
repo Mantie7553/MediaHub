@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -643,6 +644,19 @@ func (h *Handler) ServeVolume(w http.ResponseWriter, r *http.Request) {
 		zipEntries[f.Name] = f
 	}
 
+	// images are loaded by <img> tags without the Bearer header, so sign them for this volume
+	imageToken, err := auth.GenerateMediaToken(auth.GetUser(r).UserID, auth.MediaScope{
+		MediaType: "light_novel",
+		MediaID:   id,
+		VolumeID:  volumeId,
+	})
+	if utils.InternalError(w, err) {
+		return
+	}
+	imageQuery := "?" + auth.MediaTokenParam + "=" + url.QueryEscape(imageToken)
+	imgSrcRe := regexp.MustCompile(`src="(?:\.\./)?[Ii]mages/([^"]+)"`)
+	imgSrc := fmt.Sprintf(`src="/api/light-novels/%s/volumes/%s/images/${1}%s"`, id, volumeId, imageQuery)
+
 	var body strings.Builder
 	body.WriteString(`<!DOCTYPE html><html><body style="max-width:720px;margin:0 auto;padding:1rem;font-family:serif;line-height:1.8;">`)
 
@@ -684,14 +698,7 @@ func (h *Handler) ServeVolume(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// rewrite image paths
-		html = strings.ReplaceAll(html, `src="../Images/`,
-			fmt.Sprintf(`src="/api/light-novels/%s/volumes/%s/images/`, id, volumeId))
-		html = strings.ReplaceAll(html, `src="../images/`,
-			fmt.Sprintf(`src="/api/light-novels/%s/volumes/%s/images/`, id, volumeId))
-		html = strings.ReplaceAll(html, `src="images/`,
-			fmt.Sprintf(`src="/api/light-novels/%s/volumes/%s/images/`, id, volumeId))
-		html = strings.ReplaceAll(html, `src="Images/`,
-			fmt.Sprintf(`src="/api/light-novels/%s/volumes/%s/images/`, id, volumeId))
+		html = imgSrcRe.ReplaceAllString(html, imgSrc)
 
 		body.WriteString(html)
 		body.WriteString(`<div style="height:1px;background:#333;margin:2rem 0;"></div>`)

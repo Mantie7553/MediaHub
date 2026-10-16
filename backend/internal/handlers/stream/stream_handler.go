@@ -3,12 +3,15 @@ package stream
 import (
 	"database/sql"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 	"sync"
 
+	"github.com/Mantie7553/MediaHub/backend/internal/platform/auth"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/utils"
 	"github.com/go-chi/chi/v5"
 )
@@ -64,10 +67,7 @@ func (h *Handler) StreamMedia(w http.ResponseWriter, r *http.Request) {
 	tempDir := filepath.Join(mediaRoot, "temp", mediaType+"-"+mediaID)
 
 	if _, err := os.Stat(tempDir); err == nil {
-		utils.JSON(w, map[string]string{
-			"playlist":  "/stream/segments/" + mediaType + "/" + mediaID + "/playlist.m3u8",
-			"subtitles": "/stream/segments/" + mediaType + "/" + mediaID + "/subs.vtt",
-		})
+		writeStreamURLs(w, r, mediaType, mediaID)
 		return
 	}
 
@@ -121,10 +121,89 @@ func (h *Handler) StreamMedia(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	writeStreamURLs(w, r, mediaType, mediaID)
+}
+
+/*
+Function:	writeStreamURLs
+Purpose:	respond with playlist and subtitle URLs signed with a media token for this episode/movie
+Params:
+  - w: http response writer to respond to the front end
+  - r: http request coming from the frontend
+  - mediaType: episode or movie
+  - mediaID: the id of the episode or movie
+*/
+func writeStreamURLs(w http.ResponseWriter, r *http.Request, mediaType, mediaID string) {
+	token, err := auth.GenerateMediaToken(auth.GetUser(r).UserID, auth.MediaScope{MediaType: mediaType, MediaID: mediaID})
+	if utils.InternalError(w, err) {
+		return
+	}
+	query := "?" + auth.MediaTokenParam + "=" + url.QueryEscape(token)
+	base := "/stream/segments/" + mediaType + "/" + mediaID
+
 	utils.JSON(w, map[string]string{
-		"playlist":  "/stream/segments/" + mediaType + "/" + mediaID + "/playlist.m3u8",
-		"subtitles": "/stream/segments/" + mediaType + "/" + mediaID + "/subs.vtt",
+		"playlist":  base + "/playlist.m3u8" + query,
+		"subtitles": base + "/subs.vtt" + query,
 	})
+}
+
+/*
+Function:	SignTrackURL
+Purpose:	return the stream URL for a music track signed with a media token
+Params:
+  - w: http response writer to respond to the front end
+  - r: http request coming from the frontend
+*/
+func (h *Handler) SignTrackURL(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+
+	var exists bool
+	err := h.db.QueryRow(
+		`SELECT EXISTS (SELECT 1 FROM music_metadata WHERE media_item_id = $1 AND file_path IS NOT NULL)`,
+		id,
+	).Scan(&exists)
+	if utils.InternalError(w, err) {
+		return
+	}
+	if !exists {
+		utils.Error(w, http.StatusNotFound, "track not found")
+		return
+	}
+
+	token, err := auth.GenerateMediaToken(auth.GetUser(r).UserID, auth.MediaScope{MediaType: "music", MediaID: id})
+	if utils.InternalError(w, err) {
+		return
+	}
+	query := "?" + auth.MediaTokenParam + "=" + url.QueryEscape(token)
+
+	utils.JSON(w, map[string]string{
+		"url":   "/stream/music/" + id + query,
+		"cover": "/stream/music/" + id + "/cover" + query,
+	})
+}
+
+/*
+Function:	signPlaylist
+Purpose:	append the media token to every segment URI so HLS.js relative fetches stay authorized
+Params:
+  - playlist: contents of the m3u8 written by ffmpeg
+  - token: the media token the playlist was requested with
+*/
+func signPlaylist(playlist, token string) string {
+	param := auth.MediaTokenParam + "=" + url.QueryEscape(token)
+	lines := strings.Split(playlist, "\n")
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+		sep := "?"
+		if strings.Contains(trimmed, "?") {
+			sep = "&"
+		}
+		lines[i] = trimmed + sep + param
+	}
+	return strings.Join(lines, "\n")
 }
 
 /*
@@ -141,6 +220,22 @@ func (h *Handler) ServeSegment(w http.ResponseWriter, r *http.Request) {
 
 	mediaRoot := os.Getenv("MEDIA_ROOT")
 	filePath := filepath.Join(mediaRoot, "temp", mediaType+"-"+mediaID, file)
+
+	// the playlist grows while ffmpeg runs, so rewrite it on every request
+	if filepath.Ext(file) == ".m3u8" {
+		content, err := os.ReadFile(filePath)
+		if os.IsNotExist(err) {
+			utils.Error(w, http.StatusNotFound, "playlist not found")
+			return
+		}
+		if utils.InternalError(w, err) {
+			return
+		}
+		w.Header().Set("Content-Type", "application/vnd.apple.mpegurl")
+		w.Header().Set("Cache-Control", "no-store")
+		w.Write([]byte(signPlaylist(string(content), r.URL.Query().Get(auth.MediaTokenParam))))
+		return
+	}
 
 	http.ServeFile(w, r, filePath)
 }

@@ -67,6 +67,7 @@ Users can be assigned one of two download permissions: `vetted` (requests requir
     | `RADARR_URL` | URL for making requests to Radarr | 
     | `RADARR_API_KEY` | API key for your Radarr instance |
     | `JWT_SECRET` | Secret key for signing JWTs |
+    | `MEDIA_SIGNING_SECRET` | Secret key for signing short lived media URLs. Must be different from `JWT_SECRET` |
     | `DB_HOST` | Database hostname |
     | `DB_PORT` | Database port |
     | `DB_USER` | Database username |

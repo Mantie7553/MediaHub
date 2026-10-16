@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"os"
 	"time"
@@ -19,6 +20,7 @@ UserID: The id for the current user
 Role: the role for the user
 */
 type Claims struct {
+	Type   string `json:"typ"`
 	UserID string `json:"user_id"`
 	Role   string `json:"role"`
 	jwt.RegisteredClaims
@@ -92,6 +94,7 @@ Params:
 */
 func GenerateToken(userID, role string) (string, error) {
 	claims := Claims{
+		Type:   TokenTypeAccess,
 		UserID: userID,
 		Role:   role,
 		RegisteredClaims: jwt.RegisteredClaims{
@@ -114,9 +117,13 @@ func ValidateToken(tokenStr string) (*Claims, error) {
 	claims := &Claims{}
 	token, err := jwt.ParseWithClaims(tokenStr, claims, func(t *jwt.Token) (interface{}, error) {
 		return []byte(os.Getenv("JWT_SECRET")), nil
-	})
-	if err != nil || !token.Valid {
+	}, jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}))
+	if err != nil {
 		return nil, err
+	}
+	// tokens without typ (minted before media tokens existed) are rejected and get refreshed
+	if !token.Valid || claims.Type != TokenTypeAccess {
+		return nil, errors.New("invalid access token")
 	}
 	return claims, nil
 }
