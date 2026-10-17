@@ -57,6 +57,8 @@ services:
       # profile new requests use, kept in sync by bootstrap from deploy/bootstrap/arr-settings.json
       SONARR_QUALITY_PROFILE: ${SONARR_QUALITY_PROFILE:-Anime}
       RADARR_QUALITY_PROFILE: ${RADARR_QUALITY_PROFILE:-Anime}
+      # hour (0-23, TZ) of the nightly library sync, "off" to disable
+      LIBRARY_SYNC_HOUR: ${LIBRARY_SYNC_HOUR:-4}
       TRANSCODE_ENCODER: ${TRANSCODE_ENCODER:-libx264}
       TRANSCODE_HWACCEL: ${TRANSCODE_HWACCEL:-none}
     volumes:

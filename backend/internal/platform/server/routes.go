@@ -26,6 +26,7 @@ import (
 type Server struct {
 	router *chi.Mux
 	db     *sql.DB
+	sync   *sync.Handler
 }
 
 func New(db *sql.DB) *Server {
@@ -35,6 +36,14 @@ func New(db *sql.DB) *Server {
 	}
 	s.routes()
 	return s
+}
+
+/*
+Function:	StartBackgroundJobs
+Purpose:	start work that runs on its own schedule (the nightly library sync)
+*/
+func (s *Server) StartBackgroundJobs() {
+	s.sync.StartSchedule()
 }
 
 func (s *Server) Start(addr string) error {
@@ -62,6 +71,7 @@ func (s *Server) routes() {
 	searchHandler := search.NewHandler(s.db)
 	streamHandler := stream.NewHandler(s.db)
 	syncHandler := sync.NewHandler(s.db)
+	s.sync = syncHandler
 	webhooksHandler := webhooks.NewHandler(s.db)
 	usersHandler := users.NewHandler(s.db)
 
@@ -187,6 +197,8 @@ func (s *Server) routes() {
 			r.Post("/admin/jobs", jobsHandler.Create)
 
 			// Sync Handler endpoints
+			r.Post("/admin/sync", syncHandler.StartSync)
+			r.Get("/admin/sync", syncHandler.GetSyncStatus)
 			r.Post("/admin/sync/sonarr", syncHandler.SyncSonar)
 			r.Post("/admin/sync/radarr", syncHandler.SyncRadarr)
 			r.Post("/admin/sync/manga", syncHandler.SyncManga)

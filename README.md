@@ -1,56 +1,62 @@
 # **MediaHub**
 ## What is this?
-This is my attempt at a self hosted media management platform. This handles the curation of a library of media across Movies, Anime, Manga and Music that can then be downloaded to the server for playback through Plex. 
+This is my attempt at a self hosted media platform. It curates a library of Anime, Movies, Manga, Light Novels and Music, downloads what users request to a NAS, and plays or reads it right in the browser. The whole stack installs with one script and updates itself whenever `main` changes.
 
 ## Included Features
-* Media catalogs for Movies, Anime, Manga, and Music
-* Request / approval workflow for downloads
+* Catalogs for Anime, Movies, Manga, Light Novels and Music
+* Request / approval workflow for downloads, with per-user download permissions
+* In-browser playback: video streaming with per-user audio and subtitle languages and resume, plus a manga reader, a light novel reader and a music player
 * Progress and status tracking per user
-* Media playback
+* Invite-only sign up
+* Library sync that picks up media added outside MediaHub, nightly or on demand
+* One-command Docker install for Linux and Windows, with automatic updates on every push to `main`
 
 ## Tools
 | Tool | Purpose |
 |------|---------|
-| **Sonarr** | Handle downloading and library organization of Anime |
-| **Radarr** | Handles downloading and library organization of Movies |
-| **yt-dlp** | Handles downloading and library organization of Music |
-| **mangal** | Handles downloading and library organization of Manga |
-| **postgres** | Database |
+| **Sonarr** | Downloads and organizes Anime |
+| **Radarr** | Downloads and organizes Movies |
+| **Prowlarr** | Manages the indexers Sonarr and Radarr search |
+| **qBittorrent** | Download client for Sonarr and Radarr (no seeding) |
+| **yt-dlp** | Downloads Music |
+| **mangal** | Downloads Manga |
+| **ffmpeg** | Transcodes video for streaming and extracts subtitles |
+| **PostgreSQL** | Database |
+| **Caddy** | Serves the web app and proxies the API |
+| **Cloudflare Tunnel** | Optional remote access without opening ports |
 
-## Prerequisites
-Ensure the following are installed before starting:
-- **Node.js** and **npm**
-- **Go**
-- **PostgreSQL**
-- **Goose**
-- **Sonarr**
-- **Radarr**
-- **yt-dlp**
-- **mangal**
+With the Docker install all of these run as containers, so there's nothing to install by hand.
 
 ## Project Structure
 ```
     MediaHub/
     ├── backend/
     │   ├── cmd/api/        # Application entry point
-    │   ├── internal/       # Auth, media, requests, jobs, downloader, etc.
-    │   ├── migrations/     # Goose SQL migration files
-    │   └── .env
-    └── frontend/
-        ├── src/
-        │   ├── components/ # Shared UI components
-        │   ├── hooks/      # React hooks
-        │   ├── pages/      # Page components
-        │   └── services/   # API service layer
-        └── .env
+    │   ├── internal/       # Auth, media, requests, jobs, downloader, sync, streaming, etc.
+    │   ├── migrations/     # Goose SQL migrations, applied automatically on startup
+    │   └── Dockerfile
+    ├── frontend/
+    │   ├── src/
+    │   │   ├── components/ # Shared UI components
+    │   │   ├── hooks/      # React hooks
+    │   │   ├── pages/      # Page components
+    │   │   └── services/   # API service layer
+    │   └── Dockerfile      # Builds the app and serves it with Caddy
+    ├── deploy/
+    │   ├── Caddyfile
+    │   └── bootstrap/      # First-run wiring of the *arr apps, arr-settings.json
+    ├── docker-compose.yml  # The whole stack (+ gpu / smb overrides)
+    ├── install.sh / install.ps1
+    └── update.sh / update.ps1
 ```
 
 ## User Roles
 | Role | Permissions |
 |------|-------------|
 | **User** | Browse catalog, submit download requests, track status |
-| **Admin** | All user permissions, plus approve/ reject requests, manage jobs and catalog |
-Users can be assigned one of two download permissions: `vetted` (requests require admin approval) or `auto-approved` (requests are approved immediately)
+| **Admin** | All user permissions, plus approve / reject requests, manage jobs, users, invites and the library sync |
+
+Users can be given one of two download permissions: `vetted` (requests need admin approval) or `auto_approved` (requests are approved immediately).
 
 ## Install (Docker)
 One script installs everything MediaHub needs: PostgreSQL, the backend (with ffmpeg, yt-dlp and mangal built in), the web app behind Caddy, qBittorrent, Sonarr, Radarr, Prowlarr, and optionally a Cloudflare Tunnel. It installs Docker if it's missing, generates every secret, and connects the apps to each other. You don't need any UI setup.
@@ -69,11 +75,11 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1
 On a PC without Docker, the script installs WSL 2 and Docker Desktop. It then asks you to restart and run it again.
 
 The script asks for:
-- **Media folder.** This folder holds `TV Shows`, `Movies`, `Music`, `Manga` and `Light Novels`. You can give it a local folder, or an SMB share (`\nas\media` on Windows; on Linux, answer the SMB question).
-- **Address people will use**, e.g. `https://media.example.com`.
+- **Media folder.** This folder holds `TV Shows`, `Movies`, `Music`, `Manga` and `Light Novels`. You can give it a local folder, or an SMB share (`\\nas\media` on Windows; on Linux, answer the SMB question).
+- **Address people will use.** The server's home network address is fine (e.g. `http://192.168.1.10`). It's only used as the allowed origin for the API, so it doesn't need to match your tunnel address.
 - **Remote access** (optional). Pick one:
   - **Named tunnel**, for a permanent address on your own domain. Create a named tunnel in Cloudflare Zero Trust, point its public hostname at `http://web:80`, and paste the token.
-  - **`quick`**, if you have no domain. You get a free random `https://….trycloudflare.com` address with no account needed. It **changes whenever the tunnel restarts** (reboot, `docker compose restart`), so run `./tunnel-url.sh` (or `.	unnel-url.ps1`) to see the current one. The install and update scripts print it too.
+  - **`quick`**, if you have no domain. You get a free random `https://….trycloudflare.com` address with no account needed. It **changes whenever the tunnel restarts** (reboot, `docker compose restart`), so run `./tunnel-url.sh` (or `.\tunnel-url.ps1`) to see the current one. The install and update scripts print it too.
   - **Blank**, for the home network only.
 
   To switch later, set `COMPOSE_PROFILES` in `.env` to `tunnel` or `quicktunnel` (add `TUNNEL_TOKEN` for a named tunnel) and run `docker compose up -d`.
@@ -111,6 +117,13 @@ Qualities are grouped as SD / 720p / 1080p. Within a resolution the score decide
 - Avoid `$` in `.env` values, because Compose treats it as a variable.
 - Avoid `,` in the SMB password, because it separates mount options.
 
+## Keeping the library in sync
+MediaHub's catalog is built from Sonarr, Radarr and the `Manga`, `Light Novels` and `Music` folders:
+- **Requests made in MediaHub** appear as soon as Sonarr/Radarr import them (webhooks).
+- **Everything else** (files added by hand, a Sonarr/Radarr *Library Import*) is picked up by the **library sync**. It runs every night at `LIBRARY_SYNC_HOUR` (default 4 am), or on demand from *Settings → Library Sync → Sync Library* (admins only).
+
+For an existing collection, first add it to Sonarr/Radarr (*Series/Movies → Library Import*, **Anime** profile), then run the sync.
+
 ## Updating
 - **Automatic.** Every push to `main` runs `.github/workflows/release.yml`. It tests the backend, builds the frontend, then publishes the `mediahub-backend`, `mediahub-web` and `mediahub-bootstrap` images to GHCR. On each install, the `watchtower` container checks every 5 minutes, pulls new MediaHub images and restarts them. Database migrations run automatically when the backend starts.
 - **Manual** (`./update.sh` or `.\update.ps1`). This runs `git pull`, pulls all images (including new Sonarr/Radarr/qBittorrent versions), applies changes to `docker-compose.yml` or `.env`, and re-runs bootstrap. Use it after changing `.env` or the compose files.
@@ -130,7 +143,14 @@ Qualities are grouped as SD / 720p / 1080p. Within a resolution the score decide
 5. Sonarr/Radarr start fresh, and bootstrap wires them up. To keep their libraries, add your series and movies again from the existing folders (*Library Import*), or copy the old config folders into the `sonarr-config`/`radarr-config` volumes before the first start.
 
 ## Setup (development, without Docker)
-*Setup steps for front and back end servers + database*
+For working on MediaHub itself. Install these first:
+- **Node.js** and **npm**
+- **Go**
+- **PostgreSQL**
+- **ffmpeg**, **yt-dlp** and **mangal**
+- **Sonarr** and **Radarr** (with a download client)
+- **Goose** (optional, migrations also run when the backend starts)
+
 ### *Database*
 1. Create a PostgreSQL database
 2. Migrations run automatically when the backend starts. To run them by hand from `MediaHub/backend` with Goose:  

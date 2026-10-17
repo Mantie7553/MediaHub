@@ -1,5 +1,6 @@
 import { NavLink, useLocation, useNavigate } from "react-router-dom"
 import api from "../../services/api"
+import { getRole } from "../../utils/auth"
 
 /**
  *  Navigation for the application
@@ -16,16 +17,6 @@ export default function Sidebar() {
         localStorage.removeItem("token");
         localStorage.removeItem("refresh_token");
         navigate("/login");
-    }
-
-    function getRole() {
-        const token = localStorage.getItem("token");
-        if (!token) return null;
-        try {
-            return JSON.parse(atob(token.split(".")[1])).role;
-        } catch {
-            return null;
-        }
     }
 
     return <div className="drawer-side z-40">

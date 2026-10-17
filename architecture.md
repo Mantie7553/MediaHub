@@ -200,6 +200,7 @@ Backend variables live in `backend/.env`. Frontend variables live in `frontend/.
 | `ADMIN_PASSWORD` | Optional. Replaces the seeded `admin@example.com` password on startup, only while it is still the default |
 | `TRANSCODE_HWACCEL` | Optional. ffmpeg `-hwaccel` used to decode AV1 sources. Defaults to `d3d11va` on Windows and none elsewhere (e.g. set `vaapi` on Linux with an AMD GPU). `none` disables it |
 | `SONARR_URL`, `SONARR_API_KEY` | Sonarr API access |
+| `LIBRARY_SYNC_HOUR` | Optional. Hour (0-23, local time) of the nightly full library sync. Defaults to 4, `off` disables it |
 | `SONARR_QUALITY_PROFILE`, `RADARR_QUALITY_PROFILE` | Optional. Name of the quality profile new series/movies get. Defaults to `Anime`, falls back to profile id 1 if it doesn't exist |
 | `RADARR_URL`, `RADARR_API_KEY` | Radarr API access |
 | `MANGADEX_URL` | MangaDex API base URL |

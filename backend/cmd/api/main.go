@@ -6,6 +6,8 @@ import (
 	"io/fs"
 	"log"
 	"os"
+	// the runtime image has no tzdata, embed it so TZ (e.g. for the nightly sync hour) works
+	_ "time/tzdata"
 
 	"github.com/Mantie7553/MediaHub/backend/internal/cleanup"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/database"
@@ -46,6 +48,7 @@ func main() {
 
 	s := server.New(db)
 	cleanup.Start(os.Getenv("MEDIA_ROOT"))
+	s.StartBackgroundJobs()
 	fmt.Println("MediaHub API starting on port 9090...")
 	if err := s.Start(":9090"); err != nil {
 		log.Fatal(err)
