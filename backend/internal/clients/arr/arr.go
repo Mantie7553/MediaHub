@@ -270,7 +270,7 @@ func (c *ArrClient) GetAllMovies() ([]RadarrMovie, error) {
 
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("Radarr returned %d", err.Error())
+		return nil, fmt.Errorf("Radarr request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
