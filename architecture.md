@@ -179,10 +179,10 @@ Admins can trigger syncs from the backend for each media type (`/api/admin/sync/
 **Decision:** Keep `role` (user/admin) and `download_permission` (vetted/auto_approved) as two separate columns.
 **Why:** Download trust and admin access are different things, and combining them would force giving out admin to skip approval.
 
-### Running directly on Ubuntu instead of Docker on the NAS
-**Context:** Moving the stack into Docker on the NAS was considered.
-**Decision:** Keep running on the Ubuntu server.
-**Why:** The Ubuntu machine has to stay on anyway as the NAS's internet gateway, so moving to Docker would add complexity without removing any hardware.
+### Docker Compose on the Ubuntu server, not on the NAS
+**Context:** Moving the stack into Docker on the NAS was considered. Later the whole app needed to be installable in one step on any Linux or Windows machine, with updates on every push.
+**Decision:** Package everything (Postgres, backend, Caddy + frontend, cloudflared, qBittorrent, Sonarr, Radarr, Prowlarr) as one Compose project. Keep running it on the Ubuntu server. CI publishes images to GHCR and Watchtower pulls them.
+**Why:** The Ubuntu machine has to stay on anyway as the NAS's internet gateway, so the NAS gains nothing from hosting it. Compose makes the server rebuildable from the repo, and a one-shot bootstrap container does the *arr wiring that used to be manual. The media folder is mounted at the same path in every container, because Sonarr/Radarr file paths are stored verbatim in the database.
 
 ## Configuration
 
@@ -196,8 +196,11 @@ Backend variables live in `backend/.env`. Frontend variables live in `frontend/.
 | `WEBHOOK_SECRET` | Shared secret Sonarr/Radarr send in the `X-MediaHub-Secret` header. Webhooks are rejected while unset |
 | `CORS_ORIGIN` | Allowed frontend origin. The server won't start without it |
 | `MEDIA_ROOT` | Root media folder on the NAS. Expects `TV Shows`, `Movies`, `Music`, `Manga`, `Light Novels`, and holds `temp/` for transcodes |
+| `TRANSCODE_ENCODER` | Optional. H.264 encoder: `amf` (default on Windows), `vaapi` (Linux GPU, device from `TRANSCODE_VAAPI_DEVICE`, default `/dev/dri/renderD128`) or `libx264` (CPU, default elsewhere) |
+| `ADMIN_PASSWORD` | Optional. Replaces the seeded `admin@example.com` password on startup, only while it is still the default |
 | `TRANSCODE_HWACCEL` | Optional. ffmpeg `-hwaccel` used to decode AV1 sources. Defaults to `d3d11va` on Windows and none elsewhere (e.g. set `vaapi` on Linux with an AMD GPU). `none` disables it |
 | `SONARR_URL`, `SONARR_API_KEY` | Sonarr API access |
+| `SONARR_QUALITY_PROFILE`, `RADARR_QUALITY_PROFILE` | Optional. Name of the quality profile new series/movies get. Defaults to `Anime`, falls back to profile id 1 if it doesn't exist |
 | `RADARR_URL`, `RADARR_API_KEY` | Radarr API access |
 | `MANGADEX_URL` | MangaDex API base URL |
 | `MANGAL_PATH` | Path to the mangal executable |

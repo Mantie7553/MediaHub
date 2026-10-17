@@ -1,0 +1,22 @@
+# Cloudflare Tunnel (or the LAN) talks plain HTTP to this; TLS ends at Cloudflare
+{
+	auto_https off
+	admin off
+}
+
+:80 {
+	encode zstd gzip
+
+	handle /api/* {
+		# no buffering so HLS playlists and SSE progress reach the browser immediately
+		reverse_proxy backend:9090 {
+			flush_interval -1
+		}
+	}
+
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+}

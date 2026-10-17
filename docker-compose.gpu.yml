@@ -1,0 +1,11 @@
+# Linux hosts with an AMD/Intel GPU: hardware H.264 encoding and AV1 decoding through VAAPI.
+# install.sh adds this to COMPOSE_FILE when /dev/dri/renderD128 exists
+services:
+  backend:
+    devices:
+      - /dev/dri:/dev/dri
+    group_add:
+      - ${RENDER_GID:-render}
+    environment:
+      TRANSCODE_ENCODER: vaapi
+      TRANSCODE_HWACCEL: vaapi

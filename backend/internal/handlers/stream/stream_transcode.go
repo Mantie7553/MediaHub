@@ -121,7 +121,11 @@ Params:
   - manifest: the chosen tracks
 */
 func transcodeArgs(filePath, dir string, manifest streamManifest) []string {
+	encoder := transcodeEncoder()
 	args := []string{"-v", "warning"}
+	if encoder == "vaapi" {
+		args = append(args, "-vaapi_device", vaapiDevice())
+	}
 	if accel := hwaccelFor(manifest.VideoCodec); accel != "" {
 		args = append(args, "-hwaccel", accel)
 	}
@@ -129,13 +133,10 @@ func transcodeArgs(filePath, dir string, manifest streamManifest) []string {
 	if manifest.AudioIndex >= 0 {
 		args = append(args, "-map", fmt.Sprintf("0:%d", manifest.AudioIndex))
 	}
+	args = append(args, encoderArgs(encoder)...)
 	args = append(args,
-		"-vf", "format=yuv420p",
-		"-c:v", "h264_amf",
-		// cap the bitrate, uncapped AMF output was 9-22 Mbps which stalls over the tunnel
-		"-rc", "vbr_peak", "-b:v", "6M", "-maxrate", "8M", "-bufsize", "12M",
-		// keyframe every segment so HLS can cut there. forced_idr makes them real cut points
-		"-force_key_frames", fmt.Sprintf("expr:gte(t,n_forced*%d)", segmentSecs), "-forced_idr", "1",
+		// keyframe every segment so HLS can cut there
+		"-force_key_frames", fmt.Sprintf("expr:gte(t,n_forced*%d)", segmentSecs),
 		"-c:a", "aac", "-b:a", "192k", "-ac", "2",
 		"-hls_time", strconv.Itoa(segmentSecs),
 		"-hls_list_size", "0",
@@ -145,6 +146,57 @@ func transcodeArgs(filePath, dir string, manifest streamManifest) []string {
 		filepath.Join(dir, playlistFile),
 	)
 	return args
+}
+
+/*
+Function:	transcodeEncoder
+Purpose:	H.264 encoder to use: "amf" (AMD on Windows), "vaapi" (GPU on Linux) or "libx264" (CPU).
+            TRANSCODE_ENCODER overrides the platform default
+*/
+func transcodeEncoder() string {
+	switch enc := os.Getenv("TRANSCODE_ENCODER"); enc {
+	case "amf", "vaapi", "libx264":
+		return enc
+	case "":
+	default:
+		logger.Warn("unknown TRANSCODE_ENCODER %q, using the platform default", enc)
+	}
+	if runtime.GOOS == "windows" {
+		return "amf"
+	}
+	return "libx264"
+}
+
+/*
+Function:	vaapiDevice
+Purpose:	render node for VAAPI encoding, TRANSCODE_VAAPI_DEVICE overrides the usual first GPU
+*/
+func vaapiDevice() string {
+	if dev := os.Getenv("TRANSCODE_VAAPI_DEVICE"); dev != "" {
+		return dev
+	}
+	return "/dev/dri/renderD128"
+}
+
+/*
+Function:	encoderArgs
+Purpose:	ffmpeg filter and video encoder arguments for an encoder from transcodeEncoder. All of
+            them cap the bitrate, uncapped AMF output was 9-22 Mbps which stalls over the tunnel
+Params:
+  - encoder: "amf", "vaapi" or "libx264"
+*/
+func encoderArgs(encoder string) []string {
+	rate := []string{"-b:v", "6M", "-maxrate", "8M", "-bufsize", "12M"}
+	switch encoder {
+	case "amf":
+		// forced_idr makes AMF's forced keyframes real cut points, libx264 and VAAPI already do
+		return append([]string{"-vf", "format=yuv420p", "-c:v", "h264_amf", "-rc", "vbr_peak", "-forced_idr", "1"}, rate...)
+	case "vaapi":
+		// frames are uploaded to the GPU after converting, the encoder only takes GPU surfaces
+		return append([]string{"-vf", "format=nv12,hwupload", "-c:v", "h264_vaapi"}, rate...)
+	default:
+		return append([]string{"-vf", "format=yuv420p", "-c:v", "libx264", "-preset", "veryfast"}, rate...)
+	}
 }
 
 /*

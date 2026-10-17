@@ -168,4 +168,4 @@ mediahub
 *.ntvs*
 *.njsproj
 *.sln
-*.sw?
+*.sw?.bootstrap.log

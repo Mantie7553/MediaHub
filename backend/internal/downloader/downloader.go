@@ -66,7 +66,11 @@ func Run(db *sql.DB, jobID string, mediaItemID string) {
 	tmpFile.Close()
 
 	// 4. Build and start the command
-	cmd := exec.Command("yt-dlp",
+	ytdlpPath := os.Getenv("YTDLP_PATH")
+	if ytdlpPath == "" {
+		ytdlpPath = "yt-dlp"
+	}
+	cmd := exec.Command(ytdlpPath,
 		"-x",
 		"--audio-format", "mp3",
 		"--newline",
