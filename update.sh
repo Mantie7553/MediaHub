@@ -7,6 +7,10 @@ DOCKER="docker"
 docker info >/dev/null 2>&1 || DOCKER="sudo docker"
 
 git pull --ff-only
+case "$(grep -E '^COMPOSE_FILE=' .env | cut -d= -f2-)" in
+  *docker-compose.smb.yml*) ;;  # Docker mounts the share itself
+  *) deploy/check-media-mount.sh "$(grep -E '^MEDIA_HOST_PATH=' .env | cut -d= -f2-)" || exit 1 ;;
+esac
 $DOCKER compose pull --ignore-pull-failures || true
 $DOCKER compose up -d --remove-orphans
 # re-run the first-run wiring in case the update added a step
