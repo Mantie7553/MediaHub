@@ -104,6 +104,13 @@ Qualities are grouped as SD / 720p / 1080p. Within a resolution the score decide
 
 `arr-settings.json` is the source of truth. Bootstrap brings these formats and the profile back to match it on every install or update run, so change them in the file, not in the Sonarr/Radarr UI. Other profiles and formats are left alone. Per-user audio and subtitle language preferences live in MediaHub's database and move with it (see the migration steps below).
 
+## Keeping the library in sync
+MediaHub's catalog is built from Sonarr, Radarr and the `Manga`, `Light Novels` and `Music` folders:
+- **Requests made in MediaHub** appear as soon as Sonarr/Radarr import them (webhooks).
+- **Everything else** (files added by hand, a Sonarr/Radarr *Library Import*) is picked up by the **library sync**. It runs every night at `LIBRARY_SYNC_HOUR` (default 4 am), or on demand from *Management → Library Sync → Sync Library*.
+
+For an existing collection, first add it to Sonarr/Radarr (*Series/Movies → Library Import*, **Anime** profile), then run the sync.
+
 ## Updating
 - **Automatic.** Every push to `main` runs `.github/workflows/release.yml`. It tests the backend, builds the frontend, then publishes the `mediahub-backend`, `mediahub-web` and `mediahub-bootstrap` images to GHCR. On each install, the `watchtower` container checks every 5 minutes, pulls new MediaHub images and restarts them. Database migrations run automatically when the backend starts.
 - **Manual** (`./update.sh` or `.\update.ps1`). This runs `git pull`, pulls all images (including new Sonarr/Radarr/qBittorrent versions), applies changes to `docker-compose.yml` or `.env`, and re-runs bootstrap. Use it after changing `.env` or the compose files.

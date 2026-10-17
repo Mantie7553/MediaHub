@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -29,6 +28,7 @@ type Handler struct {
 	radarr   *arr.ArrClient
 	mangadex *mangadex.MangaDexClient
 	anilist  *anilist.AnilistClient
+	runner   runner
 }
 
 func NewHandler(db *sql.DB) *Handler {
@@ -41,10 +41,10 @@ func NewHandler(db *sql.DB) *Handler {
 	}
 }
 
-func (h *Handler) SyncSonar(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) syncSonarr() error {
 	series, err := h.sonarr.GetAllSeries()
-	if utils.InternalError(w, err) {
-		return
+	if err != nil {
+		return err
 	}
 
 	tvdbToAnilist, _, err := arr.FetchAnimeMaps()
@@ -220,13 +220,13 @@ func (h *Handler) SyncSonar(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	w.WriteHeader(http.StatusOK)
+	return nil
 }
 
-func (h *Handler) SyncRadarr(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) syncRadarr() error {
 	movies, err := h.radarr.GetAllMovies()
-	if utils.InternalError(w, err) {
-		return
+	if err != nil {
+		return err
 	}
 
 	_, tmdbToAnilist, err := arr.FetchAnimeMaps()
@@ -339,16 +339,16 @@ func (h *Handler) SyncRadarr(w http.ResponseWriter, r *http.Request) {
 			logger.Error("failed to update file path for %s: %s", m.Title, err.Error())
 		}
 	}
-	w.WriteHeader(http.StatusOK)
+	return nil
 }
 
-func (h *Handler) SyncManga(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) syncManga() error {
 	mediaRoot := os.Getenv("MEDIA_ROOT")
 	mangaRoot := filepath.Join(mediaRoot, "Manga")
 
 	dirs, err := os.ReadDir(mangaRoot)
-	if utils.InternalError(w, err) {
-		return
+	if err != nil {
+		return err
 	}
 
 	for _, dir := range dirs {
@@ -488,15 +488,15 @@ func (h *Handler) SyncManga(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	w.WriteHeader(http.StatusOK)
+	return nil
 }
 
-func (h *Handler) SyncLightNovel(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) syncLightNovels() error {
 	mediaRoot := os.Getenv("MEDIA_ROOT")
 	regex := regexp.MustCompile(`(?i)volume[_\s](\d+)`)
 	dirListing, err := os.ReadDir(filepath.Join(mediaRoot, "Light Novels"))
-	if utils.InternalError(w, err) {
-		return
+	if err != nil {
+		return err
 	}
 
 	for _, entry := range dirListing {
@@ -505,8 +505,8 @@ func (h *Handler) SyncLightNovel(w http.ResponseWriter, r *http.Request) {
 		}
 
 		files, err := os.ReadDir(filepath.Join(mediaRoot, "Light Novels", entry.Name()))
-		if utils.InternalError(w, err) {
-			return
+		if err != nil {
+			return err
 		}
 
 		// Convert folder name to a search query
@@ -641,7 +641,7 @@ func (h *Handler) SyncLightNovel(w http.ResponseWriter, r *http.Request) {
 
 	}
 
-	w.WriteHeader(http.StatusOK)
+	return nil
 }
 
 func extractCoverHref(filePath string) (string, error) {
@@ -733,13 +733,12 @@ func extractCoverHref(filePath string) (string, error) {
 	return "", nil
 }
 
-func (h *Handler) SyncMusic(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) syncMusic() (int, error) {
 	mediaRoot := os.Getenv("MEDIA_ROOT")
 	musicRoot := filepath.Join(mediaRoot, "Music")
 
 	if _, err := os.Stat(musicRoot); os.IsNotExist(err) {
-		utils.Error(w, http.StatusNotFound, "music directory not found")
-		return
+		return 0, fmt.Errorf("music directory not found: %s", musicRoot)
 	}
 
 	synced := 0
@@ -864,13 +863,11 @@ func (h *Handler) SyncMusic(w http.ResponseWriter, r *http.Request) {
 	})
 
 	if err != nil {
-		logger.Error("failed to walk music directory: %s", err.Error())
-		utils.Error(w, http.StatusInternalServerError, "sync failed")
-		return
+		return synced, fmt.Errorf("failed to walk music directory: %w", err)
 	}
 
 	logger.Info("Music sync complete: %d tracks synced", synced)
-	utils.JSON(w, map[string]int{"synced": synced})
+	return synced, nil
 }
 
 func extractCoverArt(mp3Path string, destPath string) {
