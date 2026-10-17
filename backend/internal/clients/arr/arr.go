@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -48,6 +49,43 @@ func NewArrClient(urlEnvKey string, apiEnvKey string) *ArrClient {
 }
 
 /*
+Function:	QualityProfileID
+Purpose:	Look up a Sonarr / Radarr quality profile id by its name (case insensitive)
+Params:
+  - name: the profile name, e.g. "Anime"
+*/
+func (c *ArrClient) QualityProfileID(name string) (int, error) {
+	req, err := http.NewRequest("GET", c.config.BaseURL+"/api/v3/qualityprofile", nil)
+	if err != nil {
+		return 0, err
+	}
+	req.Header.Set("X-Api-Key", c.config.APIKey)
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return 0, fmt.Errorf("quality profile lookup returned %d", resp.StatusCode)
+	}
+	var profiles []struct {
+		ID   int    `json:"id"`
+		Name string `json:"name"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&profiles); err != nil {
+		return 0, err
+	}
+	for _, p := range profiles {
+		if strings.EqualFold(p.Name, name) {
+			return p.ID, nil
+		}
+	}
+	return 0, fmt.Errorf("no quality profile named %q", name)
+}
+
+/*
 Function:	AddSeries
 Purpose:	Add a series for tracking to the Sonarr client
 Params:
@@ -61,9 +99,11 @@ func (c *ArrClient) AddSeries(tvdbID int, qualityProfileID int, rootFolderPath s
 		"tvdbId":           tvdbID,
 		"title":            title,
 		"qualityProfileId": qualityProfileID,
-		"rootFolderPath":   rootFolderPath,
-		"monitored":        true,
-		"seasonFolder":     true,
+		// anime type searches by absolute episode number, which is how most anime releases are named
+		"seriesType":     "anime",
+		"rootFolderPath": rootFolderPath,
+		"monitored":      true,
+		"seasonFolder":   true,
 		"addOptions": map[string]any{
 			"searchForMissingEpisodes": true,
 			"monitor":                  "all",

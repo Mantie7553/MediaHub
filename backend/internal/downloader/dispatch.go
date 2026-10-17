@@ -89,7 +89,7 @@ func Dispatch(db *sql.DB, requestID string, mediaItemID string,
 		if sonarrID > 0 {
 			seriesID = sonarrID
 		} else {
-			seriesID, err = sClient.AddSeries(tvdbID, 1, dest, title)
+			seriesID, err = sClient.AddSeries(tvdbID, qualityProfile(sClient, "SONARR_QUALITY_PROFILE"), dest, title)
 			if err != nil {
 				logger.Error("Sonarr: %s", err.Error())
 				return "", fmt.Errorf("internal server error")
@@ -120,7 +120,7 @@ func Dispatch(db *sql.DB, requestID string, mediaItemID string,
 		}
 		// connect to radarr and start downloading
 		rClient := arr.NewArrClient("RADARR_URL", "RADARR_API_KEY")
-		movieID, err := rClient.AddMovie(extIDInt, 1, dest)
+		movieID, err := rClient.AddMovie(extIDInt, qualityProfile(rClient, "RADARR_QUALITY_PROFILE"), dest)
 
 		if err != nil {
 			logger.Error("Radarr: %s", err.Error())
@@ -146,4 +146,27 @@ func Dispatch(db *sql.DB, requestID string, mediaItemID string,
 
 	// return the new id and no error
 	return jobID, nil
+}
+
+/*
+Function:	qualityProfile
+Purpose:	Quality profile id for new series / movies: the profile named in envKey, "Anime" by
+
+	default (created by the Docker bootstrap). Falls back to profile 1 if it doesn't exist
+
+Params:
+  - client: the Sonarr or Radarr client
+  - envKey: environment variable holding the profile name
+*/
+func qualityProfile(client *arr.ArrClient, envKey string) int {
+	name := os.Getenv(envKey)
+	if name == "" {
+		name = "Anime"
+	}
+	id, err := client.QualityProfileID(name)
+	if err != nil {
+		logger.Warn("quality profile %q not usable (%s), using profile 1", name, err.Error())
+		return 1
+	}
+	return id
 }
