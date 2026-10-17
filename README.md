@@ -104,6 +104,13 @@ Qualities are grouped as SD / 720p / 1080p. Within a resolution the score decide
 
 `arr-settings.json` is the source of truth. Bootstrap brings these formats and the profile back to match it on every install or update run, so change them in the file, not in the Sonarr/Radarr UI. Other profiles and formats are left alone. Per-user audio and subtitle language preferences live in MediaHub's database and move with it (see the migration steps below).
 
+**Hardware transcoding.** On Linux with an AMD/Intel GPU (`/dev/dri/renderD128`), the installer turns on VAAPI through `docker-compose.gpu.yml`. On Windows, Docker can't reach the GPU, so videos transcode on the CPU (libx264). Playback works, but first plays are slower.
+
+**Notes**
+- **NAS mounted through `/etc/fstab` (Linux).** If the media folder is on a share listed in `/etc/fstab`, `install.sh` and `update.sh` check that it is actually mounted, and refuse to start if it isn't. They also make Docker wait for the share at boot (`RequiresMountsFor` drop-in). Without this, a share that failed to mount leaves the containers looking at the empty mount-point folder, which looks like a wiped library.
+- Avoid `$` in `.env` values, because Compose treats it as a variable.
+- Avoid `,` in the SMB password, because it separates mount options.
+
 ## Updating
 - **Automatic.** Every push to `main` runs `.github/workflows/release.yml`. It tests the backend, builds the frontend, then publishes the `mediahub-backend`, `mediahub-web` and `mediahub-bootstrap` images to GHCR. On each install, the `watchtower` container checks every 5 minutes, pulls new MediaHub images and restarts them. Database migrations run automatically when the backend starts.
 - **Manual** (`./update.sh` or `.\update.ps1`). This runs `git pull`, pulls all images (including new Sonarr/Radarr/qBittorrent versions), applies changes to `docker-compose.yml` or `.env`, and re-runs bootstrap. Use it after changing `.env` or the compose files.
