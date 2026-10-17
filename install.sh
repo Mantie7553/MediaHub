@@ -114,6 +114,13 @@ else
 fi
 
 # ---- start ----
+# a NAS share that isn't mounted would leave the containers looking at an empty folder
+get_media() { grep -E '^MEDIA_HOST_PATH=' .env | cut -d= -f2-; }
+case "$(grep -E '^COMPOSE_FILE=' .env | cut -d= -f2-)" in
+  *docker-compose.smb.yml*) ;;  # Docker mounts the share itself
+  *) deploy/check-media-mount.sh "$(get_media)" || exit 1 ;;
+esac
+
 say "Pulling images"
 $DOCKER compose pull --ignore-pull-failures || true
 # compose builds a MediaHub image locally only if it could not be pulled (e.g. before CI has published one)
