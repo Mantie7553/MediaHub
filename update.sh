@@ -13,3 +13,6 @@ $DOCKER compose up -d --remove-orphans
 $DOCKER start -a "$($DOCKER compose ps -a -q bootstrap)" || exit 1
 $DOCKER image prune -f >/dev/null
 echo "MediaHub is up to date"
+case ",$(grep -E '^COMPOSE_PROFILES=' .env | cut -d= -f2-)," in
+  *,quicktunnel,*) ./tunnel-url.sh ;;
+esac

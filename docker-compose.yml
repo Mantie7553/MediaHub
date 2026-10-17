@@ -86,6 +86,16 @@ services:
     depends_on:
       - web
 
+  # no-domain alternative to the named tunnel: a random https://<words>.trycloudflare.com address that
+  # changes whenever this container restarts. ./tunnel-url.sh (or .ps1) prints the current one
+  cloudflared-quick:
+    image: cloudflare/cloudflared:latest
+    profiles: [quicktunnel]
+    restart: unless-stopped
+    command: tunnel --no-autoupdate --url http://web:80
+    depends_on:
+      - web
+
   # writes qBittorrent's first config (password, save paths) before it starts for the first time
   qbit-init:
     image: ghcr.io/mantie7553/mediahub-bootstrap:${MEDIAHUB_TAG:-latest}

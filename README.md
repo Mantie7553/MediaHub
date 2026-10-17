@@ -71,7 +71,12 @@ On a PC without Docker, the script installs WSL 2 and Docker Desktop. It then as
 The script asks for:
 - **Media folder.** This folder holds `TV Shows`, `Movies`, `Music`, `Manga` and `Light Novels`. You can give it a local folder, or an SMB share (`\nas\media` on Windows; on Linux, answer the SMB question).
 - **Address people will use**, e.g. `https://media.example.com`.
-- **Cloudflare tunnel token** (optional). Create a named tunnel in Cloudflare Zero Trust, point its public hostname at `http://web:80`, and paste the token.
+- **Remote access** (optional). Pick one:
+  - **Named tunnel**, for a permanent address on your own domain. Create a named tunnel in Cloudflare Zero Trust, point its public hostname at `http://web:80`, and paste the token.
+  - **`quick`**, if you have no domain. You get a free random `https://….trycloudflare.com` address with no account needed. It **changes whenever the tunnel restarts** (reboot, `docker compose restart`), so run `./tunnel-url.sh` (or `.	unnel-url.ps1`) to see the current one. The install and update scripts print it too.
+  - **Blank**, for the home network only.
+
+  To switch later, set `COMPOSE_PROFILES` in `.env` to `tunnel` or `quicktunnel` (add `TUNNEL_TOKEN` for a named tunnel) and run `docker compose up -d`.
 
 At the end it prints the logins. The MediaHub admin is `admin@example.com`. The qBittorrent/Sonarr/Radarr/Prowlarr user is `admin`. Both passwords are saved in `.env`. The one manual step left is adding indexers in Prowlarr (`http://<server>:9696`); they sync to Sonarr and Radarr.
 

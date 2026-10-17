@@ -62,7 +62,9 @@ if [ ! -f .env ]; then
     media_root=$media_host
   fi
   public_url=$(ask "Address people will open MediaHub at" "http://$(hostname -I 2>/dev/null | awk '{print $1}')")
-  tunnel_token=$(ask "Cloudflare tunnel token (blank to skip)" "")
+  echo "Remote access: paste a Cloudflare named tunnel token, type 'quick' for a free random"
+  echo "trycloudflare.com address (changes on restart), or leave blank for home network only."
+  tunnel_token=$(ask "Tunnel token / quick / blank" "")
   tz=$(cat /etc/timezone 2>/dev/null || timedatectl show -p Timezone --value 2>/dev/null || echo Etc/UTC)
 
   compose_file=docker-compose.yml
@@ -74,7 +76,12 @@ if [ ! -f .env ]; then
   fi
   [ "$smb" = "y" ] && compose_file="$compose_file:docker-compose.smb.yml"
   profiles=""
-  [ -n "$tunnel_token" ] && profiles=tunnel
+  if [ "$tunnel_token" = "quick" ]; then
+    profiles=quicktunnel
+    tunnel_token=""
+  elif [ -n "$tunnel_token" ]; then
+    profiles=tunnel
+  fi
 
   sed \
     -e "s|^MEDIA_HOST_PATH=.*|MEDIA_HOST_PATH=$(esc "${media_host}")|" \
@@ -132,5 +139,8 @@ if $FIRST_RUN; then
   echo "  *arr + qBittorrent login: admin / $(get ARR_PASSWORD)"
   echo "  (also stored in .env; change the MediaHub password after logging in)"
 fi
+case ",$(get COMPOSE_PROFILES)," in
+  *,quicktunnel,*) echo; ./tunnel-url.sh ;;
+esac
 echo
 echo "  Next: add indexers in Prowlarr. Updates install themselves after each push to main."
