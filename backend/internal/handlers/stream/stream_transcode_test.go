@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -124,6 +125,7 @@ func TestWaitForPlaylist(t *testing.T) {
 }
 
 func TestTranscodeArgs(t *testing.T) {
+	t.Setenv("TRANSCODE_ENCODER", "amf")
 	args := strings.Join(transcodeArgs("in.mkv", "out", streamManifest{AudioIndex: 2}), " ")
 	for _, want := range []string{
 		"-map 0:v:0", "-map 0:2", "-b:v 6M", "-maxrate 8M", "-forced_idr 1",
@@ -137,6 +139,48 @@ func TestTranscodeArgs(t *testing.T) {
 	noAudio := strings.Join(transcodeArgs("in.mkv", "out", streamManifest{AudioIndex: -1}), " ")
 	if strings.Contains(noAudio, "-map 0:-1") {
 		t.Errorf("mapped a missing audio track: %s", noAudio)
+	}
+}
+
+func TestTranscodeEncoder(t *testing.T) {
+	t.Setenv("TRANSCODE_ENCODER", "")
+	def := "libx264"
+	if runtime.GOOS == "windows" {
+		def = "amf"
+	}
+	if got := transcodeEncoder(); got != def {
+		t.Errorf("default = %q, want %q", got, def)
+	}
+
+	t.Setenv("TRANSCODE_ENCODER", "bogus")
+	if got := transcodeEncoder(); got != def {
+		t.Errorf("unknown encoder = %q, want the default %q", got, def)
+	}
+
+	t.Setenv("TRANSCODE_ENCODER", "vaapi")
+	t.Setenv("TRANSCODE_VAAPI_DEVICE", "")
+	args := strings.Join(transcodeArgs("in.mkv", "out", streamManifest{AudioIndex: 1}), " ")
+	for _, want := range []string{"-vaapi_device /dev/dri/renderD128", "format=nv12,hwupload", "-c:v h264_vaapi", "-maxrate 8M"} {
+		if !strings.Contains(args, want) {
+			t.Errorf("vaapi args missing %q: %s", want, args)
+		}
+	}
+	// the device has to be set up before the input
+	if strings.Index(args, "-vaapi_device") > strings.Index(args, "-i in.mkv") {
+		t.Errorf("-vaapi_device after the input: %s", args)
+	}
+
+	t.Setenv("TRANSCODE_ENCODER", "libx264")
+	args = strings.Join(transcodeArgs("in.mkv", "out", streamManifest{AudioIndex: 1}), " ")
+	for _, want := range []string{"-c:v libx264", "-preset veryfast", "-maxrate 8M", "-force_key_frames"} {
+		if !strings.Contains(args, want) {
+			t.Errorf("libx264 args missing %q: %s", want, args)
+		}
+	}
+	for _, bad := range []string{"-vaapi_device", "-forced_idr", "h264_amf"} {
+		if strings.Contains(args, bad) {
+			t.Errorf("libx264 args contain %q: %s", bad, args)
+		}
 	}
 }
 
