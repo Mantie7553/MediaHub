@@ -9,6 +9,9 @@ warn() { printf '\033[1;33m!!\033[0m %s\n' "$*"; }
 die()  { printf '\033[1;31mxx\033[0m %s\n' "$*" >&2; exit 1; }
 ask()  { local prompt=$1 default=${2:-} reply; read -r -p "$prompt${default:+ [$default]}: " reply; echo "${reply:-$default}"; }
 secret() { openssl rand -hex "${1:-32}"; }
+# a dead third-party repository (e.g. an old Sonarr one) makes apt-get update fail, which shouldn't
+# stop the install; a real problem with Docker's repository still fails at apt-get install
+apt_update() { $SUDO apt-get update || warn "apt-get update reported errors (often an old third-party repository in /etc/apt/sources.list.d); continuing"; }
 esc() { printf '%s' "$1" | sed -e 's/[\\|&]/\\&/g'; }  # for sed replacement text
 
 SUDO=""
@@ -19,14 +22,14 @@ if ! command -v docker >/dev/null 2>&1 || ! docker compose version >/dev/null 2>
   say "Docker Engine with the compose plugin is not installed"
   [ "$(ask 'Install it now from Docker'"'"'s apt repository? (y/n)' y)" = "y" ] || die "Docker is required"
   . /etc/os-release
-  $SUDO apt-get update
+  apt_update
   $SUDO apt-get install -y ca-certificates curl openssl
   $SUDO install -m 0755 -d /etc/apt/keyrings
   $SUDO curl -fsSL "https://download.docker.com/linux/${ID}/gpg" -o /etc/apt/keyrings/docker.asc
   $SUDO chmod a+r /etc/apt/keyrings/docker.asc
   echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/${ID} ${VERSION_CODENAME} stable" \
     | $SUDO tee /etc/apt/sources.list.d/docker.list >/dev/null
-  $SUDO apt-get update
+  apt_update
   $SUDO apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
   $SUDO systemctl enable --now docker
   [ -n "$SUDO" ] && $SUDO usermod -aG docker "$USER" && warn "Added $USER to the docker group (takes effect at next login)"
