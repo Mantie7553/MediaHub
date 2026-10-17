@@ -100,8 +100,11 @@ if (-not (Test-Path .env)) {
     $ip = (Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
            Where-Object { $_.PrefixOrigin -in 'Dhcp', 'Manual' } | Select-Object -First 1).IPAddress
     $values.PUBLIC_URL = Ask 'Address people will open MediaHub at' $(if ($ip) { "http://$ip" } else { 'http://localhost' })
-    $values.TUNNEL_TOKEN = Ask 'Cloudflare tunnel token (blank to skip)'
-    if ($values.TUNNEL_TOKEN) { $values.COMPOSE_PROFILES = 'tunnel' }
+    Write-Host "Remote access: paste a Cloudflare named tunnel token, type 'quick' for a free random"
+    Write-Host 'trycloudflare.com address (changes on restart), or leave blank for home network only.'
+    $tunnel = Ask 'Tunnel token / quick / blank'
+    if ($tunnel -eq 'quick') { $values.COMPOSE_PROFILES = 'quicktunnel' }
+    elseif ($tunnel) { $values.TUNNEL_TOKEN = $tunnel; $values.COMPOSE_PROFILES = 'tunnel' }
     # Windows PowerShell can't convert Windows time zone ids to the IANA names Linux uses
     $values.TZ = Ask 'Time zone (IANA name, e.g. America/New_York)' 'Etc/UTC'
 
@@ -144,6 +147,10 @@ if ($firstRun) {
     Write-Host "  MediaHub login:           admin@example.com / $($envValues.ADMIN_PASSWORD)"
     Write-Host "  *arr + qBittorrent login: admin / $($envValues.ARR_PASSWORD)"
     Write-Host '  (also stored in .env; change the MediaHub password after logging in)'
+}
+if ((",$($envValues.COMPOSE_PROFILES),") -like '*,quicktunnel,*') {
+    Write-Host ''
+    & (Join-Path $PSScriptRoot 'tunnel-url.ps1')
 }
 Write-Host ''
 Write-Host '  Next: add indexers in Prowlarr. Updates install themselves after each push to main.'

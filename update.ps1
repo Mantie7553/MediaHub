@@ -13,3 +13,5 @@ if ($LASTEXITCODE -ne 0) { exit 1 }
 if ($LASTEXITCODE -ne 0) { exit 1 }
 & docker image prune -f | Out-Null
 Write-Host 'MediaHub is up to date'
+$profiles = (Get-Content .env | Where-Object { $_ -match '^COMPOSE_PROFILES=' }) -replace '^COMPOSE_PROFILES=', ''
+if ((",$profiles,") -like '*,quicktunnel,*') { & (Join-Path $PSScriptRoot 'tunnel-url.ps1') }
