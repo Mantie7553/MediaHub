@@ -107,7 +107,7 @@ Qualities are grouped as SD / 720p / 1080p. Within a resolution the score decide
 ## Keeping the library in sync
 MediaHub's catalog is built from Sonarr, Radarr and the `Manga`, `Light Novels` and `Music` folders:
 - **Requests made in MediaHub** appear as soon as Sonarr/Radarr import them (webhooks).
-- **Everything else** (files added by hand, a Sonarr/Radarr *Library Import*) is picked up by the **library sync**. It runs every night at `LIBRARY_SYNC_HOUR` (default 4 am), or on demand from *Management → Library Sync → Sync Library*.
+- **Everything else** (files added by hand, a Sonarr/Radarr *Library Import*) is picked up by the **library sync**. It runs every night at `LIBRARY_SYNC_HOUR` (default 4 am), or on demand from *Settings → Library Sync → Sync Library* (admins only).
 
 For an existing collection, first add it to Sonarr/Radarr (*Series/Movies → Library Import*, **Anime** profile), then run the sync.
 

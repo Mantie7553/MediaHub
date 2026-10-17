@@ -5,7 +5,6 @@ import Loading from "../../components/states/Loading";
 import Error from "../../components/states/Error";
 import { validatePassword } from "../../utils/validate";
 import InvitesSection from "./InvitesSection";
-import LibrarySyncSection from "./LibrarySyncSection";
 
 /**
  * Admin page for managing users
@@ -88,8 +87,6 @@ export default function UserManagementPage() {
             </section>
 
             <InvitesSection />
-
-            <LibrarySyncSection />
 
             <UserModal ref={modalRef} user={selectedUser} onSave={handleSave} />
             <DeleteModal ref={deleteModalRef} user={deleteTarget} onConfirm={handleDeleteConfirm} />
