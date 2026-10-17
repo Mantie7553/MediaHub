@@ -1,0 +1,193 @@
+# MediaHub stack. Run ./install.sh (Linux) or .\install.ps1 (Windows) for first-time setup;
+# every value below comes from .env, see .env.example.
+name: mediahub
+
+x-arr-env: &arr-env
+  PUID: ${PUID:-1000}
+  PGID: ${PGID:-1000}
+  TZ: ${TZ:-Etc/UTC}
+
+# watchtower only updates containers carrying this label: our own images, not the *arr apps
+x-autoupdate: &autoupdate
+  com.centurylinklabs.watchtower.enable: "true"
+
+services:
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-mediahub}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?run the install script to create .env}
+      POSTGRES_DB: ${DB_NAME:-mediahub}
+    volumes:
+      - db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  backend:
+    image: ghcr.io/mantie7553/mediahub-backend:${MEDIAHUB_TAG:-latest}
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+      TZ: ${TZ:-Etc/UTC}
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_USER: ${DB_USER:-mediahub}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME:-mediahub}
+      JWT_SECRET: ${JWT_SECRET:?run the install script to create .env}
+      MEDIA_SIGNING_SECRET: ${MEDIA_SIGNING_SECRET:?run the install script to create .env}
+      WEBHOOK_SECRET: ${WEBHOOK_SECRET}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      CORS_ORIGIN: ${PUBLIC_URL:-http://localhost}
+      MEDIA_ROOT: ${MEDIA_ROOT:-/media}
+      MUSIC_DIR: ${MEDIA_ROOT:-/media}/Music
+      SONARR_URL: http://sonarr:8989
+      SONARR_API_KEY: ${SONARR_API_KEY}
+      RADARR_URL: http://radarr:7878
+      RADARR_API_KEY: ${RADARR_API_KEY}
+      # profile new requests use, kept in sync by bootstrap from deploy/bootstrap/arr-settings.json
+      SONARR_QUALITY_PROFILE: ${SONARR_QUALITY_PROFILE:-Anime}
+      RADARR_QUALITY_PROFILE: ${RADARR_QUALITY_PROFILE:-Anime}
+      TRANSCODE_ENCODER: ${TRANSCODE_ENCODER:-libx264}
+      TRANSCODE_HWACCEL: ${TRANSCODE_HWACCEL:-none}
+    volumes:
+      - ${MEDIA_HOST_PATH:-./media}:${MEDIA_ROOT:-/media}
+      - backend-data:/data
+    labels: *autoupdate
+
+  web:
+    image: ghcr.io/mantie7553/mediahub-web:${MEDIAHUB_TAG:-latest}
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "${HTTP_PORT:-80}:80"
+    labels: *autoupdate
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    profiles: [tunnel]
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN}
+    depends_on:
+      - web
+
+  # writes qBittorrent's first config (password, save paths) before it starts for the first time
+  qbit-init:
+    image: ghcr.io/mantie7553/mediahub-bootstrap:${MEDIAHUB_TAG:-latest}
+    build: ./deploy/bootstrap
+    command: ["qbit-config"]
+    restart: "no"
+    environment:
+      ARR_PASSWORD: ${ARR_PASSWORD}
+      MEDIA_ROOT: ${MEDIA_ROOT:-/media}
+    volumes:
+      - qbittorrent-config:/config
+
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent:latest
+    restart: unless-stopped
+    depends_on:
+      qbit-init:
+        condition: service_completed_successfully
+    environment:
+      <<: *arr-env
+      WEBUI_PORT: "8080"
+    volumes:
+      - qbittorrent-config:/config
+      - ${MEDIA_HOST_PATH:-./media}:${MEDIA_ROOT:-/media}
+    ports:
+      - "8080:8080"
+      - "6881:6881"
+      - "6881:6881/udp"
+
+  sonarr:
+    image: lscr.io/linuxserver/sonarr:latest
+    restart: unless-stopped
+    environment:
+      <<: *arr-env
+      SONARR__AUTH__APIKEY: ${SONARR_API_KEY}
+    volumes:
+      - sonarr-config:/config
+      - ${MEDIA_HOST_PATH:-./media}:${MEDIA_ROOT:-/media}
+    ports:
+      - "8989:8989"
+
+  radarr:
+    image: lscr.io/linuxserver/radarr:latest
+    restart: unless-stopped
+    environment:
+      <<: *arr-env
+      RADARR__AUTH__APIKEY: ${RADARR_API_KEY}
+    volumes:
+      - radarr-config:/config
+      - ${MEDIA_HOST_PATH:-./media}:${MEDIA_ROOT:-/media}
+    ports:
+      - "7878:7878"
+
+  prowlarr:
+    image: lscr.io/linuxserver/prowlarr:latest
+    restart: unless-stopped
+    environment:
+      <<: *arr-env
+      PROWLARR__AUTH__APIKEY: ${PROWLARR_API_KEY}
+    volumes:
+      - prowlarr-config:/config
+    ports:
+      - "9696:9696"
+
+  # one-shot: creates the media folders and connects Sonarr/Radarr/Prowlarr/qBittorrent/MediaHub.
+  # Safe to re-run, it skips anything that already exists
+  bootstrap:
+    image: ghcr.io/mantie7553/mediahub-bootstrap:${MEDIAHUB_TAG:-latest}
+    build: ./deploy/bootstrap
+    restart: "no"
+    depends_on:
+      - backend
+      - qbittorrent
+      - sonarr
+      - radarr
+      - prowlarr
+    environment:
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+      MEDIA_ROOT: ${MEDIA_ROOT:-/media}
+      ARR_PASSWORD: ${ARR_PASSWORD}
+      SONARR_API_KEY: ${SONARR_API_KEY}
+      RADARR_API_KEY: ${RADARR_API_KEY}
+      PROWLARR_API_KEY: ${PROWLARR_API_KEY}
+      WEBHOOK_SECRET: ${WEBHOOK_SECRET}
+    volumes:
+      - ${MEDIA_HOST_PATH:-./media}:${MEDIA_ROOT:-/media}
+
+  # pulls new MediaHub images after every push to main (see .github/workflows/release.yml)
+  watchtower:
+    image: nickfedor/watchtower:1.22.3
+    restart: unless-stopped
+    command: --label-enable --cleanup --interval ${UPDATE_INTERVAL:-300}
+    environment:
+      TZ: ${TZ:-Etc/UTC}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
+volumes:
+  db:
+  backend-data:
+  qbittorrent-config:
+  sonarr-config:
+  radarr-config:
+  prowlarr-config:

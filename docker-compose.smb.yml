@@ -1,0 +1,25 @@
+# Media on a network share (NAS). Docker mounts the share itself, which is the only way that works
+# on Windows, where mapped drive letters aren't visible to Docker Desktop. Replaces MEDIA_HOST_PATH.
+x-media: &media
+  type: volume
+  source: media
+  target: ${MEDIA_ROOT:-/media}
+
+services:
+  backend:
+    volumes: [*media]
+  qbittorrent:
+    volumes: [*media]
+  sonarr:
+    volumes: [*media]
+  radarr:
+    volumes: [*media]
+  bootstrap:
+    volumes: [*media]
+
+volumes:
+  media:
+    driver_opts:
+      type: cifs
+      device: "//${SMB_HOST:?set SMB_HOST in .env}/${SMB_SHARE:?set SMB_SHARE in .env}"
+      o: "username=${SMB_USERNAME},password=${SMB_PASSWORD},uid=${PUID:-1000},gid=${PGID:-1000},file_mode=0664,dir_mode=0775,vers=3.0"

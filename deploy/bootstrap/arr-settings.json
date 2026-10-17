@@ -1,0 +1,143 @@
+{
+  "_comment": [
+    "Sonarr/Radarr settings bootstrap keeps in sync on every run (install and update scripts).",
+    "This file is the source of truth: change these formats and profiles here, not in the Sonarr/Radarr UI,",
+    "or the next run puts them back. Anything not listed here (other profiles, formats) is left alone.",
+    "Regexes are case-insensitive. Quality names are the ones on the apps' Settings > Profiles page;",
+    "qualities are grouped per resolution so that, within a resolution, the format score decides.",
+    "Goal: one file with Japanese audio + English subs AND an English dub (dual audio). Failing that,",
+    "Japanese with subs (most releases don't name a language and score 0), then English-dub-only. Raws are never grabbed."
+  ],
+  "customFormats": [
+    {
+      "name": "Dual Audio",
+      "specifications": [
+        {
+          "name": "Dual Audio",
+          "implementation": "ReleaseTitleSpecification",
+          "fields": {
+            "value": "\\b(dual[ ._-]?(audio|lang(uage)?)|multi[ ._-]?audio)\\b"
+          }
+        },
+        {
+          "name": "JA+EN",
+          "implementation": "ReleaseTitleSpecification",
+          "fields": {
+            "value": "\\b(ja|jap|jpn?)[ ._-]?\\+[ ._-]?(en|eng)\\b|\\b(en|eng)[ ._-]?\\+[ ._-]?(ja|jap|jpn?)\\b"
+          }
+        },
+        {
+          "name": "DUAL tag",
+          "implementation": "ReleaseTitleSpecification",
+          "fields": {
+            "value": "\\b(web-?dl|webrip|web|bluray|bd(rip)?|hdtv)[ ._-]+dual\\b|\\bdual[ ._-]+(aac|flac|ac3|e?ac-?3|opus|ddp?|dts|truehd)"
+          }
+        },
+        {
+          "name": "DL",
+          "implementation": "ReleaseTitleSpecification",
+          "fields": {
+            "value": "(?<!WEB[-_. ]?)\\b(DL)\\b"
+          }
+        },
+        {
+          "name": "ML",
+          "implementation": "ReleaseTitleSpecification",
+          "fields": {
+            "value": "\\b(ML)\\b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Japanese Audio",
+      "specifications": [
+        {
+          "name": "Japanese",
+          "implementation": "LanguageSpecification",
+          "fields": {
+            "value": 8
+          }
+        },
+        {
+          "name": "Original",
+          "implementation": "LanguageSpecification",
+          "fields": {
+            "value": -2
+          }
+        }
+      ]
+    },
+    {
+      "name": "English Dub",
+      "specifications": [
+        {
+          "name": "English Dub",
+          "implementation": "ReleaseTitleSpecification",
+          "fields": {
+            "value": "\\beng(lish)?[ ._-]?dub(bed)?\\b|(?<!japanese[ ._-])\\bdubbed\\b"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Raw (no subtitles)",
+      "specifications": [
+        {
+          "name": "Raw",
+          "implementation": "ReleaseTitleSpecification",
+          "fields": {
+            "value": "(?<!erai-)\\braws?\\b"
+          }
+        }
+      ]
+    }
+  ],
+  "qualityProfiles": [
+    {
+      "name": "Anime",
+      "groups": [
+        {
+          "name": "SD",
+          "qualities": [
+            "SDTV",
+            "DVD",
+            "WEB 480p",
+            "Bluray-480p"
+          ]
+        },
+        {
+          "name": "720p",
+          "qualities": [
+            "HDTV-720p",
+            "WEB 720p",
+            "Bluray-720p"
+          ]
+        },
+        {
+          "name": "1080p",
+          "qualities": [
+            "HDTV-1080p",
+            "WEB 1080p",
+            "Bluray-1080p"
+          ]
+        }
+      ],
+      "cutoff": "1080p",
+      "upgradeAllowed": true,
+      "minFormatScore": -100,
+      "cutoffFormatScore": 100,
+      "minUpgradeFormatScore": 1,
+      "formatScores": {
+        "Dual Audio": 100,
+        "Japanese Audio": 10,
+        "English Dub": -5,
+        "Raw (no subtitles)": -10000
+      },
+      "radarrLanguage": {
+        "id": -1,
+        "name": "Any"
+      }
+    }
+  ]
+}
