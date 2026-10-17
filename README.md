@@ -69,11 +69,11 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1
 On a PC without Docker, the script installs WSL 2 and Docker Desktop. It then asks you to restart and run it again.
 
 The script asks for:
-- **Media folder.** This folder holds `TV Shows`, `Movies`, `Music`, `Manga` and `Light Novels`. You can give it a local folder, or an SMB share (`\nas\media` on Windows; on Linux, answer the SMB question).
+- **Media folder.** This folder holds `TV Shows`, `Movies`, `Music`, `Manga` and `Light Novels`. You can give it a local folder, or an SMB share (`\\nas\media` on Windows; on Linux, answer the SMB question).
 - **Address people will use**, e.g. `https://media.example.com`.
 - **Remote access** (optional). Pick one:
   - **Named tunnel**, for a permanent address on your own domain. Create a named tunnel in Cloudflare Zero Trust, point its public hostname at `http://web:80`, and paste the token.
-  - **`quick`**, if you have no domain. You get a free random `https://….trycloudflare.com` address with no account needed. It **changes whenever the tunnel restarts** (reboot, `docker compose restart`), so run `./tunnel-url.sh` (or `.	unnel-url.ps1`) to see the current one. The install and update scripts print it too.
+  - **`quick`**, if you have no domain. You get a free random `https://….trycloudflare.com` address with no account needed. It **changes whenever the tunnel restarts** (reboot, `docker compose restart`), so run `./tunnel-url.sh` (or `.\tunnel-url.ps1`) to see the current one. The install and update scripts print it too.
   - **Blank**, for the home network only.
 
   To switch later, set `COMPOSE_PROFILES` in `.env` to `tunnel` or `quicktunnel` (add `TUNNEL_TOKEN` for a named tunnel) and run `docker compose up -d`.
@@ -103,6 +103,13 @@ What the first-run `bootstrap` container sets up (re-running it changes nothing)
 Qualities are grouped as SD / 720p / 1080p. Within a resolution the score decides, and a higher resolution beats a higher score. Upgrades stay on until the file is 1080p and dual audio. So if only a subbed release exists at first, Sonarr/Radarr swap it for a dual-audio one when one appears.
 
 `arr-settings.json` is the source of truth. Bootstrap brings these formats and the profile back to match it on every install or update run, so change them in the file, not in the Sonarr/Radarr UI. Other profiles and formats are left alone. Per-user audio and subtitle language preferences live in MediaHub's database and move with it (see the migration steps below).
+
+**Hardware transcoding.** On Linux with an AMD/Intel GPU (`/dev/dri/renderD128`), the installer turns on VAAPI through `docker-compose.gpu.yml`. On Windows, Docker can't reach the GPU, so videos transcode on the CPU (libx264). Playback works, but first plays are slower.
+
+**Notes**
+- **NAS mounted through `/etc/fstab` (Linux).** If the media folder is on a share listed in `/etc/fstab`, `install.sh` and `update.sh` check that it is actually mounted, and refuse to start if it isn't. They also make Docker wait for the share at boot (`RequiresMountsFor` drop-in). Without this, a share that failed to mount leaves the containers looking at the empty mount-point folder, which looks like a wiped library.
+- Avoid `$` in `.env` values, because Compose treats it as a variable.
+- Avoid `,` in the SMB password, because it separates mount options.
 
 ## Keeping the library in sync
 MediaHub's catalog is built from Sonarr, Radarr and the `Manga`, `Light Novels` and `Music` folders:
