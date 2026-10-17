@@ -19,8 +19,12 @@ func main() {
 	if err := godotenv.Load(".env.local"); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		log.Fatal("Error loading .env.local file: ", err)
 	}
+	// in Docker the config comes from the container environment, so .env is optional
 	if err := godotenv.Load(); err != nil {
-		log.Fatal("Error loading .env file")
+		if !errors.Is(err, fs.ErrNotExist) {
+			log.Fatal("Error loading .env file: ", err)
+		}
+		fmt.Println("No .env file, using environment variables")
 	}
 
 	db, err := database.New()
@@ -30,6 +34,15 @@ func main() {
 	defer db.Close()
 
 	fmt.Println("Database connected successfully")
+
+	if err := database.Migrate(db); err != nil {
+		log.Fatal("Error running migrations: ", err)
+	}
+	if changed, err := database.SetInitialAdminPassword(db); err != nil {
+		log.Fatal("Error setting admin password: ", err)
+	} else if changed {
+		fmt.Println("Default admin password replaced with ADMIN_PASSWORD")
+	}
 
 	s := server.New(db)
 	cleanup.Start(os.Getenv("MEDIA_ROOT"))
