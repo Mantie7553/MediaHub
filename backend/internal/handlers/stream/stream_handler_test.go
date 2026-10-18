@@ -79,6 +79,10 @@ func TestServeSegmentRejectsTraversal(t *testing.T) {
 			if strings.Contains(rec.Body.String(), "secret") && !strings.Contains(rec.Body.String(), "invalid") {
 				t.Fatal("served a file outside the temp dir")
 			}
+			// a text type here makes the proxy compress every segment
+			if tt.status == http.StatusOK && rec.Header().Get("Content-Type") != "video/mp2t" {
+				t.Fatalf("Content-Type = %q, want video/mp2t", rec.Header().Get("Content-Type"))
+			}
 		})
 	}
 }

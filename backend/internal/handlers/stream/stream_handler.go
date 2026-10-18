@@ -267,10 +267,17 @@ func (h *Handler) ServeSegment(w http.ResponseWriter, r *http.Request) {
 	variant := chi.URLParam(r, "variant")
 	file := chi.URLParam(r, "file")
 
-	// only playlist, segments and finished subtitles; not stream.json, transcode.log or .tmp files
-	servable := map[string]bool{".m3u8": true, ".ts": true, ".vtt": true}
+	// only playlist, segments and finished subtitles; not stream.json, transcode.log or .tmp files.
+	// Types are set here because the system MIME table (Debian's) calls .ts a text file, and the
+	// proxy then compresses every segment
+	contentTypes := map[string]string{
+		".m3u8": "application/vnd.apple.mpegurl",
+		".ts":   "video/mp2t",
+		".vtt":  "text/vtt; charset=utf-8",
+	}
+	contentType, servable := contentTypes[filepath.Ext(file)]
 	if (mediaType != "episode" && mediaType != "movie") || !utils.SafeFileName(mediaID) ||
-		!variantRe.MatchString(variant) || !utils.SafeFileName(file) || !servable[filepath.Ext(file)] {
+		!variantRe.MatchString(variant) || !utils.SafeFileName(file) || !servable {
 		utils.Error(w, http.StatusBadRequest, "invalid segment path")
 		return
 	}
@@ -293,12 +300,14 @@ func (h *Handler) ServeSegment(w http.ResponseWriter, r *http.Request) {
 		if utils.InternalError(w, err) {
 			return
 		}
-		w.Header().Set("Content-Type", "application/vnd.apple.mpegurl")
+		w.Header().Set("Content-Type", contentType)
 		w.Header().Set("Cache-Control", "no-store")
 		w.Write([]byte(signPlaylist(string(content), r.URL.Query().Get(auth.MediaTokenParam))))
 		return
 	}
 
+	// ServeFile keeps a Content-Type that is already set
+	w.Header().Set("Content-Type", contentType)
 	http.ServeFile(w, r, filePath)
 }
 
