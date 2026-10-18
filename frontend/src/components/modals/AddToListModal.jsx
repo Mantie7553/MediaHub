@@ -2,7 +2,15 @@ import { useEffect, useState } from "react";
 import ScrollPicker from "../ScrollPicker";
 import Format from "../../utils/format";
 
-export default function AddToListModal({item, onConfirm, dialogRef, initialValues, isLibraryItem}) {
+/**
+ * Add a title to the user's list or edit its entry
+ * @param {function} onConfirm called with { status, score, progress }
+ * @param {object} initialValues the user's list entry, when the title is already on their list
+ * @param {boolean} isLibraryItem the title is in the library (no wishlist option then)
+ * @param {function} onRemove takes the title off the user's list, shown for titles on it
+ * @param {function} onDelete admins: opens the permanent delete confirmation
+ */
+export default function AddToListModal({item, onConfirm, dialogRef, initialValues, isLibraryItem, onRemove, onDelete}) {
     const [status, setStatus] = useState(initialValues?.status ?? 'planned');
     const [score, setScore] = useState(initialValues?.rating ?? 0);
     const [progress, setProgress] = useState((initialValues?.episodes_watched || initialValues?.chapters_read) ?? 0);
@@ -53,7 +61,19 @@ export default function AddToListModal({item, onConfirm, dialogRef, initialValue
             <section className="flex gap-2 pt-2 pl-4">
                 <button className="btn btn-primary" onClick={() => {onConfirm({ status, score, progress}); dialogRef.current.close()}}>Confirm</button>
                 <button className="btn btn-secondary btn-outline" onClick={() => dialogRef.current.close()}>Cancel</button>
+                {initialValues && onRemove && (
+                    <button className="btn btn-ghost text-error ml-auto" onClick={() => { dialogRef.current.close(); onRemove(); }}>
+                        Remove from list
+                    </button>
+                )}
             </section>
+            {onDelete && (
+                <section className="border-t border-base-300 pt-3 pl-4">
+                    <button className="link link-error text-sm" onClick={() => { dialogRef.current.close(); onDelete(); }}>
+                        Delete from server…
+                    </button>
+                </section>
+            )}
         </div>
     </dialog>
 }

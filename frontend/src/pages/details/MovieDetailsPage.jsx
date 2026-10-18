@@ -5,7 +5,8 @@ import { DetailsSkeleton } from "../../components/states/Skeletons";
 import Cover from "../../components/Cover";
 import { toast } from "../../stores/useToastStore";
 import { goBack, openViewer } from "../../utils/navigation";
-import { useMediaItem, useUserContent } from "../../hooks";
+import { useMediaItem, useUserContent, useRemoveFromList } from "../../hooks";
+import DeleteFromServerButton from "../../components/DeleteFromServerButton";
 import Format from "../../utils/format";
 import api from "../../services/api";
 import { mediaStatusBadge } from "../../utils/status";
@@ -17,6 +18,7 @@ export default function MovieDetailsPage() {
     const { id } = useParams();
     const { item: movie, loading, error, notFound, refetch } = useMediaItem(id);
     const userEntry = userContentMap[id];
+    const removeEntry = useRemoveFromList(userEntry, refresh);
 
     function updateStatus(status) {
         const request = userEntry
@@ -75,7 +77,7 @@ export default function MovieDetailsPage() {
                         <p className="text-sm text-neutral-content">Not downloaded yet, so it can't be played.</p>
                     )}
 
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                         {movie.metadata.file_path && <>
                             <button
                                 className="btn btn-primary"
@@ -104,8 +106,16 @@ export default function MovieDetailsPage() {
                                         </button>
                                     </li>
                                 ))}
+                                {userEntry && (
+                                    <li className="border-t border-base-300 mt-1 pt-1">
+                                        <button className="text-error" onClick={() => { removeEntry(); document.activeElement.blur(); }}>
+                                            Remove from list
+                                        </button>
+                                    </li>
+                                )}
                             </ul>
                         </div>
+                        <DeleteFromServerButton item={{ id, title: movie.title, type: movie.type }} />
                     </div>
                 </div>
             </div>

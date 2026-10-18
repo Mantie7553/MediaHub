@@ -8,7 +8,8 @@ import { DetailsSkeleton } from "../../components/states/Skeletons";
 import Cover from "../../components/Cover";
 import { toast } from "../../stores/useToastStore";
 import { goBack } from "../../utils/navigation";
-import { useMediaItem, useUserContent } from "../../hooks";
+import { useMediaItem, useUserContent, useRemoveFromList } from "../../hooks";
+import DeleteFromServerButton from "../../components/DeleteFromServerButton";
 import api from "../../services/api";
 import { ArrowLeft, Check } from "lucide-react";
 import Format from "../../utils/format";
@@ -19,6 +20,7 @@ export default function MangaDetailsPage() {
     const { id } = useParams();
     const { item: manga, loading, error, notFound, refetch } = useMediaItem(id);
     const userEntry = userContentMap[id];
+    const removeEntry = useRemoveFromList(userEntry, refresh);
     const [readChapters, setReadChapters] = useState(new Set());
     const [pageProgress, setPageProgress] = useState({});
 
@@ -111,10 +113,18 @@ export default function MangaDetailsPage() {
                                         </button>
                                     </li>
                                 ))}
+                                {userEntry && (
+                                    <li className="border-t border-base-300 mt-1 pt-1">
+                                        <button className="text-error" onClick={() => { removeEntry(); document.activeElement.blur(); }}>
+                                            Remove from list
+                                        </button>
+                                    </li>
+                                )}
                             </ul>
                         </div>
                         <button className="btn btn-outline btn-sm" onClick={() => markAll(true)}>Mark all read</button>
                         <button className="btn btn-outline btn-sm" onClick={() => markAll(false)}>Mark all unread</button>
+                        <DeleteFromServerButton item={{ id, title: manga.title, type: manga.type }} />
                     </div>
                 </div>
             </div>

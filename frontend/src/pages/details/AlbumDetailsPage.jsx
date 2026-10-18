@@ -10,8 +10,9 @@ import { DetailsSkeleton } from "../../components/states/Skeletons"
 import Cover from "../../components/Cover"
 import { toast } from "../../stores/useToastStore"
 import { goBack } from "../../utils/navigation"
+import DeleteFromServerButton from "../../components/DeleteFromServerButton"
 import useAudioStore from "../../stores/useAudioStore"
-import { useUserContent } from "../../hooks"
+import { useUserContent, useRemoveFromList } from "../../hooks"
 import AddToListModal from "../../components/modals/AddToListModal"
 
 export default function AlbumDetailsPage() {
@@ -20,6 +21,7 @@ export default function AlbumDetailsPage() {
     const { id } = useParams();
     const { userContentMap, refresh } = useUserContent();
     const userContent = userContentMap[id];
+    const removeEntry = useRemoveFromList(userContent, refresh);
     const { data: album, loading, error, notFound, reload } = useApi(`/albums/${id}`);
     const playAlbum = useAudioStore(state => state.playAlbum);
     const currentTrack = useAudioStore(state => state.currentTrack);
@@ -71,6 +73,7 @@ export default function AlbumDetailsPage() {
                     <button className="btn btn-outline btn-sm w-fit" onClick={() => dialogRef.current.showModal()}>
                         <BookmarkPlus size={16} /> {userContent ? "Edit List" : "Add to List"}
                     </button>
+                    <DeleteFromServerButton item={{ id, title: album.title, type: "music_album" }} />
                 </div>
             </div>
 
@@ -111,6 +114,7 @@ export default function AlbumDetailsPage() {
                 item={{ title: album.title, type: "music_album" }}
                 initialValues={userContent}
                 onConfirm={handleAddToList}
+                onRemove={userContent ? removeEntry : undefined}
             />
         </div>
     )

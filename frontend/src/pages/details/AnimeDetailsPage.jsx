@@ -8,7 +8,8 @@ import { DetailsSkeleton, ListSkeleton } from "../../components/states/Skeletons
 import Cover from "../../components/Cover";
 import { toast } from "../../stores/useToastStore";
 import { goBack, openViewer } from "../../utils/navigation";
-import { useMediaItem, useUserContent } from "../../hooks";
+import { useMediaItem, useUserContent, useRemoveFromList } from "../../hooks";
+import DeleteFromServerButton from "../../components/DeleteFromServerButton";
 import { animeBadge, mediaStatusBadge } from "../../utils/status";
 import Format from "../../utils/format";
 import { Check, ArrowLeft } from "lucide-react";
@@ -18,6 +19,7 @@ export default function AnimeDetailsPage() {
     const navigate = useNavigate();
     const { userContentMap, refresh } = useUserContent();
     const userEntry = userContentMap[id];
+    const removeEntry = useRemoveFromList(userEntry, refresh);
     const { item: anime, loading, error, notFound, refetch } = useMediaItem(id);
     const [episodes, setEpisodes] = useState([]);
     const [watchedEpisodes, setWatchedEpisodes] = useState(new Set());
@@ -143,6 +145,13 @@ export default function AnimeDetailsPage() {
                                         </button>
                                     </li>
                                 ))}
+                                {userEntry && (
+                                    <li className="border-t border-base-300 mt-1 pt-1">
+                                        <button className="text-error" onClick={() => { removeEntry(); document.activeElement.blur(); }}>
+                                            Remove from list
+                                        </button>
+                                    </li>
+                                )}
                             </ul>
                         </div>
                         <button className="btn btn-outline btn-sm" onClick={() => markShow(true)}>
@@ -151,6 +160,7 @@ export default function AnimeDetailsPage() {
                         <button className="btn btn-outline btn-sm" onClick={() => markShow(false)}>
                             Mark all unwatched
                         </button>
+                        <DeleteFromServerButton item={{ id, title: anime.title, type: anime.type }} />
                     </div>
                 </div>
             </div>

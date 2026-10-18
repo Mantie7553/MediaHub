@@ -4,6 +4,9 @@ import { mediaStatusBadge } from "../../utils/status";
 import { useRef, useState } from "react";
 import api from "../../services/api";
 import AddToListModal from "../modals/AddToListModal";
+import DeleteMediaModal from "../modals/DeleteMediaModal";
+import { removeFromList } from "../../services/mediaService";
+import { getRole } from "../../utils/auth";
 import { Plus, Check } from "lucide-react";
 import Cover from "../Cover";
 import { toast } from "../../stores/useToastStore";
@@ -13,6 +16,10 @@ export default function Card({item, showActions=false, userContentMap={}, onList
     let {infoSection, path} = mediaInfo(item);
     const userEntry = userContentMap[String(item.external_id ?? item.media_item_id ?? item.id)];
     const play = useAudioStore(state => state.play);
+    // hidden as soon as an admin deletes it, without reloading the row it sits in
+    const [deleted, setDeleted] = useState(false);
+
+    if (deleted) return null;
 
     const card = (
         <li className="card border border-base-300 w-44 shrink-0 bg-base-300 h-full">
@@ -26,7 +33,7 @@ export default function Card({item, showActions=false, userContentMap={}, onList
             <div  className="card-body p-2 gap-1">
                 <h3 className="card-title text-sm line-clamp-2">{item.media_title ?? item.title}</h3>
                 {infoSection}
-                <ActionButtons item={item} userEntry={userEntry} onListChange={onListChange}/>
+                <ActionButtons item={item} userEntry={userEntry} onListChange={onListChange} onDeleted={() => setDeleted(true)}/>
             </div>
         </li>
     )
@@ -94,9 +101,14 @@ function mediaInfo(item) {
     return {infoSection: info, path: path}
 }
 
-function ActionButtons({item, userEntry, onListChange}) {
+function ActionButtons({item, userEntry, onListChange, onDeleted}) {
     const [loading, setLoading] = useState(false);
     const dialogRef = useRef(null);
+    const deleteRef = useRef(null);
+    // list entries carry media_item_id, library items their own id; search results that
+    // aren't in the library have neither
+    const mediaId = item.media_item_id ?? item.id;
+    const canDelete = getRole() === "admin" && !!mediaId;
 
     function handleOpenModal(e) {
         e.stopPropagation();
@@ -144,10 +156,25 @@ function ActionButtons({item, userEntry, onListChange}) {
         }
     }
 
+    function handleRemove() {
+        setLoading(true);
+        removeFromList(userEntry.id)
+            .then(() => { toast.success("Removed from your list"); onListChange?.(); })
+            .catch(err => toast.error(err, "Could not remove it from your list"))
+            .finally(() => setLoading(false))
+    }
+
     const isLibraryItem = !!(userEntry || item.id);
 
     return <>
-        <AddToListModal item={item} onConfirm={handleConfirm} dialogRef={dialogRef} initialValues={userEntry} isLibraryItem={isLibraryItem}/>
+        <AddToListModal item={item} onConfirm={handleConfirm} dialogRef={dialogRef} initialValues={userEntry} isLibraryItem={isLibraryItem}
+            onRemove={userEntry ? handleRemove : undefined}
+            onDelete={canDelete ? () => deleteRef.current.showModal() : undefined}/>
+        {canDelete && <DeleteMediaModal
+            dialogRef={deleteRef}
+            item={{ id: mediaId, title: item.media_title ?? item.title, type: item.type ?? item.media_type }}
+            onDeleted={() => { onDeleted?.(); onListChange?.(); }}
+        />}
         <div className="flex flex-col gap-1">
             <button className="absolute top-2 right-2 z-10 btn btn-circle btn-xs btn-primary text-lg" onClick={handleOpenModal} disabled={loading}>
                 {userEntry ? <Check size={14} strokeWidth={4}/> : <Plus size={14} strokeWidth={4}/>}
