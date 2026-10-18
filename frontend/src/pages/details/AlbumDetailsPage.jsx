@@ -1,9 +1,15 @@
-import { useEffect, useState, useRef } from "react"
+import { useRef } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import { Play, Clock, Music, ArrowLeft, BookmarkPlus } from "lucide-react"
 import api from "../../services/api"
-import Loading from "../../components/states/Loading"
-import Error from "../../components/states/Error"
+import useApi from "../../hooks/useApi"
+import ErrorState from "../../components/states/ErrorState"
+import NotFound from "../../components/states/NotFound"
+import EmptyState from "../../components/states/EmptyState"
+import { DetailsSkeleton } from "../../components/states/Skeletons"
+import Cover from "../../components/Cover"
+import { toast } from "../../stores/useToastStore"
+import { goBack } from "../../utils/navigation"
 import useAudioStore from "../../stores/useAudioStore"
 import { useUserContent } from "../../hooks"
 import AddToListModal from "../../components/modals/AddToListModal"
@@ -14,18 +20,9 @@ export default function AlbumDetailsPage() {
     const { id } = useParams();
     const { userContentMap, refresh } = useUserContent();
     const userContent = userContentMap[id];
-    const [album, setAlbum] = useState(null);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState("");
+    const { data: album, loading, error, notFound, reload } = useApi(`/albums/${id}`);
     const playAlbum = useAudioStore(state => state.playAlbum);
     const currentTrack = useAudioStore(state => state.currentTrack);
-
-    useEffect(() => {
-        api.get(`/albums/${id}`)
-            .then(res => setAlbum(res.data))
-            .catch(err => setError(err.message))
-            .finally(() => setLoading(false))
-    }, [id])
 
     function formatDuration(secs) {
         if (!secs) return "--:--"
@@ -35,19 +32,21 @@ export default function AlbumDetailsPage() {
     }
 
     function handleAddToList({ status, score }) {
-       const payload = { album_id: id, status, rating: score || null }
-       if (userContent) {
-           api.put(`/me/media/${userContent.id}`, { status, rating: score || null }).then(() => refresh())
-       } else {
-           api.post("/me/media", payload).then(() => refresh())
-       }
+       const request = userContent
+           ? api.put(`/me/media/${userContent.id}`, { status, rating: score || null })
+           : api.post("/me/media", { album_id: id, status, rating: score || null })
+       request
+           .then(() => { toast.success(userContent ? "List updated" : "Added to your list"); refresh() })
+           .catch(err => toast.error(err, "Could not update your list"))
    }
 
-    if (loading) return <Loading />
-    if (error) return <Error error={error} />
+    if (loading) return <DetailsSkeleton />
+    if (notFound) return <NotFound title="Album not found" hint="This album isn't in the library any more. It may have been removed." />
+    if (error) return <ErrorState error={error} title="Couldn't load this album" onRetry={reload} showBack />
     if (!album) return null
 
-    const queueTracks = album.tracks.map(t => ({
+    const tracks = album.tracks ?? []
+    const queueTracks = tracks.map(t => ({
         id: t.media_item_id,
         title: t.title,
         artist: album.artist,
@@ -56,23 +55,17 @@ export default function AlbumDetailsPage() {
 
     return (
         <div className="flex flex-col gap-8">
-            <button className="btn btn-ghost btn-sm self-start" onClick={() => navigate("/")}>
+            <button className="btn btn-ghost btn-sm self-start" onClick={() => goBack(navigate)}>
                 <ArrowLeft size={18} strokeWidth={2}/> Back
             </button>
             {/* Album Header */}
             <div className="flex gap-6">
-                {album.cover_image_url ? (
-                    <img src={album.cover_image_url} className="w-48 h-48 object-cover rounded-md" />
-                ) : (
-                    <div className="w-48 h-48 rounded-md bg-base-300 flex items-center justify-center">
-                        <Music size={48} />
-                    </div>
-                )}
+                <Cover src={album.cover_image_url} alt={album.title} className="w-48 h-48 shrink-0 object-cover rounded-md" />
                 <div className="flex flex-col gap-2 justify-end">
                     <p className="text-sm opacity-70">Album</p>
                     <h2 className="text-3xl font-bold">{album.title}</h2>
-                    <p className="opacity-70">{album.artist} · {album.tracks.length} tracks</p>
-                    <button className="btn btn-primary btn-sm w-fit" onClick={() => playAlbum(queueTracks, 0)}>
+                    <p className="opacity-70">{album.artist} · {tracks.length} tracks</p>
+                    <button className="btn btn-primary btn-sm w-fit" onClick={() => playAlbum(queueTracks, 0)} disabled={tracks.length === 0}>
                         <Play size={16} /> Play
                     </button>
                     <button className="btn btn-outline btn-sm w-fit" onClick={() => dialogRef.current.showModal()}>
@@ -88,7 +81,12 @@ export default function AlbumDetailsPage() {
                     <span className="flex-1">Title</span>
                     <Clock size={12} />
                 </div>
-                {album.tracks.map((track, i) => (
+                {tracks.length === 0 && (
+                    <div className="mt-2">
+                        <EmptyState compact title="No tracks yet" hint="Tracks show up here once they've downloaded." />
+                    </div>
+                )}
+                {tracks.map((track, i) => (
                     <div
                         key={track.media_item_id}
                         className="flex items-center gap-3 px-3 py-3 hover:bg-base-200 rounded-lg cursor-pointer group"

@@ -15,16 +15,19 @@ import {
 import { LightNovelReader, MangaReader, PlayerPage } from './pages/viewer'
 import UserManagementPage from './pages/Management/UserManagementPage'
 import AudioPlayer from './pages/viewer/AudioPlayer'
+import Toaster from './components/Toaster'
+import NotFound from './components/states/NotFound'
+import ErrorBoundary, { PageBoundary } from './components/states/ErrorBoundary'
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
-        <Route element={<ProtectedRoute><Outlet/></ProtectedRoute>}>
+        <Route element={<ProtectedRoute><PageBoundary><Outlet/></PageBoundary></ProtectedRoute>}>
           <Route path='/watch/:type/:id' element={<PlayerPage/>} />
         </Route>
-        <Route element={<ProtectedRoute><Layout><Outlet /></Layout></ProtectedRoute>}>
+        <Route element={<ProtectedRoute><Layout><PageBoundary><Outlet /></PageBoundary></Layout></ProtectedRoute>}>
           <Route path="/" element={<DashboardPage/>} />
           <Route path="/downloads" element={<DownloadsPage />} />
           <Route path='/users' element={<UserManagementPage/>} />
@@ -38,9 +41,11 @@ function App() {
           <Route path='/movies/:id' element={<MovieDetailsPage/>}/>
           <Route path="/light-novels/:id/volumes/:volumeId/read" element={<LightNovelReader/>} />
           <Route path='manga/:id/chapters/:chapterId/read' element={<MangaReader/>} />
+          <Route path="*" element={<NotFound/>} />
         </Route>
       </Routes>
-      <AudioPlayer/>
+      <ErrorBoundary><AudioPlayer/></ErrorBoundary>
+      <Toaster/>
     </BrowserRouter>
   )
 }

@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react"
-import Loading from "../../components/states/Loading";
-import Error from "../../components/states/Error";
+import { useState } from "react"
+import ErrorState from "../../components/states/ErrorState";
+import { CardGridSkeleton } from "../../components/states/Skeletons";
 import api from "../../services/api";
+import useApi from "../../hooks/useApi";
 import ContentList from "../../components/layout/ContentList";
 import ContentGrid from "../../components/layout/ContentGrid";
 import useUserContent from "../../hooks/useUserContent";
@@ -12,50 +13,35 @@ const emptySections = { trending: [], popular: [], top_rated: [] };
 export default function Discover() {
     const { userContentMap, refresh } = useUserContent();
     const [activeTab, setActiveTab] = useState("anime");
-    const [library, setLibrary] = useState([]);
     const [query, setQuery] = useState("");
-    const [sections, setSections] = useState(emptySections);
-    const [searchResults, setSearchResults] = useState([]);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState("");
-
-    useEffect(() => {
-        if (activeTab === "music_track") return
-        setSections(emptySections);
-        setSearchResults([]);
-        api.get(`/search?type=${activeTab}`)
-            .then(resp => {
-                const data = resp.data;
-                setSections(data);
-            })
-            .catch(err => setError(err));
-    }, [activeTab])
-
-    useEffect(() => {
-        if (activeTab === "music_track") return
-        api.get(`/media?available=true&type=${activeTab}`)
-            .then(res => setLibrary(res.data ?? []))
-            .catch(() => {})
-    }, [activeTab])
+    const isMusic = activeTab === "music_track";
+    const sections = useApi(isMusic ? null : `/search?type=${activeTab}`, { initial: emptySections });
+    const library = useApi(isMusic ? null : `/media?available=true&type=${activeTab}`, { initial: [] });
+    // the finished search: its query, results and error. null when not searching
+    const [search, setSearch] = useState(null);
+    const [searching, setSearching] = useState(false);
 
     function handleSearch() {
-        setSections(emptySections);
-        setSearchResults([]);
-        if (!query.trim()) return;
-        setLoading(true);
-        setError("");
-        api.get(`/search?type=${activeTab}&q=${query}`)
-            .then(resp => setSearchResults(resp.data))
-            .catch(err => setError(err.message))
-            .finally(() => setLoading(false))
+        const q = query.trim();
+        if (!q) {
+            setSearch(null);
+            return;
+        }
+        setSearching(true);
+        api.get(`/search?type=${activeTab}&q=${encodeURIComponent(q)}`)
+            .then(resp => setSearch({ query: q, results: resp.data ?? [], error: null }))
+            .catch(err => setSearch({ query: q, results: [], error: err }))
+            .finally(() => setSearching(false))
     }
 
     function handleTabChange(tab) {
         setActiveTab(tab);
-        setSections(emptySections);
-        setSearchResults([]);
+        setSearch(null);
         setQuery("");
     }
+
+    const listProps = { showActions: true, userContentMap, onListChange: refresh, loading: sections.loading };
+    const topRatedHeading = activeTab === "manga" ? "Latest Updates" : "Top Rated";
 
     return <div className="flex flex-col gap-6">
         {/* Tabs */}
@@ -79,7 +65,7 @@ export default function Discover() {
         </div>
 
         {activeTab === "music_track" ? (
-            <MusicDiscover userContentMap={userContentMap} onListChange={refresh}/>
+            <MusicDiscover onListChange={refresh}/>
         ) : (
             <>
                 {/* Search */}
@@ -91,23 +77,41 @@ export default function Discover() {
                         onChange={(e) => setQuery(e.target.value)}
                         onKeyDown={(e) => e.key === "Enter" && handleSearch()}
                     />
-                    <button className="btn btn-primary" onClick={handleSearch}>Search</button>
+                    <button className="btn btn-primary" onClick={handleSearch} disabled={searching}>
+                        {searching && <span className="loading loading-spinner loading-xs" />} Search
+                    </button>
+                    {search && <button className="btn btn-ghost" onClick={() => { setSearch(null); setQuery(""); }}>Clear</button>}
                 </div>
 
-                {loading && <Loading />}
-                {error && <Error error={error} />}
-
                 {/* Available Now */}
-                <ContentList items={library} heading="Available Now" userContentMap={userContentMap} onListChange={refresh} />
+                {library.error ? (
+                    <div className="my-4">
+                        <h2 className="font-bold mb-2">Available Now</h2>
+                        <ErrorState compact error={library.error} onRetry={library.reload} />
+                    </div>
+                ) : (
+                    <ContentList items={library.data} heading="Available Now" userContentMap={userContentMap} onListChange={refresh}
+                        loading={library.loading} emptyText="Nothing downloaded yet" />
+                )}
 
                 {/* Search Results */}
-                {searchResults.length > 0 ? (
-                    <ContentGrid items={searchResults} heading="Search Results" showActions={true} userContentMap={userContentMap} onListChange={refresh} />
+                {searching ? (
+                    <div className="flex flex-col gap-2">
+                        <h2 className="font-bold">Search Results</h2>
+                        <CardGridSkeleton count={6} />
+                    </div>
+                ) : search ? (
+                    search.error
+                        ? <ErrorState compact error={search.error} onRetry={handleSearch} />
+                        : <ContentGrid items={search.results} heading={`Results for "${search.query}"`} showActions={true} userContentMap={userContentMap} onListChange={refresh}
+                            emptyText={`No results for "${search.query}"`} emptyHint="Check the spelling or try the title in another language." />
+                ) : sections.error ? (
+                    <ErrorState compact error={sections.error} onRetry={sections.reload} />
                 ) : (
                     <>
-                        <ContentList items={sections.trending} heading="Trending" showActions={true} userContentMap={userContentMap} onListChange={refresh} />
-                        <ContentList items={sections.popular} heading="Popular" showActions={true} userContentMap={userContentMap} onListChange={refresh} />
-                        <ContentList items={sections.top_rated} heading={activeTab === "manga" ? "Latest Updates" : "Top Rated"} showActions={true} userContentMap={userContentMap} onListChange={refresh} />
+                        <ContentList items={sections.data.trending ?? []} heading="Trending" {...listProps} />
+                        <ContentList items={sections.data.popular ?? []} heading="Popular" {...listProps} />
+                        <ContentList items={sections.data.top_rated ?? []} heading={topRatedHeading} {...listProps} />
                     </>
                 )}
             </>

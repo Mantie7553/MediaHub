@@ -1,29 +1,11 @@
-import { useState, useEffect } from 'react'
-import api from '../services/api'
+import useApi from './useApi'
 
 /**
- * Hook for getting job information from the database
- * that sets loading and error states
- * @returns a list of jobs, the loading state, the error state, and a function to refetch data
+ * Hook for getting job information from the database, refreshed every 5 seconds
+ * @returns a list of jobs, the loading state, the error state, pollError when a refresh
+ *  failed while older jobs are still shown, and a function to refetch data
  */
 export default function useJobs() {
-    const [jobs, setJobs] = useState([])
-    const [loading, setLoading] = useState(true)
-    const [error, setError] = useState(null)
-
-    function fetch(showLoading = true) {
-        if (showLoading) setLoading(true)
-        api.get('/admin/jobs')
-            .then(res => setJobs(res.data))
-            .catch(err => setError(err))
-            .finally(() => setLoading(false))
-    }
-
-    useEffect(() => {
-        fetch(true)
-        const interval = setInterval(() => fetch(false), 5000)
-        return () => clearInterval(interval)
-    }, [])
-
-    return { jobs, loading, error, refetch: fetch }
+    const { data, loading, error, pollError, reload } = useApi('/admin/jobs', { initial: [], poll: 5000 })
+    return { jobs: data, loading, error, pollError, refetch: (showLoading = true) => reload(!showLoading) }
 }

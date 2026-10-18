@@ -1,6 +1,10 @@
 import { useParams, useNavigate } from "react-router-dom";
-import Loading from "../../components/states/Loading";
-import Error from "../../components/states/Error";
+import ErrorState from "../../components/states/ErrorState";
+import NotFound from "../../components/states/NotFound";
+import { DetailsSkeleton } from "../../components/states/Skeletons";
+import Cover from "../../components/Cover";
+import { toast } from "../../stores/useToastStore";
+import { goBack, openViewer } from "../../utils/navigation";
 import { useMediaItem, useUserContent } from "../../hooks";
 import Format from "../../utils/format";
 import api from "../../services/api";
@@ -11,19 +15,21 @@ export default function MovieDetailsPage() {
     const navigate = useNavigate();
     const { userContentMap, refresh } = useUserContent();
     const { id } = useParams();
-    const { item: movie, loading, error } = useMediaItem(id);
+    const { item: movie, loading, error, notFound, refetch } = useMediaItem(id);
     const userEntry = userContentMap[id];
 
     function updateStatus(status) {
-        if (userEntry) {
-            api.put(`/me/media/${userEntry.id}`, { status }).then(() => refresh());
-        } else {
-            api.post(`/me/media`, { media_item_id: id, status }).then(() => refresh());
-        }
+        const request = userEntry
+            ? api.put(`/me/media/${userEntry.id}`, { status })
+            : api.post(`/me/media`, { media_item_id: id, status });
+        request
+            .then(() => refresh())
+            .catch(err => toast.error(err, "Could not update your list"));
     }
 
-    if (loading) return <Loading />
-    if (error) return <Error error={error} />
+    if (loading) return <DetailsSkeleton />
+    if (notFound) return <NotFound title="Movie not found" hint="This movie isn't in the library any more. It may have been removed." />
+    if (error) return <ErrorState error={error} title="Couldn't load this movie" onRetry={refetch} showBack />
     if (!movie) return null
 
     // resume unless barely started or within the last 2 minutes (credits)
@@ -33,11 +39,11 @@ export default function MovieDetailsPage() {
 
     return (
         <div className="flex flex-col gap-8">
-            <button className="btn btn-ghost btn-sm self-start" onClick={() => navigate("/")}>
+            <button className="btn btn-ghost btn-sm self-start" onClick={() => goBack(navigate)}>
                 <ArrowLeft size={18} strokeWidth={2}/> Back
             </button>
             <div className="flex gap-6">
-                <img src={movie.cover_image_url} className="w-48 h-64 object-cover rounded-md" />
+                <Cover src={movie.cover_image_url} alt={movie.title} className="w-48 h-64 shrink-0 object-cover rounded-md" />
                 <div className="flex flex-col gap-3">
                     <h2 className="text-2xl font-bold">{movie.title}</h2>
 
@@ -65,18 +71,22 @@ export default function MovieDetailsPage() {
                         />
                     )}
 
+                    {!movie.metadata.file_path && (
+                        <p className="text-sm text-neutral-content">Not downloaded yet, so it can't be played.</p>
+                    )}
+
                     <div className="flex gap-2">
                         {movie.metadata.file_path && <>
                             <button
                                 className="btn btn-primary"
-                                onClick={() => navigate(`/watch/movie/${id}`, { state: { position: canResume ? position : 0 } })}
+                                onClick={() => openViewer(navigate, `/watch/movie/${id}`, { position: canResume ? position : 0 })}
                             >
                                 {canResume ? `Resume from ${Format.duration(position)}` : "Watch"}
                             </button>
                             {canResume && (
                                 <button
                                     className="btn btn-ghost"
-                                    onClick={() => navigate(`/watch/movie/${id}`, { state: { position: 0 } })}
+                                    onClick={() => openViewer(navigate, `/watch/movie/${id}`, { position: 0 })}
                                 >
                                     Start over
                                 </button>

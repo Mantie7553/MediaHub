@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import api from "../../services/api";
 import Format from "../../utils/format";
+import { errorMessage } from "../../utils/errors";
 
 const SOURCE_LABELS = {
     "sonarr": "TV (Sonarr)",
@@ -27,7 +28,7 @@ export default function LibrarySyncSection() {
                 setStatus(res.data);
                 return res.data;
             })
-            .catch(err => setError(err.response?.data ?? err.message));
+            .catch(err => setError(errorMessage(err, "Could not load the sync status")));
     }
 
     // poll while a sync is running, stop once it's done
@@ -53,7 +54,7 @@ export default function LibrarySyncSection() {
             .catch(err => {
                 // 409: already running, just show its progress
                 if (err.response?.status === 409) poll();
-                else setError(err.response?.data ?? err.message);
+                else setError(errorMessage(err, "Could not start the sync"));
             });
     }
 

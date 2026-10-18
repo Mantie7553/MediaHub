@@ -1,7 +1,12 @@
 import { useState, useEffect } from "react";
-import { NavLink, useLocation, useNavigate, useParams } from "react-router-dom";
-import Loading from "../../components/states/Loading";
-import Error from "../../components/states/Error";
+import { NavLink, useNavigate, useParams } from "react-router-dom";
+import ErrorState from "../../components/states/ErrorState";
+import NotFound from "../../components/states/NotFound";
+import EmptyState from "../../components/states/EmptyState";
+import { DetailsSkeleton } from "../../components/states/Skeletons";
+import Cover from "../../components/Cover";
+import { toast } from "../../stores/useToastStore";
+import { goBack } from "../../utils/navigation";
 import { useMediaItem, useUserContent } from "../../hooks";
 import { mediaStatusBadge } from "../../utils/status";
 import api from "../../services/api";
@@ -12,7 +17,7 @@ export default function LightNovelDetailsPage() {
     const navigate = useNavigate();
     const { userContentMap, refresh } = useUserContent();
     const { id } = useParams();
-    const { item: ln, loading, error } = useMediaItem(id);
+    const { item: ln, loading, error, notFound, refetch } = useMediaItem(id);
     const userEntry = userContentMap[id];
     const [readVolumes, setReadVolumes] = useState(new Set());
     const [scrollPosition, setScrollPosition] = useState({});
@@ -27,11 +32,12 @@ export default function LightNovelDetailsPage() {
     }, [ln]);
 
     function updateStatus(status) {
-        if (userEntry) {
-            api.put(`/me/media/${userEntry.id}`, { status }).then(() => refresh());
-        } else {
-            api.post(`/me/media`, { media_item_id: id, status }).then(() => refresh());
-        }
+        const request = userEntry
+            ? api.put(`/me/media/${userEntry.id}`, { status })
+            : api.post(`/me/media`, { media_item_id: id, status });
+        request
+            .then(() => refresh())
+            .catch(err => toast.error(err, "Could not update your list"));
     }
 
     function toggleVolume(volume) {
@@ -44,9 +50,11 @@ export default function LightNovelDetailsPage() {
                 setReadVolumes(next);
                 updateStatus(status);
             })
-            .catch(() => {});
+            .catch(err => toast.error(err, "Could not update the volume"));
         api.put(`/light-novels/volumes/${volume.id}/progress`, { scroll_position: read ? 1 : 0 })
-            .then(() => setScrollPosition(prev => ({ ...prev, [volume.id]: read ? 1 : 0 })));
+            .then(() => setScrollPosition(prev => ({ ...prev, [volume.id]: read ? 1 : 0 })))
+            // the read mark above already reports a failure
+            .catch(() => {});
     }
 
     function markAll(read) {
@@ -59,22 +67,23 @@ export default function LightNovelDetailsPage() {
                 setScrollPosition(newScrollPositions);
                 Promise.all(ln.metadata.volumes.map(v =>
                     api.put(`/light-novels/volumes/${v.id}/progress`, { scroll_position: read ? 1 : 0 })
-                )).catch(() => {});
+                )).catch(err => toast.error(err, "Some volumes' reading progress didn't save"));
             })
-            .catch(() => {});
+            .catch(err => toast.error(err, "Could not update the volumes"));
     }
 
-    if (loading) return <Loading />
-    if (error) return <Error error={error} />
+    if (loading) return <DetailsSkeleton />
+    if (notFound) return <NotFound title="Light novel not found" hint="This light novel isn't in the library any more. It may have been removed." />
+    if (error) return <ErrorState error={error} title="Couldn't load this light novel" onRetry={refetch} showBack />
     if (!ln) return null
 
     return (
         <div className="flex flex-col">
-            <button className="btn btn-ghost btn-sm self-start" onClick={() => navigate("/")}>
+            <button className="btn btn-ghost btn-sm self-start" onClick={() => goBack(navigate)}>
                 <ArrowLeft size={18} strokeWidth={2}/> Back
             </button>
             <div className="flex gap-6">
-                <img src={ln.cover_image_url} className="w-48 h-64 object-contain rounded-md" />
+                <Cover src={ln.cover_image_url} alt={ln.title} className="w-48 h-64 shrink-0 object-contain rounded-md" />
                 <div className="flex flex-col gap-3">
                     <h2 className="text-2xl font-bold">{ln.title}</h2>
                     {ln.metadata.author && <span className="text-sm text-neutral-content">by {ln.metadata.author}</span>}
@@ -111,6 +120,11 @@ export default function LightNovelDetailsPage() {
             </div>
 
             <h3 className="font-bold text-lg mt-6">Volumes</h3>
+            {!ln.metadata.volumes?.length && (
+                <div className="mt-2">
+                    <EmptyState compact title="No volumes yet" hint="Volumes show up here once they've downloaded." />
+                </div>
+            )}
             <div className="flex flex-col gap-2 mt-2">
                 {(ln.metadata.volumes ?? []).map(volume => (
                     <div key={volume.id} className="flex items-center gap-3 p-3 rounded-lg bg-base-200">
@@ -120,7 +134,7 @@ export default function LightNovelDetailsPage() {
                         >
                             <Check size={10} strokeWidth={3} />
                         </button>
-                        <NavLink to={`/light-novels/${id}/volumes/${volume.id}/read`} className="text-sm w-24 shrink-0">
+                        <NavLink to={`/light-novels/${id}/volumes/${volume.id}/read`} state={{ fromDetails: true }} className="text-sm w-24 shrink-0">
                             {volume.title ?? `Volume ${volume.volume_number}`}
                         </NavLink>
                         {scrollPosition[volume.id] != null && (

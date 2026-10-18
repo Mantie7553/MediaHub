@@ -1,8 +1,11 @@
 import { forwardRef, useRef, useState, useEffect } from "react";
 import api from "../../services/api";
+import useApi from "../../hooks/useApi";
 import Format from "../../utils/format";
-import Loading from "../../components/states/Loading";
-import Error from "../../components/states/Error";
+import { errorMessage } from "../../utils/errors";
+import { toast } from "../../stores/useToastStore";
+import ErrorState from "../../components/states/ErrorState";
+import { TableSkeleton } from "../../components/states/Skeletons";
 import { validatePassword } from "../../utils/validate";
 import InvitesSection from "./InvitesSection";
 
@@ -10,23 +13,12 @@ import InvitesSection from "./InvitesSection";
  * Admin page for managing users
  */
 export default function UserManagementPage() {
-    const [users, setUsers] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState("");
+    const { data: users, loading, error, reload } = useApi("/admin/users", { initial: [] });
     const [selectedUser, setSelectedUser] = useState(null);
     const [deleteTarget, setDeleteTarget] = useState(null);
     const modalRef = useRef(null);
     const deleteModalRef = useRef(null);
 
-    function fetchUsers() {
-        setLoading(true);
-        api.get("/admin/users")
-            .then(res => setUsers(res.data ?? []))
-            .catch(err => setError(err.message))
-            .finally(() => setLoading(false));
-    }
-
-    useEffect(() => { fetchUsers(); }, []);
 
     function handleAdd() {
         setSelectedUser(null);
@@ -45,8 +37,8 @@ export default function UserManagementPage() {
 
     function handleDeleteConfirm() {
         api.delete(`/admin/users/${deleteTarget.id}`)
-            .then(() => fetchUsers())
-            .catch(err => setError(err.response?.data?.error ?? err.message))
+            .then(() => { toast.success(`Deleted ${deleteTarget.username}`); reload(true); })
+            .catch(err => toast.error(err, "Could not delete the user"))
             .finally(() => deleteModalRef.current.close());
     }
 
@@ -55,11 +47,11 @@ export default function UserManagementPage() {
             ? api.put(`/admin/users/${selectedUser.id}`, data)
             : api.post("/admin/users", data);
 
-        return req.then(() => fetchUsers());
+        return req.then(() => { toast.success(selectedUser ? "User updated" : "User added"); reload(true); });
     }
 
-    if (loading) return <Loading />;
-    if (error) return <Error error={error} />;
+    if (loading) return <TableSkeleton columns={5} rows={3} />;
+    if (error) return <ErrorState error={error} title="Couldn't load users" onRetry={reload} />;
 
     return (
         <div className="flex flex-col gap-6">
@@ -162,7 +154,7 @@ const UserModal = forwardRef(function UserModal({ user, onSave }, ref) {
 
         onSave(payload)
             .then(() => ref.current.close())
-            .catch(err => setError(err.response?.data ?? err.message))
+            .catch(err => setError(errorMessage(err, "Could not save the user")))
             .finally(() => setLoading(false));
     }
 

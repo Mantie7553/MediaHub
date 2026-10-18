@@ -1,29 +1,34 @@
 import { useRef, useEffect } from "react";
-import { NavLink, useNavigate, useParams } from "react-router-dom"
+import { useLocation, useNavigate, useParams } from "react-router-dom"
 import { ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react"
 import { useMediaItem, usePages } from "../../hooks";
-import Loading from "../../components/states/Loading";
-import Error from "../../components/states/Error";
+import ErrorState from "../../components/states/ErrorState";
+import NotFound from "../../components/states/NotFound";
+import { PageSkeleton, ReaderSkeleton } from "../../components/states/Skeletons";
 import api from "../../services/api";
+import { exitViewer, switchViewer } from "../../utils/navigation";
 
 export default function MangaReader() {
     const { id, chapterId } = useParams();
-    const { item, loading, error } = useMediaItem(id);
+    const { item, loading, error, notFound, refetch } = useMediaItem(id);
 
-    if (loading) return <Loading />
-    if (error) return <Error error={error} />
+    if (loading) return <ReaderSkeleton variant="page" />
+    if (notFound) return <NotFound title="Manga not found" hint="This manga isn't in the library any more." />
+    if (error) return <ErrorState error={error} title="Couldn't open this manga" onRetry={refetch} showBack />
     if (!item) return null
 
     const chapters = item.metadata?.chapters ?? [];
     const chapter = chapters.find(c => c.id === chapterId);
+    if (!chapter) return <NotFound title="Chapter not found" hint="This chapter isn't part of the manga any more. Pick another from the chapter list." />
     return <MangaReaderInner key={chapterId} id={id} chapterId={chapterId} chapter={chapter} chapters={chapters} />
 }
 
 function MangaReaderInner({ id, chapterId, chapter, chapters }) {
     const navigate = useNavigate();
+    const location = useLocation();
     const initialPage = chapter?.last_page_read ?? 0;
     const totalPages = chapter?.page_count ?? 0;
-    const { currentPage, setCurrentPage, imageSrc, loading, error } = usePages(id, chapterId, initialPage);
+    const { currentPage, setCurrentPage, imageSrc, loading, error, refetch } = usePages(id, chapterId, initialPage, totalPages);
     const pagesSinceLastSave = useRef(0);
     const currentPageRef = useRef(currentPage);
     const currentIndex = chapters.findIndex(c => c.id === chapterId);
@@ -46,7 +51,8 @@ function MangaReaderInner({ id, chapterId, chapter, chapters }) {
         }).catch(() => {});
         pagesSinceLastSave.current = 0;
         if (completed) {
-            api.put(`/manga/chapters/${chapterId}/read`, { read: true })
+            // best effort like the progress save above, reading carries on either way
+            api.put(`/manga/chapters/${chapterId}/read`, { read: true }).catch(() => {});
         }
     }
 
@@ -63,7 +69,7 @@ function MangaReaderInner({ id, chapterId, chapter, chapters }) {
             changePage(currentPage + 1);
         } else if (nextChapter) {
             saveProgress(currentPage);
-            navigate(`/manga/${id}/chapters/${nextChapter.id}/read`);
+            switchViewer(navigate, location, `/manga/${id}/chapters/${nextChapter.id}/read`);
         }
     }
 
@@ -72,7 +78,7 @@ function MangaReaderInner({ id, chapterId, chapter, chapters }) {
             changePage(currentPage - 1);
         } else if (prevChapter) {
             saveProgress(currentPage);
-            navigate(`/manga/${id}/chapters/${prevChapter.id}/read`);
+            switchViewer(navigate, location, `/manga/${id}/chapters/${prevChapter.id}/read`);
         }
     }
 
@@ -85,9 +91,6 @@ function MangaReaderInner({ id, chapterId, chapter, chapters }) {
         return () => window.removeEventListener("keydown", handleKeyDown);
     }, [totalPages, currentPage]);
 
-    if (loading) return <Loading />
-    if (error) return <Error error={error} />
-
     const progressPct = totalPages ? Math.round(((currentPage + 1) / totalPages) * 100) : 0;
 
     return (
@@ -95,10 +98,10 @@ function MangaReaderInner({ id, chapterId, chapter, chapters }) {
             <div className="sticky top-0 z-10 bg-base-200 border-b border-base-300 w-full">
                 <div className="max-w-2xl mx-auto px-6 py-2">
                     <div className="flex items-center gap-3">
-                        <NavLink to={`/manga/${id}`} className="btn btn-sm shrink-0">
+                        <button onClick={() => exitViewer(navigate, location, `/manga/${id}`)} className="btn btn-sm shrink-0">
                             <ArrowLeft size={16} strokeWidth={3}/>
                             To Chapters
-                        </NavLink>
+                        </button>
                         <div className="flex-1 flex flex-col gap-1">
                             <p className={`text-xs text-center ${currentPage !== totalPages - 1 ? "text-neutral-content" : ""}`}>
                                 {currentPage + 1} / <strong>{totalPages}</strong>
@@ -117,11 +120,18 @@ function MangaReaderInner({ id, chapterId, chapter, chapters }) {
                 </div>
             </div>
             <div className="flex flex-col items-center">
-                <div className="flex-1 overflow-hidden relative">
-                    <img src={imageSrc} className="max-h-[calc(100vh-5rem)] max-w-full object-contain mt-2"/>
+                {/* the toolbar stays while a page loads or fails, so the reader can still move on */}
+                {error ? (
+                    <div className="max-w-xl w-full mt-8 px-4">
+                        <ErrorState compact error={error} onRetry={refetch}/>
+                    </div>
+                ) : loading ? (
+                    <PageSkeleton />
+                ) : <div className="flex-1 overflow-hidden relative">
+                    <img src={imageSrc} alt={`Page ${currentPage + 1}`} className="max-h-[calc(100vh-5rem)] max-w-full object-contain mt-2"/>
                     <div className="absolute inset-y-0 left-0 w-1/2 cursor-pointer hover:bg-black/10" onClick={handlePageDown}></div>
                     <div className="absolute inset-y-0 right-0 w-1/2 cursor-pointer hover:bg-black/10" onClick={handlePageUp}></div>
-                </div>
+                </div>}
             </div>
         </div>
     )

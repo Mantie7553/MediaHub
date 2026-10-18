@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import api from '../services/api'
+import { errorMessage } from '../utils/errors'
 
 export default function useCreateRequest(id) {
     const [requesting, setRequesting] = useState(false);
@@ -10,7 +11,7 @@ export default function useCreateRequest(id) {
         setRequestMsg("");
         api.post("/requests", { media_item_id: id })
         .then(() => setRequestMsg("Download requested!"))
-        .catch(err => setRequestMsg(err.response?.data?.error ?? err.message))
+        .catch(err => setRequestMsg(errorMessage(err, "Could not request the download")))
         .finally(() => setRequesting(false))
     }
 
