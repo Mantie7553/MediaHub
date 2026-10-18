@@ -350,3 +350,51 @@ func (c *ArrClient) GetMovieFilePath(movieFileID int) (string, error) {
 
 	return result.Path, nil
 }
+
+/*
+Function:	DeleteSeries
+Purpose:	Remove a series from Sonarr along with its files, so it is neither monitored nor
+            downloaded again. A series that is already gone counts as deleted
+Params:
+  - seriesID: the Sonarr series id
+*/
+func (c *ArrClient) DeleteSeries(seriesID int) error {
+	return c.delete(fmt.Sprintf("/api/v3/series/%d?deleteFiles=true&addImportListExclusion=false", seriesID))
+}
+
+/*
+Function:	DeleteMovie
+Purpose:	Remove a movie from Radarr along with its files, so it is neither monitored nor
+            downloaded again. A movie that is already gone counts as deleted
+Params:
+  - movieID: the Radarr movie id
+*/
+func (c *ArrClient) DeleteMovie(movieID int) error {
+	return c.delete(fmt.Sprintf("/api/v3/movie/%d?deleteFiles=true&addImportExclusion=false", movieID))
+}
+
+/*
+Function:	delete
+Purpose:	send a DELETE to Sonarr / Radarr, treating 404 (already removed) as success
+Params:
+  - path: the API path with its query
+*/
+func (c *ArrClient) delete(path string) error {
+	req, err := http.NewRequest("DELETE", c.config.BaseURL+path, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("X-Api-Key", c.config.APIKey)
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound || resp.StatusCode/100 == 2 {
+		return nil
+	}
+	body, _ := io.ReadAll(resp.Body)
+	return fmt.Errorf("returned %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+}
