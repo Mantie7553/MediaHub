@@ -6,7 +6,9 @@ DOCKER="docker"
 docker info >/dev/null 2>&1 || DOCKER="sudo docker"
 
 for _ in $(seq 1 30); do
-  url=$($DOCKER compose logs cloudflared-quick 2>/dev/null | grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' | tail -n 1)
+  # only this run of the container: a restarted one still has the old address in its logs
+  started=$($DOCKER inspect -f "{{.State.StartedAt}}" "$($DOCKER compose ps -q cloudflared-quick)" 2>/dev/null)
+  url=$($DOCKER compose logs ${started:+--since "$started"} cloudflared-quick 2>/dev/null | grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' | tail -n 1)
   if [ -n "$url" ]; then
     echo "  Remote address (quick tunnel): $url"
     exit 0
