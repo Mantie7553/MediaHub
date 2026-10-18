@@ -111,3 +111,18 @@ func SafeFileName(name string) bool {
 	}
 	return name == filepath.Base(name)
 }
+
+/*
+Function:	IsWithin
+Purpose:	check that a cleaned path stays inside dir (and is not dir itself)
+Params:
+  - dir: the directory the path must stay in
+  - path: the path we are checking
+*/
+func IsWithin(dir, path string) bool {
+	rel, err := filepath.Rel(filepath.Clean(dir), filepath.Clean(path))
+	if err != nil {
+		return false
+	}
+	return rel != "." && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && !filepath.IsAbs(rel)
+}

@@ -1,6 +1,9 @@
 package utils
 
-import "testing"
+import (
+	"path/filepath"
+	"testing"
+)
 
 func TestSafeFileName(t *testing.T) {
 	tests := []struct {
@@ -30,5 +33,24 @@ func TestSafeFileName(t *testing.T) {
 				t.Fatalf("SafeFileName(%q) = %v, want %v", tt.name, got, tt.ok)
 			}
 		})
+	}
+}
+
+func TestIsWithin(t *testing.T) {
+	dir := filepath.Join("media", "temp", "episode-1")
+	tests := []struct {
+		path string
+		ok   bool
+	}{
+		{filepath.Join(dir, "playlist.m3u8"), true},
+		{dir, false},
+		{filepath.Join(dir, ".."), false},
+		{filepath.Join(dir, "..", "episode-12", "playlist.m3u8"), false},
+		{filepath.Join("media", "temp", "episode-12", "playlist.m3u8"), false},
+	}
+	for _, tt := range tests {
+		if got := IsWithin(dir, tt.path); got != tt.ok {
+			t.Errorf("IsWithin(%q) = %v, want %v", tt.path, got, tt.ok)
+		}
 	}
 }

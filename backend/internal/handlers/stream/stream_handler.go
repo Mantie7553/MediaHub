@@ -285,7 +285,7 @@ func (h *Handler) ServeSegment(w http.ResponseWriter, r *http.Request) {
 	mediaRoot := os.Getenv("MEDIA_ROOT")
 	tempDir := filepath.Join(mediaRoot, "temp", mediaType+"-"+mediaID+"-"+variant)
 	filePath := filepath.Join(tempDir, file)
-	if !isWithin(tempDir, filePath) {
+	if !utils.IsWithin(tempDir, filePath) {
 		utils.Error(w, http.StatusBadRequest, "invalid segment path")
 		return
 	}
@@ -309,21 +309,6 @@ func (h *Handler) ServeSegment(w http.ResponseWriter, r *http.Request) {
 	// ServeFile keeps a Content-Type that is already set
 	w.Header().Set("Content-Type", contentType)
 	http.ServeFile(w, r, filePath)
-}
-
-/*
-Function:	isWithin
-Purpose:	check that a cleaned path stays inside dir
-Params:
-  - dir: the directory the path must stay in
-  - path: the path we are checking
-*/
-func isWithin(dir, path string) bool {
-	rel, err := filepath.Rel(filepath.Clean(dir), filepath.Clean(path))
-	if err != nil {
-		return false
-	}
-	return rel != "." && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && !filepath.IsAbs(rel)
 }
 
 func (h *Handler) ServeTrack(w http.ResponseWriter, r *http.Request) {
