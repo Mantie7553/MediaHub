@@ -202,6 +202,23 @@ func (h *Handler) remove(w http.ResponseWriter, r *http.Request, t target) {
 	if _, err := tx.Exec(`DELETE FROM download_jobs WHERE media_item_id = ANY($1::uuid[])`, pq.Array(t.ids)); utils.InternalError(w, err) {
 		return
 	}
+	// requests keep their history, but deleting the item clears their link to it and a request
+	// must name an item, an album or a title (download_requests CHECK). Copy the title over first
+	if _, err := tx.Exec(
+		`UPDATE download_requests r SET title_override = COALESCE(r.title_override, m.title, $2)
+		FROM media_items m WHERE r.media_item_id = m.id AND m.id = ANY($1::uuid[])`,
+		pq.Array(t.ids), t.title,
+	); utils.InternalError(w, err) {
+		return
+	}
+	if t.albumID != "" {
+		if _, err := tx.Exec(
+			`UPDATE download_requests SET title_override = COALESCE(title_override, $2) WHERE album_id = $1`,
+			t.albumID, t.title,
+		); utils.InternalError(w, err) {
+			return
+		}
+	}
 	if _, err := tx.Exec(`DELETE FROM media_items WHERE id = ANY($1::uuid[])`, pq.Array(t.ids)); utils.InternalError(w, err) {
 		return
 	}
