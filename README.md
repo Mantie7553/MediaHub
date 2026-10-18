@@ -45,7 +45,7 @@ With the Docker install all of these run as containers, so there's nothing to in
     ├── deploy/
     │   ├── Caddyfile
     │   └── bootstrap/      # First-run wiring of the *arr apps, arr-settings.json
-    ├── docker-compose.yml  # The whole stack (+ gpu / smb overrides)
+    ├── docker-compose.yml  # The whole stack (+ gpu / nvidia / smb overrides)
     ├── install.sh / install.ps1
     └── update.sh / update.ps1
 ```
@@ -110,7 +110,7 @@ Qualities are grouped as SD / 720p / 1080p. Within a resolution the score decide
 
 `arr-settings.json` is the source of truth. Bootstrap brings these formats and the profile back to match it on every install or update run, so change them in the file, not in the Sonarr/Radarr UI. Other profiles and formats are left alone. Per-user audio and subtitle language preferences live in MediaHub's database and move with it (see the migration steps below).
 
-**Hardware transcoding.** On Linux with an AMD/Intel GPU (`/dev/dri/renderD128`), the installer turns on VAAPI through `docker-compose.gpu.yml`. On Windows, Docker can't reach the GPU, so videos transcode on the CPU (libx264). Playback works, but first plays are slower.
+**Hardware transcoding.** On Linux with an NVIDIA GPU, the installer turns on NVENC through `docker-compose.nvidia.yml` once the host has the NVIDIA driver (`sudo ubuntu-drivers install`, then reboot) and [nvidia-container-toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html) (then `sudo nvidia-ctk runtime configure --runtime=docker` and restart Docker). On an existing install, add `:docker-compose.nvidia.yml` to `COMPOSE_FILE` in `.env` and run `./update.sh`. With an AMD/Intel GPU (`/dev/dri/renderD128`), the installer turns on VAAPI through `docker-compose.gpu.yml`. On Windows, Docker can't reach the GPU, so videos transcode on the CPU (libx264). Playback works, but first plays are slower.
 
 **Notes**
 - **NAS mounted through `/etc/fstab` (Linux).** If the media folder is on a share listed in `/etc/fstab`, `install.sh` and `update.sh` check that it is actually mounted, and refuse to start if it isn't. They also make Docker wait for the share at boot (`RequiresMountsFor` drop-in). Without this, a share that failed to mount leaves the containers looking at the empty mount-point folder, which looks like a wiped library.

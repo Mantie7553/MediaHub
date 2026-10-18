@@ -69,10 +69,16 @@ if [ ! -f .env ]; then
 
   compose_file=docker-compose.yml
   render_gid=""
-  if [ -e /dev/dri/renderD128 ]; then
+  # NVIDIA first: its driver also creates renderD128, which VAAPI can't use
+  if command -v nvidia-smi >/dev/null 2>&1 && $DOCKER info 2>/dev/null | grep -qi "runtimes:.*nvidia"; then
+    say "NVIDIA GPU found, enabling NVENC transcoding"
+    compose_file="$compose_file:docker-compose.nvidia.yml"
+  elif [ -e /dev/dri/renderD128 ]; then
     say "GPU found at /dev/dri/renderD128, enabling VAAPI transcoding"
     compose_file="$compose_file:docker-compose.gpu.yml"
     render_gid=$(stat -c %g /dev/dri/renderD128)
+  elif lspci 2>/dev/null | grep -qi "vga.*nvidia"; then
+    warn "NVIDIA GPU found but the NVIDIA driver or nvidia-container-toolkit is missing, transcoding on the CPU (see README, Hardware transcoding)"
   fi
   [ "$smb" = "y" ] && compose_file="$compose_file:docker-compose.smb.yml"
   profiles=""

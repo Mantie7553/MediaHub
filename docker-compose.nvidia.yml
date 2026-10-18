@@ -1,0 +1,15 @@
+# Linux hosts with an NVIDIA GPU: hardware H.264 encoding through NVENC. Needs the NVIDIA driver
+# and nvidia-container-toolkit on the host. install.sh adds this to COMPOSE_FILE when both are there
+services:
+  backend:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              # video mounts the NVENC/NVDEC libraries ffmpeg loads
+              capabilities: [gpu, video, utility]
+    environment:
+      NVIDIA_DRIVER_CAPABILITIES: video,utility
+      TRANSCODE_ENCODER: nvenc

@@ -196,7 +196,7 @@ Backend variables live in `backend/.env`. Frontend variables live in `frontend/.
 | `WEBHOOK_SECRET` | Shared secret Sonarr/Radarr send in the `X-MediaHub-Secret` header. Webhooks are rejected while unset |
 | `CORS_ORIGIN` | Allowed frontend origin. The server won't start without it |
 | `MEDIA_ROOT` | Root media folder on the NAS. Expects `TV Shows`, `Movies`, `Music`, `Manga`, `Light Novels`, and holds `temp/` for transcodes |
-| `TRANSCODE_ENCODER` | Optional. H.264 encoder: `amf` (default on Windows), `vaapi` (Linux GPU, device from `TRANSCODE_VAAPI_DEVICE`, default `/dev/dri/renderD128`) or `libx264` (CPU, default elsewhere) |
+| `TRANSCODE_ENCODER` | Optional. H.264 encoder: `amf` (default on Windows), `vaapi` (Linux AMD/Intel GPU, device from `TRANSCODE_VAAPI_DEVICE`, default `/dev/dri/renderD128`), `nvenc` (NVIDIA GPU) or `libx264` (CPU, default elsewhere) |
 | `ADMIN_PASSWORD` | Optional. Replaces the seeded `admin@example.com` password on startup, only while it is still the default |
 | `TRANSCODE_HWACCEL` | Optional. ffmpeg `-hwaccel` used to decode AV1 sources. Defaults to `d3d11va` on Windows and none elsewhere (e.g. set `vaapi` on Linux with an AMD GPU). `none` disables it |
 | `SONARR_URL`, `SONARR_API_KEY` | Sonarr API access |

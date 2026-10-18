@@ -170,6 +170,17 @@ func TestTranscodeEncoder(t *testing.T) {
 		t.Errorf("-vaapi_device after the input: %s", args)
 	}
 
+	t.Setenv("TRANSCODE_ENCODER", "nvenc")
+	args = strings.Join(transcodeArgs("in.mkv", "out", streamManifest{AudioIndex: 1}), " ")
+	for _, want := range []string{"format=yuv420p", "-c:v h264_nvenc", "-forced-idr 1", "-maxrate 8M", "-force_key_frames"} {
+		if !strings.Contains(args, want) {
+			t.Errorf("nvenc args missing %q: %s", want, args)
+		}
+	}
+	if strings.Contains(args, "-vaapi_device") {
+		t.Errorf("nvenc args contain -vaapi_device: %s", args)
+	}
+
 	t.Setenv("TRANSCODE_ENCODER", "libx264")
 	args = strings.Join(transcodeArgs("in.mkv", "out", streamManifest{AudioIndex: 1}), " ")
 	for _, want := range []string{"-c:v libx264", "-preset veryfast", "-maxrate 8M", "-force_key_frames"} {

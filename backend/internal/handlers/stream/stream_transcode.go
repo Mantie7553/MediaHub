@@ -150,12 +150,12 @@ func transcodeArgs(filePath, dir string, manifest streamManifest) []string {
 
 /*
 Function:	transcodeEncoder
-Purpose:	H.264 encoder to use: "amf" (AMD on Windows), "vaapi" (GPU on Linux) or "libx264" (CPU).
-            TRANSCODE_ENCODER overrides the platform default
+Purpose:	H.264 encoder to use: "amf" (AMD on Windows), "vaapi" (AMD/Intel GPU on Linux), "nvenc"
+            (NVIDIA GPU) or "libx264" (CPU). TRANSCODE_ENCODER overrides the platform default
 */
 func transcodeEncoder() string {
 	switch enc := os.Getenv("TRANSCODE_ENCODER"); enc {
-	case "amf", "vaapi", "libx264":
+	case "amf", "vaapi", "nvenc", "libx264":
 		return enc
 	case "":
 	default:
@@ -183,7 +183,7 @@ Function:	encoderArgs
 Purpose:	ffmpeg filter and video encoder arguments for an encoder from transcodeEncoder. All of
             them cap the bitrate, uncapped AMF output was 9-22 Mbps which stalls over the tunnel
 Params:
-  - encoder: "amf", "vaapi" or "libx264"
+  - encoder: "amf", "vaapi", "nvenc" or "libx264"
 */
 func encoderArgs(encoder string) []string {
 	rate := []string{"-b:v", "6M", "-maxrate", "8M", "-bufsize", "12M"}
@@ -194,6 +194,9 @@ func encoderArgs(encoder string) []string {
 	case "vaapi":
 		// frames are uploaded to the GPU after converting, the encoder only takes GPU surfaces
 		return append([]string{"-vf", "format=nv12,hwupload", "-c:v", "h264_vaapi"}, rate...)
+	case "nvenc":
+		// 8-bit first, h264_nvenc has no 10-bit mode. forced-idr makes the forced keyframes cut points
+		return append([]string{"-vf", "format=yuv420p", "-c:v", "h264_nvenc", "-preset", "p4", "-rc", "vbr", "-forced-idr", "1"}, rate...)
 	default:
 		return append([]string{"-vf", "format=yuv420p", "-c:v", "libx264", "-preset", "veryfast"}, rate...)
 	}
