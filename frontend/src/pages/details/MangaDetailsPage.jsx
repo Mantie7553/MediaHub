@@ -139,22 +139,40 @@ export default function MangaDetailsPage() {
                             <NavLink to={`/manga/${id}/chapters/${chapter.id}/read`} state={{ fromDetails: true }} className="text-sm w-24 shrink-0">
                                 {chapter.title ?? `Chapter ${chapter.chapter_number}`}
                             </NavLink>
-                            {chapter.page_count && (
-                                <div className="relative flex-1 max-w-48">
-                                    <progress
-                                        className="progress progress-primary w-full"
-                                        value={(pageProgress[chapter.id] ?? 0) + 1}
-                                        max={chapter.page_count}
-                                    />
-                                    <span className="absolute inset-0 flex items-center justify-center text-xs font-bold">
-                                        {(pageProgress[chapter.id] ?? 0) + 1} / {chapter.page_count}
-                                    </span>
-                                </div>
+                            {chapter.page_count > 0 && (
+                                <ChapterProgress
+                                    page={pageProgress[chapter.id] ?? 0}
+                                    pageCount={chapter.page_count}
+                                    read={readChapters.has(chapter.id)}
+                                />
                             )}
                         </div>
-                                            ))}
+                    ))}
                 </div>
             </>}
         </div>
     )
+}
+/**
+ * How far into a chapter the user is. Page 0 is saved both for "never opened" and "marked
+ * unread" (and for closing the reader on the first page), so a chapter only counts as started
+ * past the first page, otherwise it would read 1 / N before it was ever opened
+ * @param {number} page the last page read, from 0
+ * @param {number} pageCount pages in the chapter
+ * @param {boolean} read marked as read
+ */
+function ChapterProgress({ page, pageCount, read }) {
+    const started = read || page > 0;
+    const shown = read ? pageCount : page + 1;
+
+    return <div className="relative flex-1 max-w-48">
+        <progress
+            className="progress progress-primary w-full"
+            value={started ? shown : 0}
+            max={pageCount}
+        />
+        <span className="absolute inset-0 flex items-center justify-center text-xs font-bold">
+            {started ? `${shown} / ${pageCount}` : `${pageCount} pages`}
+        </span>
+    </div>
 }
