@@ -3,7 +3,8 @@ import { useParams, useLocation, useNavigate } from "react-router-dom"
 import Hls from "hls.js"
 import api from "../../services/api"
 import Loading from "../../components/states/Loading"
-import Error from "../../components/states/Error"
+import ErrorState from "../../components/states/ErrorState"
+import { toast } from "../../stores/useToastStore"
 import { ArrowLeft, ArrowRight, Languages } from "lucide-react"
 
 export default function PlayerPage() {
@@ -24,6 +25,8 @@ export default function PlayerPage() {
     const [prefsMessage, setPrefsMessage] = useState("");
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    // bumped by Try again after the stream failed to start
+    const [attempt, setAttempt] = useState(0);
     const initialPosition = location.state?.position ?? 0;
     const animeId = location.state?.animeId ?? null;
     const episodeList = location.state?.episodes ?? [];
@@ -84,9 +87,15 @@ export default function PlayerPage() {
     useEffect(() => {
         fetchStream(initialPosition)
             .then(setPlaylistUrl)
-            .catch(err => setError(err.message))
+            .catch(err => setError(err))
             .finally(() => setLoading(false))
-    }, [id])
+    }, [id, attempt])
+
+    function retry() {
+        setError(null)
+        setLoading(true)
+        setAttempt(a => a + 1)
+    }
 
     // set up video after playlist loads
     useEffect(() => {
@@ -136,7 +145,7 @@ export default function PlayerPage() {
                     .then(url => {
                         if (!destroyed) hls.loadSource(url)
                     })
-                    .catch(err => setError(err.message))
+                    .catch(err => setError(err))
             })
             return () => {
                 destroyed = true
@@ -163,9 +172,10 @@ export default function PlayerPage() {
         fetchStream(video.currentTime, index, currentSubtitleLabel())
             .then(setPlaylistUrl)
             .catch(err => {
+                // the current audio keeps playing, so this doesn't need to stop playback
                 setSwitchingAudio(false)
                 ignoreTrackChangesRef.current = false
-                setError(err.message)
+                toast.error(err, "Could not switch the audio track")
             })
     }
 
@@ -307,7 +317,9 @@ export default function PlayerPage() {
     }
 
     if (loading) return <Loading />
-    if (error) return <Error error={error} />
+    if (error) return <div className="min-h-screen bg-base-100">
+        <ErrorState error={error} title="Couldn't play this video" onRetry={retry} showBack />
+    </div>
 
     const selectedAudio = audioTracks.find(a => a.selected)
 

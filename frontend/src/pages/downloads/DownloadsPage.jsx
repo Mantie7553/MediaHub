@@ -1,10 +1,15 @@
 import { useRef, forwardRef, useState } from "react";
+import { Download } from "lucide-react";
 import useJobs from "../../hooks/useJobs";
 import { useAdminRequests } from "../../hooks"
 import { approveRequest, rejectRequest } from "../../services/requestsService";
 import Format from "../../utils/format";
 import { statusBadge, statusColor } from "../../utils/status";
-import Loading from "../../components/states/Loading"
+import { errorMessage } from "../../utils/errors";
+import { toast } from "../../stores/useToastStore";
+import ErrorState from "../../components/states/ErrorState";
+import EmptyState from "../../components/states/EmptyState";
+import { TableSkeleton } from "../../components/states/Skeletons";
 
 /**
  * Downloads and requests page layout
@@ -13,25 +18,33 @@ import Loading from "../../components/states/Loading"
 export default function DownloadsPage() {
 
     const { requests, loading: rLoading, error: rError, refetch: refetchRequests } = useAdminRequests()
-    const { jobs, loading: jLoading, error: jError } = useJobs();
+    const { jobs, loading: jLoading, error: jError, pollError: jPollError, refetch: refetchJobs } = useJobs();
     const [selectedRequest, setSelectedRequest] = useState(null);
+    const [busyId, setBusyId] = useState(null);
     const modalRef = useRef(null);
 
     function handleApprove(id) {
-        approveRequest(id).then(() => refetchRequests())
+        setBusyId(id)
+        approveRequest(id)
+            .then(() => { toast.success("Request approved, the download is starting"); refetchRequests(false) })
+            .catch(err => toast.error(err, "Could not approve the request"))
+            .finally(() => setBusyId(null))
     }
 
     function handleReject(id, notes) {
-        rejectRequest(id, notes).then(() => refetchRequests())
+        setBusyId(id)
+        rejectRequest(id, notes)
+            .then(() => { toast.success("Request rejected"); refetchRequests(false) })
+            .catch(err => toast.error(err, "Could not reject the request"))
+            .finally(() => setBusyId(null))
     }
 
-    if (rLoading || jLoading) return <Loading />
-
-    if (rError || jError) return <Error error={rError || jError} />
-
-    return<div className="flex gap-10 justify-center">
-        <section className="card">
-            <h1>Requests</h1>
+    return<div className="flex flex-wrap gap-10 justify-center pt-4">
+        <section className="card min-w-80">
+            <h1 className="text-xl font-bold mb-2">Requests</h1>
+            {rLoading ? <TableSkeleton columns={4}/> :
+            rError ? <ErrorState compact error={rError} onRetry={refetchRequests}/> :
+            requests.length === 0 ? <EmptyState compact title="No requests yet" hint="Requests people make from Discover show up here for approval."/> :
             <Table 
             columns={[
             { key: "media_title", header: "Title", render: (val, item) => val || item.title_override || "Unknown" },
@@ -41,14 +54,14 @@ export default function DownloadsPage() {
                 <div className="flex gap-2">
                     <button 
                     className="btn btn-xs btn-success"
-                    disabled={item.status !== "pending"}
+                    disabled={item.status !== "pending" || busyId === item.id}
                     onClick={() => handleApprove(item.id)}
                     >
                         Approve
                     </button>
                     <button 
                     className="btn btn-xs btn-error"
-                    disabled={item.status !== "pending"}
+                    disabled={item.status !== "pending" || busyId === item.id}
                     onClick={() => { setSelectedRequest(item); modalRef.current.showModal() }}
                     >
                         Reject
@@ -57,10 +70,16 @@ export default function DownloadsPage() {
                 )},
             ]}
             items={requests}
-            />
+            />}
         </section>
-        <section className="card">
-            <h1>Jobs</h1>
+        <section className="card min-w-80">
+            <h1 className="text-xl font-bold mb-2">Jobs</h1>
+            {jPollError && <p className="text-xs text-warning mb-2" role="status">
+                Lost connection, retrying: {errorMessage(jPollError)}
+            </p>}
+            {jLoading ? <TableSkeleton columns={4}/> :
+            jError ? <ErrorState compact error={jError} onRetry={refetchJobs}/> :
+            jobs.length === 0 ? <EmptyState compact icon={Download} title="No downloads running" hint="Approved requests appear here while they download."/> :
             <Table 
             columns={[
                 { key: "media_title", header: "Title" },
@@ -78,7 +97,7 @@ export default function DownloadsPage() {
                 )},
             ]} 
             items={jobs}
-            />
+            />}
         </section>
         <Modal ref={modalRef} onConfirm={(notes) => handleReject(selectedRequest.id, notes)} />
     </div>

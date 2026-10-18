@@ -1,8 +1,13 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import api from "../../services/api";
-import Loading from "../../components/states/Loading";
-import Error from "../../components/states/Error";
+import ErrorState from "../../components/states/ErrorState";
+import NotFound from "../../components/states/NotFound";
+import EmptyState from "../../components/states/EmptyState";
+import { DetailsSkeleton, ListSkeleton } from "../../components/states/Skeletons";
+import Cover from "../../components/Cover";
+import { toast } from "../../stores/useToastStore";
+import { goBack } from "../../utils/navigation";
 import { useMediaItem, useUserContent } from "../../hooks";
 import { animeBadge, mediaStatusBadge } from "../../utils/status";
 import Format from "../../utils/format";
@@ -13,13 +18,17 @@ export default function AnimeDetailsPage() {
     const navigate = useNavigate();
     const { userContentMap, refresh } = useUserContent();
     const userEntry = userContentMap[id];
-    const { item: anime, loading, error } = useMediaItem(id);
+    const { item: anime, loading, error, notFound, refetch } = useMediaItem(id);
     const [episodes, setEpisodes] = useState([]);
     const [watchedEpisodes, setWatchedEpisodes] = useState(new Set());
     const [episodeProgress, setEpisodeProgress] = useState({});
+    const [episodesLoaded, setEpisodesLoaded] = useState(false);
+    const [episodesError, setEpisodesError] = useState(null);
+    const [episodesAttempt, setEpisodesAttempt] = useState(0);
 
     useEffect(() => {
-        function fetchEpisodes() {
+        // background: the refresh when the tab regains focus, which fails quietly
+        function fetchEpisodes(background) {
             api.get(`/media/${id}/episodes`)
                 .then(res => {
                     const data = res.data ?? [];
@@ -28,21 +37,30 @@ export default function AnimeDetailsPage() {
                     const initial = {};
                     data.forEach(ep => { initial[ep.id] = { position: ep.position_secs, duration: ep.duration_secs }; });
                     setEpisodeProgress(initial);
+                    setEpisodesLoaded(true);
+                    setEpisodesError(null);
                 })
-                .catch(() => {})
+                .catch(err => { if (!background) setEpisodesError(err) })
         }
 
-        fetchEpisodes();
-        window.addEventListener("focus", fetchEpisodes);
-        return () => window.removeEventListener("focus", fetchEpisodes);
-    }, [id])
+        fetchEpisodes(false);
+        const onFocus = () => fetchEpisodes(true);
+        window.addEventListener("focus", onFocus);
+        return () => window.removeEventListener("focus", onFocus);
+    }, [id, episodesAttempt])
+
+    function retryEpisodes() {
+        setEpisodesError(null);
+        setEpisodesAttempt(a => a + 1);
+    }
 
     function updateStatus(status) {
-        if (userEntry) {
-            api.put(`/me/media/${userEntry.id}`, { status }).then(() => refresh());
-        } else {
-            api.post(`/me/media`, { media_item_id: id, status }).then(() => refresh());
-        }
+        const request = userEntry
+            ? api.put(`/me/media/${userEntry.id}`, { status })
+            : api.post(`/me/media`, { media_item_id: id, status });
+        request
+            .then(() => refresh())
+            .catch(err => toast.error(err, "Could not update your list"));
     }
 
     function toggleEpisode(ep) {
@@ -55,7 +73,7 @@ export default function AnimeDetailsPage() {
                 setWatchedEpisodes(next);
                 updateStatus(status);
             })
-            .catch(() => {})
+            .catch(err => toast.error(err, "Could not update the episode"))
     }
 
     function markSeason(seasonNum, eps, watched) {
@@ -67,7 +85,7 @@ export default function AnimeDetailsPage() {
                 setWatchedEpisodes(next);
                 updateStatus(status);
             })
-            .catch(() => {})
+            .catch(err => toast.error(err, `Could not update season ${seasonNum}`))
     }
 
     function markShow(watched) {
@@ -76,11 +94,12 @@ export default function AnimeDetailsPage() {
                 setWatchedEpisodes(watched ? new Set(episodes.map(ep => ep.id)) : new Set());
                 updateStatus(watched ? "completed" : "planned");
             })
-            .catch(() => {});
+            .catch(err => toast.error(err, "Could not update the show"));
     }
 
-    if (loading) return <Loading />
-    if (error) return <Error error={error} />
+    if (loading) return <DetailsSkeleton />
+    if (notFound) return <NotFound title="Show not found" hint="This show isn't in the library any more. It may have been removed." />
+    if (error) return <ErrorState error={error} title="Couldn't load this show" onRetry={refetch} showBack />
     if (!anime) return null
 
     const seasons = episodes.reduce((acc, ep) => {
@@ -92,11 +111,11 @@ export default function AnimeDetailsPage() {
 
     return (
         <div className="flex flex-col gap-8">
-            <button className="btn btn-ghost btn-sm self-start" onClick={() => navigate("/")}>
+            <button className="btn btn-ghost btn-sm self-start" onClick={() => goBack(navigate)}>
                 <ArrowLeft size={18} strokeWidth={2}/> Back
             </button>
             <div className="flex gap-6">
-                <img src={anime.cover_image_url} className="w-48 h-64 object-cover rounded-md" />
+                <Cover src={anime.cover_image_url} alt={anime.title} className="w-48 h-64 shrink-0 object-cover rounded-md" />
                 <div className="flex flex-col gap-3">
                     <h2 className="text-2xl font-bold">{anime.title}</h2>
                     <span className={`badge ${animeBadge(anime.metadata.status)}`}>{anime.metadata.status}</span>
@@ -136,7 +155,13 @@ export default function AnimeDetailsPage() {
                 </div>
             </div>
 
-            {Object.keys(seasons).length > 0 && (
+            {episodesError ? (
+                <ErrorState compact error={episodesError} onRetry={retryEpisodes} />
+            ) : !episodesLoaded ? (
+                <ListSkeleton />
+            ) : episodes.length === 0 ? (
+                <EmptyState compact title="No episodes yet" hint="Episodes show up here once they've downloaded." />
+            ) : (
                 <div className="flex flex-col gap-6">
                     {Object.entries(seasons).map(([seasonNum, eps]) => (
                         <div key={seasonNum}>

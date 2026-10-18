@@ -5,16 +5,14 @@ import { useRef, useState } from "react";
 import api from "../../services/api";
 import AddToListModal from "../modals/AddToListModal";
 import { Plus, Check } from "lucide-react";
+import Cover from "../Cover";
+import { toast } from "../../stores/useToastStore";
 import useAudioStore from "../../stores/useAudioStore"
 
 export default function Card({item, showActions=false, userContentMap={}, onListChange}) {
     let {infoSection, path} = mediaInfo(item);
     const userEntry = userContentMap[String(item.external_id ?? item.media_item_id ?? item.id)];
     const play = useAudioStore(state => state.play);
-
-    const coverSrc = item.external_source === "mangadex" && item.cover_image_url
-    ? `/api/proxy/cover?url=${encodeURIComponent(item.cover_image_url)}`
-    : item.cover_image_url;
 
     const card = (
         <li className="card border border-base-300 w-44 shrink-0 bg-base-300 h-full">
@@ -23,11 +21,7 @@ export default function Card({item, showActions=false, userContentMap={}, onList
                     <span className={`badge ${mediaStatusBadge(userEntry?.status ?? item.status)} absolute top-2 left-2 z-10 text-xs p-1`}>
                         {Format.statusLabel(userEntry?.status ?? item.status, item.type ?? item.media_type)}
                     </span>}
-                {item.cover_image_url ? (
-                    <img src={coverSrc} className="w-full h-56 object-contain"/>
-                ) : (
-                    <div className="skeleton h-64 w-full"></div>
-                )}
+                <Cover src={item.cover_image_url} source={item.external_source} alt={item.media_title ?? item.title} className="w-full h-56 object-contain"/>
             </figure>
             <div  className="card-body p-2 gap-1">
                 <h3 className="card-title text-sm line-clamp-2">{item.media_title ?? item.title}</h3>
@@ -101,7 +95,6 @@ function mediaInfo(item) {
 }
 
 function ActionButtons({item, userEntry, onListChange}) {
-    const [msg, setMsg] = useState("");
     const [loading, setLoading] = useState(false);
     const dialogRef = useRef(null);
 
@@ -113,15 +106,14 @@ function ActionButtons({item, userEntry, onListChange}) {
 
     function handleConfirm({ status, score, progress }) {
         setLoading(true);
-        setMsg("");
         if (userEntry) {
             // existing list entry — update it
             api.put(`/me/media/${userEntry.id}`, {
                 status,
                 rating: score === 0 ? null : score,
             })
-            .then(() => { setMsg("Updated!"); onListChange?.(); })
-            .catch(err => setMsg(err.response?.data?.error ?? err.message))
+            .then(() => { toast.success("List updated"); onListChange?.(); })
+            .catch(err => toast.error(err, "Could not update your list"))
             .finally(() => setLoading(false))
         } else if (item.id) {
             // already in DB — just add to list, no download
@@ -130,8 +122,8 @@ function ActionButtons({item, userEntry, onListChange}) {
                 status,
                 rating: score === 0 ? null : score,
             })
-            .then(() => { setMsg("Added to list!"); onListChange?.(); })
-            .catch(err => setMsg(err.response?.data?.error ?? err.message))
+            .then(() => { toast.success("Added to your list"); onListChange?.(); })
+            .catch(err => toast.error(err, "Could not update your list"))
             .finally(() => setLoading(false))
         } else if (item.external_source) {
             // not in DB yet — save and dispatch download if permitted
@@ -146,8 +138,8 @@ function ActionButtons({item, userEntry, onListChange}) {
                 rating: score === 0 ? null : score,
                 progress,
             })
-            .then(() => { setMsg("Added to list!"); onListChange?.(); })
-            .catch(err => setMsg(err.response?.data?.error ?? err.message))
+            .then(() => { toast.success("Added to your list"); onListChange?.(); })
+            .catch(err => toast.error(err, "Could not update your list"))
             .finally(() => setLoading(false))
         }
     }
@@ -161,6 +153,5 @@ function ActionButtons({item, userEntry, onListChange}) {
                 {userEntry ? <Check size={14} strokeWidth={4}/> : <Plus size={14} strokeWidth={4}/>}
             </button>
         </div>
-        {msg && <p className="text-xs mt-1">{msg}</p>}
     </>
 }

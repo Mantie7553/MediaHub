@@ -1,8 +1,13 @@
 import { useState, useEffect } from "react";
 import { NavLink, useNavigate, useParams } from "react-router-dom";
 import { mangaBadge, mediaStatusBadge } from "../../utils/status";
-import Loading from "../../components/states/Loading";
-import Error from "../../components/states/Error";
+import ErrorState from "../../components/states/ErrorState";
+import NotFound from "../../components/states/NotFound";
+import EmptyState from "../../components/states/EmptyState";
+import { DetailsSkeleton } from "../../components/states/Skeletons";
+import Cover from "../../components/Cover";
+import { toast } from "../../stores/useToastStore";
+import { goBack } from "../../utils/navigation";
 import { useMediaItem, useUserContent } from "../../hooks";
 import api from "../../services/api";
 import { ArrowLeft, Check } from "lucide-react";
@@ -12,14 +17,11 @@ export default function MangaDetailsPage() {
     const navigate = useNavigate();
     const { userContentMap, refresh } = useUserContent();
     const { id } = useParams();
-    const { item: manga, loading, error } = useMediaItem(id);
+    const { item: manga, loading, error, notFound, refetch } = useMediaItem(id);
     const userEntry = userContentMap[id];
     const [readChapters, setReadChapters] = useState(new Set());
     const [pageProgress, setPageProgress] = useState({});
 
-    const coverSrc = manga?.external_source === "mangadex" && manga?.cover_image_url
-    ? `/api/proxy/cover?url=${encodeURIComponent(manga.cover_image_url)}`
-    : manga?.cover_image_url;
 
     useEffect(() => {
         if (manga?.metadata?.chapters) {
@@ -31,11 +33,12 @@ export default function MangaDetailsPage() {
     }, [manga]);
 
     function updateStatus(status) {
-        if (userEntry) {
-            api.put(`/me/media/${userEntry.id}`, { status }).then(() => refresh());
-        } else {
-            api.post(`/me/media`, { media_item_id: id, status }).then(() => refresh());
-        }
+        const request = userEntry
+            ? api.put(`/me/media/${userEntry.id}`, { status })
+            : api.post(`/me/media`, { media_item_id: id, status });
+        request
+            .then(() => refresh())
+            .catch(err => toast.error(err, "Could not update your list"));
     }
 
     function toggleChapter(chapter) {
@@ -48,10 +51,12 @@ export default function MangaDetailsPage() {
                 setReadChapters(next);
                 updateStatus(status);
             })
-            .catch(() => {});
+            .catch(err => toast.error(err, "Could not update the chapter"));
         api.put(`/manga/${id}/chapters/${chapter.id}/progress`, 
             { last_page_read: read ? chapter.page_count -1 : 0, completed: read })
-        .then(() => setPageProgress(prev => ({ ...prev, [chapter.id]: read ? (chapter.page_count - 1) : 0 })));
+        .then(() => setPageProgress(prev => ({ ...prev, [chapter.id]: read ? (chapter.page_count - 1) : 0 })))
+        // the read mark above already reports a failure
+        .catch(() => {});
     }
 
     function markAll(read) {
@@ -64,22 +69,23 @@ export default function MangaDetailsPage() {
                 setPageProgress(newPageProgress);
                 Promise.all(manga.metadata.chapters.map(c =>
                     api.put(`/manga/${id}/chapters/${c.id}/progress`, { last_page_read: read ? (c.page_count - 1) : 0, completed: read })
-                )).catch(() => {});
+                )).catch(err => toast.error(err, "Some chapters' page progress didn't save"));
             })
-            .catch(() => {});
+            .catch(err => toast.error(err, "Could not update the chapters"));
     }
 
-    if (loading) return <Loading />
-    if (error) return <Error error={error} />
+    if (loading) return <DetailsSkeleton />
+    if (notFound) return <NotFound title="Manga not found" hint="This manga isn't in the library any more. It may have been removed." />
+    if (error) return <ErrorState error={error} title="Couldn't load this manga" onRetry={refetch} showBack />
     if (!manga) return null
 
     return (
         <div className="flex flex-col">
-            <button className="btn btn-ghost btn-sm self-start" onClick={() => navigate("/")}>
+            <button className="btn btn-ghost btn-sm self-start" onClick={() => goBack(navigate)}>
                 <ArrowLeft size={18} strokeWidth={2}/> Back
             </button>
             <div className="flex gap-6">
-                <img src={coverSrc} className="w-48 h-64 object-cover rounded-md" />
+                <Cover src={manga.cover_image_url} source={manga.external_source} alt={manga.title} className="w-48 h-64 shrink-0 object-cover rounded-md" />
                 <div className="flex flex-col gap-3">
                     <h2 className="text-2xl font-bold">{manga.title}</h2>
                     <span className={`badge ${mangaBadge(manga.metadata.status)}`}>{manga.metadata.status}</span>
@@ -113,7 +119,13 @@ export default function MangaDetailsPage() {
                 </div>
             </div>
 
-            {manga.metadata.chapters && <>
+            {!manga.metadata.chapters?.length && (
+                <div className="mt-4">
+                    <EmptyState compact title="No chapters yet" hint="Chapters show up here once they've downloaded." />
+                </div>
+            )}
+
+            {manga.metadata.chapters?.length > 0 && <>
                 <h3 className="font-bold text-lg mt-4">Chapters</h3>
                 <div className="flex flex-col gap-2 mt-2">
                     {manga.metadata.chapters.map(chapter => (

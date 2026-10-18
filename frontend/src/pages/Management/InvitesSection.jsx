@@ -1,6 +1,8 @@
 import { forwardRef, useRef, useState, useEffect } from "react";
 import api from "../../services/api";
 import Format from "../../utils/format";
+import { errorMessage } from "../../utils/errors";
+import { toast } from "../../stores/useToastStore";
 
 const STATUS_BADGE = {
     active: "badge-success",
@@ -18,16 +20,16 @@ export default function InvitesSection() {
 
     function fetchInvites() {
         api.get("/admin/invites")
-            .then(res => setInvites(res.data ?? []))
-            .catch(err => setError(err.response?.data ?? err.message));
+            .then(res => { setInvites(res.data ?? []); setError(""); })
+            .catch(err => setError(errorMessage(err, "Could not load invites")));
     }
 
     useEffect(() => { fetchInvites(); }, []);
 
     function handleRevoke(invite) {
         api.delete(`/admin/invites/${invite.id}`)
-            .then(() => fetchInvites())
-            .catch(err => setError(err.response?.data ?? err.message));
+            .then(() => { toast.success("Invite revoked"); fetchInvites(); })
+            .catch(err => toast.error(err, "Could not revoke the invite"));
     }
 
     return (
@@ -108,14 +110,17 @@ const CreateInviteModal = forwardRef(function CreateInviteModal({ onCreated }, r
                 setCreated(res.data);
                 onCreated();
             })
-            .catch(err => setError(err.response?.data ?? err.message))
+            .catch(err => setError(errorMessage(err, "Could not create the invite")))
             .finally(() => setLoading(false));
     }
 
     function copy(text, what) {
         navigator.clipboard?.writeText(text)
             .then(() => setCopied(what))
-            .catch(() => setCopied(""));
+            .catch(() => {
+                setCopied("");
+                toast.error("Couldn't copy, select the text and copy it by hand");
+            });
     }
 
     function close() {

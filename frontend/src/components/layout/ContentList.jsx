@@ -1,14 +1,22 @@
 import { useNavigate } from "react-router-dom"
 import { Card } from "../cards"
+import { CardRowSkeleton } from "../states/Skeletons"
+import EmptyState from "../states/EmptyState"
 
 /**
  * A list of some content type
  * @param {any} items the items this list will contain
  * @param {any} heading the heading for this list
+ * @param {boolean} loading shows placeholder cards instead of the items
+ * @param {string} emptyText what to say when there are no items
+ * @param {string} emptyHint what the user can do about it
+ * @param {object} emptyAction optional { label, to } shown when there are no items
  * @returns
  */
-export default function ContentList({items, heading, userContentMap={}, onListChange}) {
+export default function ContentList({items, heading, userContentMap={}, onListChange, loading=false, emptyText="Nothing here yet", emptyHint, emptyAction}) {
     const navigate = useNavigate();
+
+    if (loading) return <CardRowSkeleton heading={heading}/>
 
     function handleShowAll() {
         navigate("/library", { state: {items, heading}});
@@ -20,9 +28,7 @@ export default function ContentList({items, heading, userContentMap={}, onListCh
             { items.length > 8 && <button className="link" onClick={handleShowAll}>Show All</button> }
         </div>
         {items.length === 0 ? (
-            <div className="flex items-center justify-center h-32 w-full border border-dashed border-base-300 rounded-lg">
-                <p className="text-base-content/50 text-sm pl-2">Nothing here yet</p>
-            </div>
+            <EmptyState compact title={emptyText} hint={emptyHint} action={emptyAction}/>
         ) : (
             <>
                 <ul className="flex gap-4 overflow-x-auto flex-nowrap">

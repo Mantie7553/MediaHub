@@ -1,11 +1,28 @@
 import { useLocation } from "react-router-dom";
+import { LibraryBig } from "lucide-react";
 import ContentGrid from "../../components/layout/ContentGrid";
+import EmptyState from "../../components/states/EmptyState";
 import { useUserContent } from "../../hooks";
 
+/**
+ * Every item of one dashboard row ("Show All"). The items come from the dashboard in the
+ * navigation state, so a refresh or a shared link has nothing to show
+ */
 export default function Library() {
     const location = useLocation();
     const {items, heading} = location.state ?? {};
     const { userContentMap, refresh } = useUserContent();
 
-    return <ContentGrid items={items} heading={heading} userContentMap={userContentMap} onListChange={refresh}/>
+    if (!items) {
+        return <EmptyState
+            icon={LibraryBig}
+            title="Nothing to show here"
+            hint="This page lists a row from the dashboard. Open it again with Show All on the dashboard."
+            action={{ label: "Go to the dashboard", to: "/" }}
+        />
+    }
+
+    return <div className="pt-4">
+        <ContentGrid items={items} heading={heading} userContentMap={userContentMap} onListChange={refresh} emptyText="Nothing here yet"/>
+    </div>
 }

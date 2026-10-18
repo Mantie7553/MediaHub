@@ -3,19 +3,23 @@ import { useState, useEffect, useRef } from "react"
 import { useParams, NavLink, useNavigate } from "react-router-dom"
 import api from "../../services/api"
 import { useMediaItem } from "../../hooks"
+import useApi from "../../hooks/useApi"
 import Loading from "../../components/states/Loading"
-import Error from "../../components/states/Error"
+import ErrorState from "../../components/states/ErrorState"
+import NotFound from "../../components/states/NotFound"
 
 export default function LightNovelReader() {
     const { id, volumeId } = useParams()
-    const { item: ln, loading, error } = useMediaItem(id)
+    const { item: ln, loading, error, notFound, refetch } = useMediaItem(id)
 
     if (loading) return <Loading />
-    if (error) return <Error error={error} />
+    if (notFound) return <NotFound title="Light novel not found" hint="This light novel isn't in the library any more." />
+    if (error) return <ErrorState error={error} title="Couldn't open this light novel" onRetry={refetch} showBack />
     if (!ln) return null
 
     const volumes = ln.metadata?.volumes ?? [];
     const volume = volumes.find(v => v.id === volumeId);
+    if (!volume) return <NotFound title="Volume not found" hint="This volume isn't part of the light novel any more. Pick another from the volume list." />
     return <LightNovelReaderInner key={volumeId} id={id} volumeId={volumeId} volume={volume} volumes={volumes} />
 }
 
@@ -23,9 +27,7 @@ function LightNovelReaderInner({ id, volumeId, volume, volumes }) {
     const navigate = useNavigate();
     const initialScroll = volume?.scroll_position ?? 0;
 
-    const [content, setContent] = useState(null);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
+    const { data: content, loading, error, reload } = useApi(`/light-novels/${id}/volumes/${volumeId}/content`);
     const [scrollPct, setScrollPct] = useState(initialScroll);
     const contentRef = useRef(null);
     const scrollPctRef = useRef(initialScroll);
@@ -35,13 +37,6 @@ function LightNovelReaderInner({ id, volumeId, volume, volumes }) {
     const nextVolume = volumes[currentIndex + 1] ?? null;
     const prevVolume = volumes[currentIndex - 1] ?? null;
 
-    useEffect(() => {
-        setLoading(true)
-        api.get(`/light-novels/${id}/volumes/${volumeId}/content`)
-            .then(res => setContent(res.data))
-            .catch(err => setError(err.message))
-            .finally(() => setLoading(false))
-    }, [volumeId])
 
     // restore scroll position after content renders
     useEffect(() => {
@@ -91,12 +86,13 @@ function LightNovelReaderInner({ id, volumeId, volume, volumes }) {
             scroll_position: pct,
         }).catch(() => {})
         if (pct >= 1) {
-            api.put(`/light-novels/volumes/${volumeId}/read`, { read: true })
+            // best effort like the progress save above, reading carries on either way
+            api.put(`/light-novels/volumes/${volumeId}/read`, { read: true }).catch(() => {})
         }
     }
 
     if (loading) return <Loading />
-    if (error) return <Error error={error} />
+    if (error) return <ErrorState error={error} title="Couldn't load this volume" onRetry={reload} showBack />
 
     return (
         <div className="flex flex-col h-screen">
