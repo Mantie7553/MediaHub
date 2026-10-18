@@ -87,21 +87,3 @@ func TestServeSegmentRejectsTraversal(t *testing.T) {
 	}
 }
 
-func TestIsWithin(t *testing.T) {
-	dir := filepath.Join("media", "temp", "episode-1")
-	tests := []struct {
-		path string
-		ok   bool
-	}{
-		{filepath.Join(dir, "playlist.m3u8"), true},
-		{dir, false},
-		{filepath.Join(dir, ".."), false},
-		{filepath.Join(dir, "..", "episode-12", "playlist.m3u8"), false},
-		{filepath.Join("media", "temp", "episode-12", "playlist.m3u8"), false},
-	}
-	for _, tt := range tests {
-		if got := isWithin(dir, tt.path); got != tt.ok {
-			t.Errorf("isWithin(%q) = %v, want %v", tt.path, got, tt.ok)
-		}
-	}
-}

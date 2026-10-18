@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/Mantie7553/MediaHub/backend/internal/handlers/deletion"
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/invites"
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/jobs"
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/lists"
@@ -66,6 +67,7 @@ func (s *Server) routes() {
 	jobsHandler := jobs.NewHandler(s.db)
 	listsHandler := lists.NewHandler(s.db)
 	mediaHandler := media.NewHandler(s.db)
+	deletionHandler := deletion.NewHandler(s.db)
 	musicHandler := music.NewHandler(s.db)
 	requestsHandler := requests.NewHandler(s.db)
 	searchHandler := search.NewHandler(s.db)
@@ -187,6 +189,9 @@ func (s *Server) routes() {
 			r.Use(auth.Middleware)
 			r.Use(auth.RequireAdmin)
 			r.Post("/media", mediaHandler.Upload)
+			// permanent deletion: files, Sonarr/Radarr entry and every user's lists and progress
+			r.Delete("/media/{id}", deletionHandler.DeleteMedia)
+			r.Delete("/albums/{id}", deletionHandler.DeleteAlbum)
 			// Request Handler endpoints
 			r.Get("/requests/all", requestsHandler.GetAllAdmin)
 			r.Put("/requests/{id}/approve", requestsHandler.Approve)

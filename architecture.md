@@ -147,6 +147,14 @@ Admins can trigger syncs from the backend for each media type (`/api/admin/sync/
 - **Sonarr / Radarr:** pull the library from the *arr API, map TVDB or TMDB IDs to AniList IDs using the Fribb anime-lists mapping, and fetch metadata from AniList by ID.
 - **Manga, light novels, music:** scan the matching folder under `MEDIA_ROOT` and create or update rows for what's on disk.
 
+### Removing Content
+- **From a list** (any user): `DELETE /api/me/media/{entryId}` deletes only the caller's own list entry; the title stays in the library.
+- **From the server** (admins, `deletion` package): `DELETE /api/media/{id}` (anime, movie, manga, light novel, track) and `DELETE /api/albums/{id}`. The order makes a failed deletion safe to retry:
+  1. Refused with 409 while a download for it is queued or running.
+  2. Sonarr/Radarr delete the series or movie with its files (skipped if another item shares the same series). A failure there returns 502 and stops.
+  3. Files: a title folder (`TV Shows/<Series>`, `Movies/<Movie>`, `Manga/<Series>`, `Light Novels/<Series>`, `Music/<Artist>/<Album>`) that no other item has files in is removed whole, so leftover covers or metadata can't be re-imported by the next sync. Otherwise files are removed one by one and emptied folders pruned, never the type folder itself. Every path must be inside `MEDIA_ROOT`; any failure stops before the database. Old transcodes in `temp/` go too.
+  4. One transaction deletes the item's `download_jobs` (no `ON DELETE` rule) and the item; lists, progress, episodes, chapters and volumes cascade. `download_requests` keep their history.
+
 ## External Integrations
 
 | Service | Used for | Notes |

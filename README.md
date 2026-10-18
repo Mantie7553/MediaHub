@@ -54,7 +54,7 @@ With the Docker install all of these run as containers, so there's nothing to in
 | Role | Permissions |
 |------|-------------|
 | **User** | Browse catalog, submit download requests, track status |
-| **Admin** | All user permissions, plus approve / reject requests, manage jobs, users, invites and the library sync |
+| **Admin** | All user permissions, plus approve / reject requests, manage jobs, users, invites and the library sync, and permanently delete titles |
 
 Users can be given one of two download permissions: `vetted` (requests need admin approval) or `auto_approved` (requests are approved immediately).
 
@@ -123,6 +123,8 @@ MediaHub's catalog is built from Sonarr, Radarr and the `Manga`, `Light Novels` 
 - **Everything else** (files added by hand, a Sonarr/Radarr *Library Import*) is picked up by the **library sync**. It runs every night at `LIBRARY_SYNC_HOUR` (default 4 am), or on demand from *Settings → Library Sync → Sync Library* (admins only).
 
 For an existing collection, first add it to Sonarr/Radarr (*Series/Movies → Library Import*, **Anime** profile), then run the sync.
+
+**Removing titles.** Anyone can take a title off their own list (the status menu on its page, or the card's list dialog). Admins can also **Delete from server**, which deletes the files, removes the series/movie from Sonarr/Radarr so it isn't downloaded again, and clears it from everyone's lists. It asks you to type the title first and can't be undone.
 
 ## Updating
 - **Automatic.** Every push to `main` runs `.github/workflows/release.yml`. It tests the backend, builds the frontend, then publishes the `mediahub-backend`, `mediahub-web` and `mediahub-bootstrap` images to GHCR. On each install, the `watchtower` container checks every 5 minutes, pulls new MediaHub images and restarts them. Database migrations run automatically when the backend starts.
