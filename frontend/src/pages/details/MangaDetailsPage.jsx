@@ -136,7 +136,7 @@ export default function MangaDetailsPage() {
                             >
                                 <Check size={10} strokeWidth={3} />
                             </button>
-                            <NavLink to={`/manga/${id}/chapters/${chapter.id}/read`} className="text-sm w-24 shrink-0">
+                            <NavLink to={`/manga/${id}/chapters/${chapter.id}/read`} state={{ fromDetails: true }} className="text-sm w-24 shrink-0">
                                 {chapter.title ?? `Chapter ${chapter.chapter_number}`}
                             </NavLink>
                             {chapter.page_count && (

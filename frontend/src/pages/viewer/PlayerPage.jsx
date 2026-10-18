@@ -2,9 +2,9 @@ import { useState, useEffect, useRef } from "react"
 import { useParams, useLocation, useNavigate } from "react-router-dom"
 import Hls from "hls.js"
 import api from "../../services/api"
-import Loading from "../../components/states/Loading"
 import ErrorState from "../../components/states/ErrorState"
 import { toast } from "../../stores/useToastStore"
+import { exitViewer, switchViewer } from "../../utils/navigation"
 import { ArrowLeft, ArrowRight, Languages } from "lucide-react"
 
 export default function PlayerPage() {
@@ -27,6 +27,10 @@ export default function PlayerPage() {
     const [error, setError] = useState(null);
     // bumped by Try again after the stream failed to start
     const [attempt, setAttempt] = useState(0);
+    // the video is waiting for data mid-playback (seeking ahead, slow network)
+    const [buffering, setBuffering] = useState(false);
+    // which load has taken long enough to explain the wait, see the effect below
+    const [slowLoad, setSlowLoad] = useState(null);
     const initialPosition = location.state?.position ?? 0;
     const animeId = location.state?.animeId ?? null;
     const episodeList = location.state?.episodes ?? [];
@@ -96,6 +100,28 @@ export default function PlayerPage() {
         setLoading(true)
         setAttempt(a => a + 1)
     }
+
+    // a first play waits for the server to start transcoding, which can take a while:
+    // after a few seconds say so, so the spinner doesn't look stuck
+    const loadKey = `${id}:${attempt}`
+    useEffect(() => {
+        if (!loading) return
+        const timer = setTimeout(() => setSlowLoad(loadKey), 6000)
+        return () => clearTimeout(timer)
+    }, [loading, loadKey])
+
+    useEffect(() => {
+        const video = videoRef.current
+        if (!video) return
+        const waiting = () => setBuffering(true)
+        const ready = () => setBuffering(false)
+        video.addEventListener("waiting", waiting)
+        for (const event of ["playing", "canplay", "pause", "emptied"]) video.addEventListener(event, ready)
+        return () => {
+            video.removeEventListener("waiting", waiting)
+            for (const event of ["playing", "canplay", "pause", "emptied"]) video.removeEventListener(event, ready)
+        }
+    }, [])
 
     // set up video after playlist loads
     useEffect(() => {
@@ -307,31 +333,32 @@ export default function PlayerPage() {
     }
 
     function goToEpisode(ep) {
-        navigate(`/watch/episode/${ep.id}`, {
-            state: {
-                position: 0,
-                animeId,
-                episodes: episodeList,
-            }
-        });
+        setLoading(true)
+        switchViewer(navigate, location, `/watch/episode/${ep.id}`, { position: 0 });
     }
 
-    if (loading) return <Loading />
+    function exit() {
+        exitViewer(navigate, location, type === "movie" ? `/movies/${id}` : animeId ? `/anime/${animeId}` : null)
+    }
+
     if (error) return <div className="min-h-screen bg-base-100">
         <ErrorState error={error} title="Couldn't play this video" onRetry={retry} showBack />
     </div>
 
     const selectedAudio = audioTracks.find(a => a.selected)
+    const currentEpisode = episodeList[currentIndex]
 
     return (
     <div className="flex flex-col h-screen bg-black">
         <div className="flex items-center justify-between px-4 py-2 bg-black/80">
-            <button
-                className="btn btn-ghost btn-sm text-white"
-                onClick={() => animeId ? navigate(`/anime/${animeId}`) : navigate(-1)}
-            >
+            <button className="btn btn-ghost btn-sm text-white" onClick={exit}>
                 <ArrowLeft size={18} strokeWidth={2}/> Back
             </button>
+            {currentEpisode && (
+                <span className="text-sm text-white/70 truncate px-2 hidden sm:block">
+                    EP {currentEpisode.episode_number}{currentEpisode.title ? ` — ${currentEpisode.title}` : ""}
+                </span>
+            )}
             <div className="flex gap-2">
                 <div className="dropdown dropdown-end">
                     <div tabIndex={0} role="button" className="btn btn-ghost btn-sm text-white">
@@ -391,12 +418,29 @@ export default function PlayerPage() {
                 </button>
             </div>
         </div>
-        <div className="flex flex-1 items-center justify-center">
+        <div className="relative flex flex-1 items-center justify-center">
+            {/* the video element stays mounted while loading so hls.js always has it to attach to */}
+            {loading && (
+                <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 text-white text-center px-6" role="status">
+                    <span className="loading loading-spinner loading-lg"></span>
+                    <p>Preparing the video…</p>
+                    {slowLoad === loadKey && (
+                        <p className="text-sm text-white/60 max-w-sm">
+                            The first play of a video takes a little longer while the server gets it ready.
+                        </p>
+                    )}
+                </div>
+            )}
+            {!loading && buffering && (
+                <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none" role="status" aria-label="Buffering">
+                    <span className="loading loading-spinner loading-lg text-white"></span>
+                </div>
+            )}
             <video
                 ref={videoRef}
                 controls
                 crossOrigin="anonymous"
-                className="w-full max-w-6xl"
+                className={`w-full max-w-6xl ${loading ? "invisible" : ""}`}
             >
                 {subtitles.filter(t => subtitleFiles[t.url]).map(t => (
                     <track

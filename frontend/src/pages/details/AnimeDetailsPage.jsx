@@ -7,7 +7,7 @@ import EmptyState from "../../components/states/EmptyState";
 import { DetailsSkeleton, ListSkeleton } from "../../components/states/Skeletons";
 import Cover from "../../components/Cover";
 import { toast } from "../../stores/useToastStore";
-import { goBack } from "../../utils/navigation";
+import { goBack, openViewer } from "../../utils/navigation";
 import { useMediaItem, useUserContent } from "../../hooks";
 import { animeBadge, mediaStatusBadge } from "../../utils/status";
 import Format from "../../utils/format";
@@ -201,7 +201,7 @@ export default function AnimeDetailsPage() {
                                         </div>
                                         <button
                                             className="btn btn-sm btn-primary"
-                                            onClick={() => navigate(`/watch/episode/${ep.id}`, { state: { position: episodeProgress[ep.id]?.position ?? ep.position_secs, animeId: id, episodes: episodes } }) }
+                                            onClick={() => openViewer(navigate, `/watch/episode/${ep.id}`, { position: episodeProgress[ep.id]?.position ?? ep.position_secs, animeId: id, episodes: episodes }) }
                                         >
                                             Watch
                                         </button>

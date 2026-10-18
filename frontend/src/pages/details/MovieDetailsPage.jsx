@@ -4,7 +4,7 @@ import NotFound from "../../components/states/NotFound";
 import { DetailsSkeleton } from "../../components/states/Skeletons";
 import Cover from "../../components/Cover";
 import { toast } from "../../stores/useToastStore";
-import { goBack } from "../../utils/navigation";
+import { goBack, openViewer } from "../../utils/navigation";
 import { useMediaItem, useUserContent } from "../../hooks";
 import Format from "../../utils/format";
 import api from "../../services/api";
@@ -79,14 +79,14 @@ export default function MovieDetailsPage() {
                         {movie.metadata.file_path && <>
                             <button
                                 className="btn btn-primary"
-                                onClick={() => navigate(`/watch/movie/${id}`, { state: { position: canResume ? position : 0 } })}
+                                onClick={() => openViewer(navigate, `/watch/movie/${id}`, { position: canResume ? position : 0 })}
                             >
                                 {canResume ? `Resume from ${Format.duration(position)}` : "Watch"}
                             </button>
                             {canResume && (
                                 <button
                                     className="btn btn-ghost"
-                                    onClick={() => navigate(`/watch/movie/${id}`, { state: { position: 0 } })}
+                                    onClick={() => openViewer(navigate, `/watch/movie/${id}`, { position: 0 })}
                                 >
                                     Start over
                                 </button>

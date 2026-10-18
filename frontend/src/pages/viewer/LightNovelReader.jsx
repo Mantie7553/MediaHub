@@ -1,18 +1,19 @@
 import { ChevronDown, ChevronUp, ArrowLeft } from 'lucide-react'
 import { useState, useEffect, useRef } from "react"
-import { useParams, NavLink, useNavigate } from "react-router-dom"
+import { useParams, useLocation, useNavigate } from "react-router-dom"
 import api from "../../services/api"
 import { useMediaItem } from "../../hooks"
 import useApi from "../../hooks/useApi"
-import Loading from "../../components/states/Loading"
 import ErrorState from "../../components/states/ErrorState"
 import NotFound from "../../components/states/NotFound"
+import { ReaderSkeleton, TextSkeleton } from "../../components/states/Skeletons"
+import { exitViewer, switchViewer } from "../../utils/navigation"
 
 export default function LightNovelReader() {
     const { id, volumeId } = useParams()
     const { item: ln, loading, error, notFound, refetch } = useMediaItem(id)
 
-    if (loading) return <Loading />
+    if (loading) return <ReaderSkeleton variant="text" />
     if (notFound) return <NotFound title="Light novel not found" hint="This light novel isn't in the library any more." />
     if (error) return <ErrorState error={error} title="Couldn't open this light novel" onRetry={refetch} showBack />
     if (!ln) return null
@@ -25,6 +26,7 @@ export default function LightNovelReader() {
 
 function LightNovelReaderInner({ id, volumeId, volume, volumes }) {
     const navigate = useNavigate();
+    const location = useLocation();
     const initialScroll = volume?.scroll_position ?? 0;
 
     const { data: content, loading, error, reload } = useApi(`/light-novels/${id}/volumes/${volumeId}/content`);
@@ -91,7 +93,6 @@ function LightNovelReaderInner({ id, volumeId, volume, volumes }) {
         }
     }
 
-    if (loading) return <Loading />
     if (error) return <ErrorState error={error} title="Couldn't load this volume" onRetry={reload} showBack />
 
     return (
@@ -109,17 +110,17 @@ function LightNovelReaderInner({ id, volumeId, volume, volumes }) {
                         />
                     </div>
                     <div className="flex justify-center items-center gap-4 p-3">
-                        <NavLink to={`/light-novels/${id}`} className="btn btn-sm">
+                        <button onClick={() => exitViewer(navigate, location, `/light-novels/${id}`)} className="btn btn-sm">
                             <ArrowLeft size={16} strokeWidth={3}/>
                             To Volumes
-                        </NavLink>
+                        </button>
                         <button
                             className="btn btn-sm"
                             disabled={scrollPct <= 0 && !prevVolume}
                             onClick={() => {
                                 if (scrollPct <= 0 && prevVolume) {
                                     saveProgress(scrollPctRef.current);
-                                    navigate(`/light-novels/${id}/volumes/${prevVolume.id}/read`);
+                                    switchViewer(navigate, location, `/light-novels/${id}/volumes/${prevVolume.id}/read`);
                                 } else {
                                     contentRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
                                 }
@@ -133,7 +134,7 @@ function LightNovelReaderInner({ id, volumeId, volume, volumes }) {
                             onClick={() => {
                                 if (scrollPct >= 1 && nextVolume) {
                                     saveProgress(scrollPctRef.current);
-                                    navigate(`/light-novels/${id}/volumes/${nextVolume.id}/read`);
+                                    switchViewer(navigate, location, `/light-novels/${id}/volumes/${nextVolume.id}/read`);
                                 } else {
                                     const el = contentRef.current;
                                     if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
@@ -145,7 +146,8 @@ function LightNovelReaderInner({ id, volumeId, volume, volumes }) {
                     </div>
                 </div>
             </div>
-            <div
+            {/* the toolbar stays up while the text loads */}
+            {loading ? <TextSkeleton /> : <div
                 ref={contentRef}
                 className="flex-1 overflow-y-auto flex flex-col items-center"
             >
@@ -155,7 +157,7 @@ function LightNovelReaderInner({ id, volumeId, volume, volumes }) {
                         dangerouslySetInnerHTML={{ __html: content }}
                     />
                 </div>
-            </div>
+            </div>}
         </div>
     )
 }

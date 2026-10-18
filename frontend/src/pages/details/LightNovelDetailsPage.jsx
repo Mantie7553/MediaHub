@@ -134,7 +134,7 @@ export default function LightNovelDetailsPage() {
                         >
                             <Check size={10} strokeWidth={3} />
                         </button>
-                        <NavLink to={`/light-novels/${id}/volumes/${volume.id}/read`} className="text-sm w-24 shrink-0">
+                        <NavLink to={`/light-novels/${id}/volumes/${volume.id}/read`} state={{ fromDetails: true }} className="text-sm w-24 shrink-0">
                             {volume.title ?? `Volume ${volume.volume_number}`}
                         </NavLink>
                         {scrollPosition[volume.id] != null && (

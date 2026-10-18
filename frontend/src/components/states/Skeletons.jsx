@@ -85,3 +85,55 @@ export function TableSkeleton({ columns = 4, rows = 4 }) {
         {Array.from({ length: rows }, (_, i) => <div key={i} className="skeleton h-8 w-full"></div>)}
     </div>
 }
+
+/**
+ * A reader toolbar with a progress bar
+ */
+export function ReaderToolbarSkeleton() {
+    return <div className="sticky top-0 z-10 bg-base-200 border-b border-base-300 w-full" aria-hidden="true">
+        <div className="max-w-2xl mx-auto px-6 py-3 flex items-center gap-3">
+            <div className="skeleton h-8 w-28 shrink-0"></div>
+            <div className="flex-1 flex flex-col gap-2 items-center">
+                <div className="skeleton h-3 w-12"></div>
+                <div className="skeleton h-2 w-full"></div>
+            </div>
+            <div className="skeleton h-8 w-20 shrink-0"></div>
+        </div>
+    </div>
+}
+
+/**
+ * A manga page while its image loads
+ */
+export function PageSkeleton() {
+    return <div className="skeleton mt-2 h-[calc(100vh-5rem)] aspect-[2/3] max-w-full" aria-busy="true" aria-label="Loading page"></div>
+}
+
+/**
+ * Paragraphs of a light novel while the volume loads
+ */
+export function TextSkeleton({ paragraphs = 4 }) {
+    return <div className="max-w-2xl mx-auto w-full px-6 py-8 flex flex-col gap-6" aria-busy="true" aria-label="Loading text">
+        {Array.from({ length: paragraphs }, (_, p) => (
+            <div key={p} className="flex flex-col gap-2">
+                <div className="skeleton h-4 w-full"></div>
+                <div className="skeleton h-4 w-full"></div>
+                <div className="skeleton h-4 w-11/12"></div>
+                <div className="skeleton h-4 w-3/5"></div>
+            </div>
+        ))}
+    </div>
+}
+
+/**
+ * A whole reader page: toolbar plus a manga page or light novel text
+ * @param {string} variant "page" or "text"
+ */
+export function ReaderSkeleton({ variant = "page" }) {
+    return <div className="flex flex-col">
+        <ReaderToolbarSkeleton/>
+        {variant === "page"
+            ? <div className="flex justify-center"><PageSkeleton/></div>
+            : <TextSkeleton/>}
+    </div>
+}
