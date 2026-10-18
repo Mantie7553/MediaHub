@@ -1,19 +1,12 @@
-import { useEffect, useState } from "react";
-import api from "../services/api";
+import useApi from "./useApi";
 
+/**
+ * The media the logged in user tracks, with a map to look entries up by media, external or album id
+ * @returns userContent, userContentMap, loading, error, refresh (reloads in the background)
+ *  and retry (reloads showing the loading state, after an error)
+ */
 export default function useUserContent() {
-    const [userContent, setUserContent] = useState([]);
-    const [error, setError] = useState("");
-
-    function refresh() {
-        api.get("/me/media")
-            .then(resp => setUserContent(resp.data))
-            .catch(err => setError(err.message ?? "Unable to retrieve user tracked media"));
-    }
-
-    useEffect(() => {
-        refresh();
-    }, [])
+    const { data: userContent, loading, error, reload } = useApi("/me/media", { initial: [] });
 
     const userContentMap = Object.fromEntries([
         ...userContent.map(item => [item.media_item_id, item]),
@@ -21,5 +14,5 @@ export default function useUserContent() {
         ...userContent.filter(item => item.album_id != null).map(item => [item.album_id, item]),
     ]);
 
-    return { userContent, userContentMap, error, refresh };
+    return { userContent, userContentMap, loading, error, refresh: () => reload(true), retry: () => reload() };
 }
