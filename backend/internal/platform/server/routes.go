@@ -11,6 +11,7 @@ import (
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/invites"
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/jobs"
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/lists"
+	"github.com/Mantie7553/MediaHub/backend/internal/handlers/manga"
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/media"
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/music"
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/requests"
@@ -66,6 +67,7 @@ func (s *Server) routes() {
 	invitesHandler := invites.NewHandler(s.db)
 	jobsHandler := jobs.NewHandler(s.db)
 	listsHandler := lists.NewHandler(s.db)
+	mangaHandler := manga.NewHandler(s.db)
 	mediaHandler := media.NewHandler(s.db)
 	deletionHandler := deletion.NewHandler(s.db)
 	musicHandler := music.NewHandler(s.db)
@@ -192,6 +194,9 @@ func (s *Server) routes() {
 			// permanent deletion: files, Sonarr/Radarr entry and every user's lists and progress
 			r.Delete("/media/{id}", deletionHandler.DeleteMedia)
 			r.Delete("/albums/{id}", deletionHandler.DeleteAlbum)
+			// manga chapters: upload a file, or fetch what MangaDex has that the library doesn't
+			r.Post("/admin/manga/{id}/chapters", mangaHandler.UploadChapter)
+			r.Post("/admin/manga/{id}/check", mangaHandler.CheckForChapters)
 			// Request Handler endpoints
 			r.Get("/requests/all", requestsHandler.GetAllAdmin)
 			r.Put("/requests/{id}/approve", requestsHandler.Approve)

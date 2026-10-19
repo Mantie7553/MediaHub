@@ -19,7 +19,6 @@ This is my attempt at a self hosted media platform. It curates a library of Anim
 | **Prowlarr** | Manages the indexers Sonarr and Radarr search |
 | **qBittorrent** | Download client for Sonarr and Radarr (no seeding) |
 | **yt-dlp** | Downloads Music |
-| **mangal** | Downloads Manga |
 | **ffmpeg** | Transcodes video for streaming and extracts subtitles |
 | **PostgreSQL** | Database |
 | **Caddy** | Serves the web app and proxies the API |
@@ -59,7 +58,7 @@ With the Docker install all of these run as containers, so there's nothing to in
 Users can be given one of two download permissions: `vetted` (requests need admin approval) or `auto_approved` (requests are approved immediately).
 
 ## Install (Docker)
-One script installs everything MediaHub needs: PostgreSQL, the backend (with ffmpeg, yt-dlp and mangal built in), the web app behind Caddy, qBittorrent, Sonarr, Radarr, Prowlarr, and optionally a Cloudflare Tunnel. It installs Docker if it's missing, generates every secret, and connects the apps to each other. You don't need any UI setup.
+One script installs everything MediaHub needs: PostgreSQL, the backend (with ffmpeg and yt-dlp built in), the web app behind Caddy, qBittorrent, Sonarr, Radarr, Prowlarr, and optionally a Cloudflare Tunnel. It installs Docker if it's missing, generates every secret, and connects the apps to each other. You don't need any UI setup.
 
 **Linux (Ubuntu/Debian)**
 ```
@@ -149,7 +148,7 @@ For working on MediaHub itself. Install these first:
 - **Node.js** and **npm**
 - **Go**
 - **PostgreSQL**
-- **ffmpeg**, **yt-dlp** and **mangal**
+- **ffmpeg** and **yt-dlp**
 - **Sonarr** and **Radarr** (with a download client)
 - **Goose** (optional, migrations also run when the backend starts)
 
@@ -174,7 +173,6 @@ For working on MediaHub itself. Install these first:
     | `DB_PASSWORD` | Database password |
     | `DB_NAME` | Database name |
     | `MEDIA_ROOT` | Root path where media will be downloaded |
-    | `MANGAL_PATH` | Path to the mangal executable |
     | `TRANSCODE_HWACCEL` | *(Optional)* GPU decoder for AV1 videos. Defaults to `d3d11va` on Windows; on Linux set e.g. `vaapi`, or `none` to decode on the CPU |
 2. In both Sonarr and Radarr, go to *Settings → Connect → + → Webhook*:
     - **URL:** `<api_url>/api/webhooks/sonarr` (or `/radarr`)

@@ -41,7 +41,7 @@ func Dispatch(db *sql.DB, requestID string, mediaItemID string,
 		handler = "ytdlp"
 	case "manga":
 		dest = filepath.Join(mediaRoot, "Manga")
-		handler = "mangal"
+		handler = "mangadex"
 	default:
 		dest = filepath.Join(mediaRoot, "Downloads")
 		handler = "ytdlp"
@@ -136,8 +136,8 @@ func Dispatch(db *sql.DB, requestID string, mediaItemID string,
 			logger.Error("failed to save radarr_id %s", err.Error())
 		}
 
-	case "mangal":
-		go RunMangal(db, jobID, mediaItemID, sourceURL, dest)
+	case "mangadex":
+		go RunMangaDex(db, jobID, mediaItemID, dest)
 
 	// if it is not any of the above try downloading it with ytdlp
 	default:

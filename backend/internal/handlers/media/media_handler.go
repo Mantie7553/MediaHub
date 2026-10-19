@@ -10,12 +10,12 @@ import (
 	"net/url"
 	"path/filepath"
 	"regexp"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/Mantie7553/MediaHub/backend/internal/clients/mangadex"
+	"github.com/Mantie7553/MediaHub/backend/internal/mangafiles"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/auth"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/logger"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/utils"
@@ -517,31 +517,18 @@ func (h *Handler) ServePage(w http.ResponseWriter, r *http.Request) {
 	}
 	defer reader.Close()
 
-	sort.Slice(reader.File, func(i, j int) bool {
-		return reader.File[i].Name < reader.File[j].Name
-	})
+	// only the images count as pages: imported archives can hold ComicInfo.xml and folders
+	pages := mangafiles.Pages(&reader.Reader)
 
 	// check that the page number is in bounds
-	if pageNum < 0 || pageNum >= len(reader.File) {
+	if pageNum < 0 || pageNum >= len(pages) {
 		utils.Error(w, http.StatusNotFound, "page not found")
 		return
 	}
 
 	// read the page
-	entry := reader.File[pageNum]
-
-	contentTypes := map[string]string{
-		".jpg":  "image/jpeg",
-		".jpeg": "image/jpeg",
-		".png":  "image/png",
-		".webp": "image/webp",
-	}
-
-	// check that the content type of the file is actually allowed
-	ct, ok := contentTypes[strings.ToLower(filepath.Ext(entry.Name))]
-	if !ok {
-		ct = "application/octet-stream"
-	}
+	entry := pages[pageNum]
+	ct := mangafiles.ImageType(entry.Name)
 
 	f, err := entry.Open()
 	if utils.InternalError(w, err) {
