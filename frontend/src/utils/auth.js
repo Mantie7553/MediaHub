@@ -1,3 +1,5 @@
+import api from "../services/api";
+
 
 /**
  * Role of the logged in user, read from the access token
@@ -11,4 +13,18 @@ export function getRole() {
     } catch {
         return null;
     }
+}
+
+/**
+ * Sign out: revoke the refresh token on the server (best effort), forget both tokens and go to
+ * the login page
+ * @param {function} navigate from useNavigate
+ */
+export function logout(navigate) {
+    api.delete("/auth/logout", {
+        data: {refresh_token: localStorage.getItem("refresh_token")}
+    });
+    localStorage.removeItem("token");
+    localStorage.removeItem("refresh_token");
+    navigate("/login");
 }

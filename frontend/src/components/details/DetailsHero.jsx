@@ -92,16 +92,3 @@ function Description({ text, html }) {
         </button>}
     </div>
 }
-
-/**
- * A small status chip for the hero, like airing or ongoing
- * @param {string} label the text
- * @param {string} tone a daisyUI color name: info, success, warning, error
- */
-export function HeroChip({ label, tone }) {
-    const dots = { info: "bg-info", success: "bg-success", warning: "bg-warning", error: "bg-error" }
-    return <span className="inline-flex items-center gap-1.5 rounded-full bg-white/8 ring-1 ring-white/10 px-2.5 py-0.5 text-xs font-medium capitalize text-base-content/90">
-        <span className={`size-1.5 rounded-full ${dots[tone] ?? "bg-neutral-content"}`}></span>
-        {label}
-    </span>
-}

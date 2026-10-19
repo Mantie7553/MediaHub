@@ -12,7 +12,8 @@ import DeleteFromServerButton from "../../components/DeleteFromServerButton";
 import { animeBadge } from "../../utils/status";
 import Format from "../../utils/format";
 import { CheckCheck, Play, RotateCcw, Undo2 } from "lucide-react";
-import DetailsHero, { HeroChip } from "../../components/details/DetailsHero";
+import DetailsHero from "../../components/details/DetailsHero";
+import StatusPill from "../../components/StatusPill";
 import { ActionMenu, ActionMenuItem, ListStatusMenu } from "../../components/details/Menus";
 import ItemRow, { ItemList } from "../../components/details/ItemRow";
 import SegmentedTabs from "../../components/SegmentedTabs";
@@ -140,7 +141,7 @@ export default function AnimeDetailsPage() {
                 cover={{ src: anime.cover_image_url }}
                 eyebrow="Anime"
                 title={anime.title}
-                badges={anime.metadata.status && <HeroChip label={anime.metadata.status} tone={animeBadge(anime.metadata.status)?.replace("badge-", "")}/>}
+                badges={anime.metadata.status && <StatusPill label={anime.metadata.status} tone={animeBadge(anime.metadata.status)?.replace("badge-", "")}/>}
                 meta={[
                     anime.release_date && Format.year(anime.release_date),
                     episodes.length > 0 && `${episodes.length} episodes`,

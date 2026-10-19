@@ -1,7 +1,6 @@
 import { NavLink, useNavigate } from "react-router-dom"
 import { LogOut, PanelLeftClose, PanelLeftOpen } from "lucide-react"
-import api from "../../services/api"
-import { getRole } from "../../utils/auth"
+import { getRole, logout } from "../../utils/auth"
 import useMe from "../../hooks/useMe"
 import useSidebarStore from "../../stores/useSidebarStore"
 import Logo from "./Logo"
@@ -20,15 +19,6 @@ export default function Sidebar() {
     const collapsed = useSidebarStore(state => state.collapsed);
     const toggle = useSidebarStore(state => state.toggle);
     const items = navItems(role);
-
-    function handleLogout() {
-        api.delete("/auth/logout", {
-            data: {refresh_token: localStorage.getItem("refresh_token")}
-        });
-        localStorage.removeItem("token");
-        localStorage.removeItem("refresh_token");
-        navigate("/login");
-    }
 
     // the rail only applies on desktop, the mobile drawer always shows labels
     const hideInRail = collapsed ? "lg:hidden" : "";
@@ -62,7 +52,7 @@ export default function Sidebar() {
                         <p className="text-xs text-base-content/50 capitalize">{role ?? ""}</p>
                     </div>
                     <RailTooltip label="Log out" enabled={collapsed}>
-                        <button className="btn btn-ghost btn-square text-base-content/60 hover:text-error" onClick={handleLogout} aria-label="Log out">
+                        <button className="btn btn-ghost btn-square text-base-content/60 hover:text-error" onClick={() => logout(navigate)} aria-label="Log out">
                             <LogOut size={18}/>
                         </button>
                     </RailTooltip>
