@@ -19,14 +19,15 @@ const LONG_DESCRIPTION = 320
  * @param {string[]} genres shown as chips
  * @param {string} description plain text, or HTML with html set
  * @param {boolean} html the description is HTML from the metadata source
- * @param {any} actions the buttons
+ * @param {any} primary the main button, full width on phones
+ * @param {any} actions the other buttons, in a row under the main one on phones
  * @param {any} note a line under the actions, like why it can't be played
  */
-export default function DetailsHero({ cover, square = false, eyebrow, title, meta = [], badges, genres = [], description, html = false, actions, note }) {
+export default function DetailsHero({ cover, square = false, eyebrow, title, meta = [], badges, genres = [], description, html = false, primary, actions, note }) {
     const navigate = useNavigate()
     const facts = meta.filter(Boolean)
 
-    return <section className="relative isolate -mx-4 sm:-mx-6 lg:-mx-10 -mt-5 sm:-mt-6 lg:-mt-8 px-4 sm:px-6 lg:px-10 pt-3 lg:pt-6 pb-10 mb-2">
+    return <section className="relative z-10 isolate -mx-4 sm:-mx-6 lg:-mx-10 -mt-5 sm:-mt-6 lg:-mt-8 px-4 sm:px-6 lg:px-10 pt-3 lg:pt-6 pb-10 mb-2">
         {/* the cover, blurred into a wash of its colors. Clipped here and not on the section, so
             the action menus can open past the hero. Past the page's max width its edges fade out */}
         <div className="absolute inset-0 -z-10 overflow-hidden min-[1680px]:[mask-image:linear-gradient(to_right,transparent,#000_6rem,#000_calc(100%-6rem),transparent)]" aria-hidden="true">
@@ -65,7 +66,10 @@ export default function DetailsHero({ cover, square = false, eyebrow, title, met
 
                 {description && <Description text={description} html={html}/>}
 
-                {actions && <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 pt-1">{actions}</div>}
+                {(primary || actions) && <div className="w-full max-w-md sm:max-w-none flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2 pt-1">
+                    {primary && <div className="flex *:flex-1 sm:*:flex-none">{primary}</div>}
+                    {actions && <div className="flex items-center gap-2">{actions}</div>}
+                </div>}
                 {note && <p className="text-sm text-base-content/50">{note}</p>}
             </div>
         </div>

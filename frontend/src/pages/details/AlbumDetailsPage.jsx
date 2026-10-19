@@ -70,11 +70,11 @@ export default function AlbumDetailsPage() {
                     `${tracks.length} ${tracks.length === 1 ? "track" : "tracks"}`,
                     totalSecs > 0 && `${Math.round(totalSecs / 60)} min`,
                 ]}
+                primary={<button className="btn btn-primary btn-lg shadow-glow px-6" onClick={() => playAlbum(queueTracks, 0)} disabled={tracks.length === 0}>
+                    <Play size={18} fill="currentColor"/> Play
+                </button>}
                 actions={<>
-                    <button className="btn btn-primary btn-lg shadow-glow px-6" onClick={() => playAlbum(queueTracks, 0)} disabled={tracks.length === 0}>
-                        <Play size={18} fill="currentColor"/> Play
-                    </button>
-                    <button className="btn border-white/10 bg-white/10 hover:bg-white/15 gap-2 font-medium" onClick={() => dialogRef.current.showModal()}>
+                    <button className="btn flex-1 sm:flex-none border-white/10 bg-white/10 hover:bg-white/15 gap-2 font-medium" onClick={() => dialogRef.current.showModal()}>
                         {userContent ? <Check size={16} className="text-primary"/> : <BookmarkPlus size={16}/>}
                         {userContent ? Format.statusLabel(userContent.status, "music_album") : "Add to list"}
                     </button>

@@ -5,11 +5,12 @@
  * @param {function} onChange called with the picked key
  * @param {string} label names the tab list for screen readers
  * @param {string} size "md", or "lg" for a page's main tabs
+ * @param {boolean} bleed on phones, scrolls to the screen edges instead of within its box
  */
-export default function SegmentedTabs({ options, value, onChange, label, size = "md" }) {
+export default function SegmentedTabs({ options, value, onChange, label, size = "md", bleed = true }) {
     const large = size === "lg"
 
-    return <div className="shelf -mx-4 px-4 sm:mx-0 sm:px-0 overflow-x-auto scroll-px-4 sm:scroll-px-0">
+    return <div className={`shelf overflow-x-auto ${bleed ? "-mx-4 px-4 sm:mx-0 sm:px-0 scroll-px-4 sm:scroll-px-0" : ""}`}>
         <div role="tablist" aria-label={label}
             className={`inline-flex gap-1 rounded-full bg-base-200 ring-1 ring-white/5 shadow-card ${large ? "p-1.5" : "p-1"}`}>
             {options.map(({ key, label, icon: Icon, count }) => {

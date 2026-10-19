@@ -144,7 +144,7 @@ function LightNovelReaderInner({ id, volumeId, volume, volumes, title }) {
             {/* the toolbar stays up while the text loads */}
             {loading ? <TextSkeleton /> : <div
                 ref={contentRef}
-                className="flex-1 overflow-y-auto flex flex-col items-center px-3 sm:px-6 py-4 sm:py-8 pb-[calc(2rem+env(safe-area-inset-bottom))]"
+                className="flex-1 overflow-y-auto flex flex-col items-center px-3 sm:px-6 py-4 sm:py-8 pb-[calc(2rem+var(--player-h,0px)+env(safe-area-inset-bottom))]"
             >
                 {/* a warm page to read on, the text comes with its own markup from the EPUB */}
                 <article

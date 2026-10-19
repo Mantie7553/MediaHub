@@ -101,13 +101,13 @@ export default function LightNovelDetailsPage() {
                 genres={ln.metadata.genres ?? []}
                 description={ln.description}
                 html
+                primary={volumes.length > 0 && <button className="btn btn-primary btn-lg shadow-glow px-6" onClick={() => read(nextVolume ?? volumes[0])}>
+                    <BookOpen size={18}/>
+                    {nextVolume
+                        ? `${nextStarted ? "Continue" : readVolumes.size > 0 ? "Read" : "Start reading"} Vol. ${nextVolume.volume_number}`
+                        : "Read again"}
+                </button>}
                 actions={<>
-                    {volumes.length > 0 && <button className="btn btn-primary btn-lg shadow-glow px-6" onClick={() => read(nextVolume ?? volumes[0])}>
-                        <BookOpen size={18}/>
-                        {nextVolume
-                            ? `${nextStarted ? "Continue" : readVolumes.size > 0 ? "Read" : "Start reading"} Vol. ${nextVolume.volume_number}`
-                            : "Read again"}
-                    </button>}
                     <ListStatusMenu
                         status={userEntry?.status}
                         type={ln.type}

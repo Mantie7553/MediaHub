@@ -31,6 +31,27 @@ export default function PlayerPage() {
     const [buffering, setBuffering] = useState(false);
     // which load has taken long enough to explain the wait, see the effect below
     const [slowLoad, setSlowLoad] = useState(null);
+    // the audio/subtitle panel. Opened by click rather than focus, because opening a
+    // select's native picker takes focus away and would close a focus-based dropdown
+    const [languagesOpen, setLanguagesOpen] = useState(false);
+    const languagesRef = useRef(null);
+
+    // a tap outside the panel or Escape closes it
+    useEffect(() => {
+        if (!languagesOpen) return
+        function onPointerDown(e) {
+            if (!languagesRef.current?.contains(e.target)) setLanguagesOpen(false)
+        }
+        function onKeyDown(e) {
+            if (e.key === "Escape") setLanguagesOpen(false)
+        }
+        document.addEventListener("pointerdown", onPointerDown)
+        document.addEventListener("keydown", onKeyDown)
+        return () => {
+            document.removeEventListener("pointerdown", onPointerDown)
+            document.removeEventListener("keydown", onKeyDown)
+        }
+    }, [languagesOpen])
     const initialPosition = location.state?.position ?? 0;
     const animeId = location.state?.animeId ?? null;
     const episodeList = location.state?.episodes ?? [];
@@ -379,11 +400,16 @@ export default function PlayerPage() {
                 >
                     <span className="hidden sm:inline">Next</span> <SkipForward size={18}/>
                 </button>}
-                <div className="dropdown dropdown-end">
-                    <div tabIndex={0} role="button" className="btn btn-ghost btn-sm gap-1.5 text-white hover:bg-white/10" aria-label="Audio and subtitles">
+                <div className="relative" ref={languagesRef}>
+                    <button
+                        className={`btn btn-ghost btn-sm gap-1.5 text-white hover:bg-white/10 ${languagesOpen ? "bg-white/10" : ""}`}
+                        aria-label="Audio and subtitles"
+                        aria-expanded={languagesOpen}
+                        onClick={() => setLanguagesOpen(!languagesOpen)}
+                    >
                         <Languages size={18}/> <span className="hidden md:inline">Languages</span>
-                    </div>
-                    <div tabIndex={0} className="dropdown-content surface-raised text-base-content z-30 mt-2 w-[min(20rem,calc(100vw-1rem))] p-4 flex flex-col gap-4">
+                    </button>
+                    {languagesOpen && <div className="absolute right-0 top-full surface-raised text-base-content z-30 mt-2 w-[min(20rem,calc(100vw-1rem))] p-4 flex flex-col gap-4 animate-fade-in">
                         <label className="flex flex-col gap-1.5">
                             <span className="text-xs font-medium uppercase tracking-wider text-base-content/50">Audio</span>
                             <select
@@ -421,7 +447,7 @@ export default function PlayerPage() {
                             Use these languages by default
                         </button>
                         {prefsMessage && <span className="text-xs text-base-content/70">{prefsMessage}</span>}
-                    </div>
+                    </div>}
                 </div>
             </div>
         </header>

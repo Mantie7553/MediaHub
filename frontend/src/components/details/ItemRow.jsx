@@ -70,9 +70,11 @@ export function CheckToggle({ checked, onClick, label }) {
  */
 export function ItemList({ title, actions, children }) {
     return <section className="animate-fade-up">
-        {(title || actions) && <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-            {typeof title === "string" ? <h2 className="text-xl font-semibold tracking-tight">{title}</h2> : title}
-            {actions && <div className="flex items-center gap-2">{actions}</div>}
+        {(title || actions) && <div className="flex items-center justify-between gap-3 mb-3">
+            <div className="flex-1 min-w-0">
+                {typeof title === "string" ? <h2 className="text-xl font-semibold tracking-tight">{title}</h2> : title}
+            </div>
+            {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
         </div>}
         <ul className="surface p-1.5 sm:p-2 flex flex-col gap-0.5">
             {children}

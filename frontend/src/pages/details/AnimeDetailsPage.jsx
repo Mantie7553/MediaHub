@@ -149,10 +149,10 @@ export default function AnimeDetailsPage() {
                 genres={anime.metadata.genres ?? []}
                 description={anime.description}
                 html
+                primary={primary && <button className="btn btn-primary btn-lg shadow-glow px-6" onClick={primary.run}>
+                    <Play size={18} fill="currentColor"/> {primary.label}
+                </button>}
                 actions={<>
-                    {primary && <button className="btn btn-primary btn-lg shadow-glow px-6" onClick={primary.run}>
-                        <Play size={18} fill="currentColor"/> {primary.label}
-                    </button>}
                     <ListStatusMenu
                         status={userEntry?.status}
                         type={anime.type}
@@ -179,6 +179,7 @@ export default function AnimeDetailsPage() {
                     title={multiSeason
                         ? <SegmentedTabs
                             label="Season"
+                            bleed={false}
                             value={season}
                             onChange={setPickedSeason}
                             options={seasonNumbers.map(n => ({ key: n, label: `Season ${n}` }))}

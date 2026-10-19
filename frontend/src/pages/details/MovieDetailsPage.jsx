@@ -58,24 +58,23 @@ export default function MovieDetailsPage() {
                 description={movie.description}
                 html
                 note={!movie.metadata.file_path && "Not downloaded yet, so it can't be played."}
+                primary={movie.metadata.file_path && <button
+                    className="btn btn-primary btn-lg shadow-glow px-6"
+                    onClick={() => openViewer(navigate, `/watch/movie/${id}`, { position: canResume ? position : 0 })}
+                >
+                    <Play size={18} fill="currentColor"/>
+                    {canResume ? `Resume from ${Format.duration(position)}` : "Play"}
+                </button>}
                 actions={<>
-                    {movie.metadata.file_path && <>
+                    {movie.metadata.file_path && canResume && (
                         <button
-                            className="btn btn-primary btn-lg shadow-glow px-6"
-                            onClick={() => openViewer(navigate, `/watch/movie/${id}`, { position: canResume ? position : 0 })}
+                            className="btn btn-square sm:w-auto sm:px-4 border-white/10 bg-white/10 hover:bg-white/15"
+                            onClick={() => openViewer(navigate, `/watch/movie/${id}`, { position: 0 })}
+                            aria-label="Start over"
                         >
-                            <Play size={18} fill="currentColor"/>
-                            {canResume ? `Resume from ${Format.duration(position)}` : "Play"}
+                            <RotateCcw size={18}/> <span className="hidden sm:inline">Start over</span>
                         </button>
-                        {canResume && (
-                            <button
-                                className="btn btn-lg border-white/10 bg-white/10 hover:bg-white/15"
-                                onClick={() => openViewer(navigate, `/watch/movie/${id}`, { position: 0 })}
-                            >
-                                <RotateCcw size={18}/> Start over
-                            </button>
-                        )}
-                    </>}
+                    )}
                     <ListStatusMenu
                         status={userEntry?.status}
                         type={movie.type}

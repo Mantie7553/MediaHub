@@ -102,13 +102,13 @@ export default function MangaDetailsPage() {
                 ]}
                 genres={manga.metadata.genres ?? []}
                 description={manga.description}
+                primary={chapters.length > 0 && <button className="btn btn-primary btn-lg shadow-glow px-6" onClick={() => read(nextChapter ?? chapters[0])}>
+                    <BookOpen size={18}/>
+                    {nextChapter
+                        ? `${nextStarted ? "Continue" : readChapters.size > 0 ? "Read" : "Start reading"} Ch. ${nextChapter.chapter_number}`
+                        : "Read again"}
+                </button>}
                 actions={<>
-                    {chapters.length > 0 && <button className="btn btn-primary btn-lg shadow-glow px-6" onClick={() => read(nextChapter ?? chapters[0])}>
-                        <BookOpen size={18}/>
-                        {nextChapter
-                            ? `${nextStarted ? "Continue" : readChapters.size > 0 ? "Read" : "Start reading"} Ch. ${nextChapter.chapter_number}`
-                            : "Read again"}
-                    </button>}
                     <ListStatusMenu
                         status={userEntry?.status}
                         type={manga.type}

@@ -16,15 +16,15 @@ function closeMenu() {
  * @param {function} onRemove takes it off the list, shown only when it's on the list
  */
 export function ListStatusMenu({ status, type, options, onSelect, onRemove }) {
-    return <div className="dropdown dropdown-center sm:dropdown-start">
-        <div tabIndex={0} role="button" className="btn border-white/10 bg-white/10 hover:bg-white/15 backdrop-blur gap-2 font-medium">
+    return <div className="dropdown dropdown-center sm:dropdown-start flex-1 sm:flex-none">
+        <div tabIndex={0} role="button" className="btn w-full sm:w-auto border-white/10 bg-white/10 hover:bg-white/15 backdrop-blur gap-2 font-medium">
             {status
                 ? <span className={`size-2 rounded-full ${mediaStatusDot(status)}`}></span>
                 : <Plus size={16}/>}
             {Format.statusLabel(status, type)}
-            <ChevronDown size={16} className="text-base-content/50"/>
+            <ChevronDown size={16} className="text-base-content/50 ml-auto sm:ml-0"/>
         </div>
-        <ul tabIndex={0} className="dropdown-content menu surface-raised z-30 mt-2 w-56 p-1.5 gap-0.5">
+        <ul tabIndex={0} className="dropdown-content menu surface-raised z-30 mt-2 w-full min-w-56 p-1.5 gap-0.5">
             {options.map(option => (
                 <li key={option}>
                     <button className={option === status ? "text-primary font-medium" : ""} onClick={() => { onSelect(option); closeMenu(); }}>

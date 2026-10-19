@@ -95,7 +95,7 @@ function MangaReaderInner({ id, chapterId, chapter, chapters, title }) {
     const progressPct = totalPages ? Math.round(((currentPage + 1) / totalPages) * 100) : 0;
 
     return (
-        <div className="flex flex-col min-h-dvh bg-black/30">
+        <div className="flex flex-col min-h-dvh bg-black/30 pb-[var(--player-h,0px)]">
             <ReaderToolbar
                 onBack={() => exitViewer(navigate, location, `/manga/${id}`)}
                 backLabel="Chapters"
@@ -122,7 +122,7 @@ function MangaReaderInner({ id, chapterId, chapter, chapters, title }) {
                 ) : loading ? (
                     <PageSkeleton />
                 ) : <div className="relative select-none">
-                    <img src={imageSrc} alt={`Page ${currentPage + 1}`} className="block max-h-[calc(100dvh-3.75rem-env(safe-area-inset-top))] max-w-full object-contain shadow-raised"/>
+                    <img src={imageSrc} alt={`Page ${currentPage + 1}`} className="block max-h-[calc(100dvh-3.75rem-env(safe-area-inset-top)-var(--player-h,0px))] max-w-full object-contain shadow-raised"/>
                     {/* tap the left or right half to turn the page */}
                     <div className="absolute inset-y-0 left-0 w-1/2 cursor-w-resize" onClick={handlePageDown}></div>
                     <div className="absolute inset-y-0 right-0 w-1/2 cursor-e-resize" onClick={handlePageUp}></div>

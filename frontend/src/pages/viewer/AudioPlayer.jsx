@@ -13,6 +13,26 @@ export default function AudioPlayer() {
     const { pathname } = useLocation()
     const inLayout = !pathname.startsWith("/watch/") && !pathname.endsWith("/read") && pathname !== "/login"
     const audioRef = useRef(null)
+    const barRef = useRef(null)
+    const visible = currentTrack !== null
+
+    // --player-h is the bar's height (0px when hidden), pages pad their bottoms by it
+    useEffect(() => {
+        const root = document.documentElement
+        const bar = barRef.current
+        if (!bar) {
+            root.style.setProperty("--player-h", "0px")
+            return
+        }
+        const update = () => root.style.setProperty("--player-h", `${bar.offsetHeight}px`)
+        update()
+        const observer = new ResizeObserver(update)
+        observer.observe(bar)
+        return () => {
+            observer.disconnect()
+            root.style.setProperty("--player-h", "0px")
+        }
+    }, [visible])
     const [progress, setProgress] = useState(0)
     const [duration, setDuration] = useState(0)
 
@@ -100,7 +120,7 @@ export default function AudioPlayer() {
             onPlaying={() => { remintedRef.current = false }}
         />
         {/* sits above the mobile tab bar, and beside the sidebar on desktop */}
-        <div className={`fixed right-0 left-0 z-50 transition-[left] duration-200
+        <div ref={barRef} className={`fixed right-0 left-0 z-50 transition-[left] duration-200
             ${inLayout ? "bottom-[calc(4rem+env(safe-area-inset-bottom))] lg:bottom-0" : "bottom-0 pb-[env(safe-area-inset-bottom)]"}
             ${!inLayout ? "" : sidebarCollapsed ? "lg:left-[4.5rem]" : "lg:left-60"}
             bg-base-300/90 backdrop-blur-xl border-t border-white/5 shadow-[0_-12px_32px_-12px_rgb(0_0_0/0.6)]`}>
