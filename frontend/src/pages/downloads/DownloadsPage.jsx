@@ -1,6 +1,6 @@
 import PageHeader from "../../components/layout/PageHeader"
 import { useRef, forwardRef, useState } from "react";
-import { Download } from "lucide-react";
+import { Check, Download, Inbox, WifiOff, X } from "lucide-react";
 import useJobs from "../../hooks/useJobs";
 import { useAdminRequests } from "../../hooks"
 import { approveRequest, rejectRequest } from "../../services/requestsService";
@@ -11,6 +11,12 @@ import { toast } from "../../stores/useToastStore";
 import ErrorState from "../../components/states/ErrorState";
 import EmptyState from "../../components/states/EmptyState";
 import { TableSkeleton } from "../../components/states/Skeletons";
+import DataTable, { Panel } from "../../components/DataTable";
+import StatusPill from "../../components/StatusPill";
+
+// pending requests first, the rest newest first
+const byPendingThenNewest = (a, b) =>
+    (b.status === "pending") - (a.status === "pending") || new Date(b.requested_at) - new Date(a.requested_at);
 
 /**
  * Downloads and requests page layout
@@ -40,134 +46,124 @@ export default function DownloadsPage() {
             .finally(() => setBusyId(null))
     }
 
+    const pending = requests.filter(r => r.status === "pending").length;
+    const sortedRequests = [...requests].sort(byPendingThenNewest);
+
     return <div>
         <PageHeader title="Downloads" subtitle="Approve requests and keep an eye on what's downloading."/>
         <div className="grid gap-6 xl:grid-cols-2 items-start">
-        <section className="surface p-5 min-w-0 overflow-x-auto">
-            <h2 className="text-lg font-semibold tracking-tight mb-4">Requests</h2>
-            {rLoading ? <TableSkeleton columns={4}/> :
-            rError ? <ErrorState compact error={rError} onRetry={refetchRequests}/> :
-            requests.length === 0 ? <EmptyState compact title="No requests yet" hint="Requests people make from Discover show up here for approval."/> :
-            <Table 
-            columns={[
-            { key: "media_title", header: "Title", render: (val, item) => val || item.title_override || "Unknown" },
-            { key: "status", header: "Status", render: (val) => <span className={`badge ${statusBadge(val)}`}>{val}</span> },
-            { key: "requested_at", header: "Requested At", render: (val) => Format.dateTime(val) },
-            { key: "actions", header: "Actions", render: (_, item) => (
-                <div className="flex gap-2">
-                    <button 
-                    className="btn btn-xs btn-success"
-                    disabled={item.status !== "pending" || busyId === item.id}
-                    onClick={() => handleApprove(item.id)}
-                    >
-                        Approve
-                    </button>
-                    <button 
-                    className="btn btn-xs btn-error"
-                    disabled={item.status !== "pending" || busyId === item.id}
-                    onClick={() => { setSelectedRequest(item); modalRef.current.showModal() }}
-                    >
-                        Reject
-                    </button>
-                </div>
-                )},
-            ]}
-            items={requests}
-            />}
-        </section>
-        <section className="surface p-5 min-w-0 overflow-x-auto">
-            <h2 className="text-lg font-semibold tracking-tight mb-4">Jobs</h2>
-            {jPollError && <p className="text-xs text-warning mb-2" role="status">
-                Lost connection, retrying: {errorMessage(jPollError)}
-            </p>}
-            {jLoading ? <TableSkeleton columns={4}/> :
-            jError ? <ErrorState compact error={jError} onRetry={refetchJobs}/> :
-            jobs.length === 0 ? <EmptyState compact icon={Download} title="No downloads running" hint="Approved requests appear here while they download."/> :
-            <Table 
-            columns={[
-                { key: "media_title", header: "Title" },
-                { key: "handler", header: "Handler"},
-                { key: "progress_pct", header: "Progress", render: (val) => (
-                    <progress className="progress progress-primary min-w-30" value={val} max="100"></progress>
-                )},
-                { key: "status", header: "Status", render: (val) => (
-                    <div className="flex gap-2 items-center">
-                        <div className="inline-grid *:[grid-area:1/1]">
-                        <div className={`status ${statusColor(val)} animate-ping`}></div>
-                        <div className={`status ${statusColor((val))}`}></div>
-                        </div>
-                    </div>
-                )},
-            ]} 
-            items={jobs}
-            />}
-        </section>
+            <Panel
+                title="Requests"
+                icon={Inbox}
+                meta={!rLoading && !rError && (pending > 0 ? `${pending} pending` : requests.length || null)}
+            >
+                {rLoading ? <TableSkeleton columns={4}/> :
+                rError ? <ErrorState compact error={rError} onRetry={refetchRequests}/> :
+                requests.length === 0 ? <EmptyState compact title="No requests yet" hint="Requests people make from Discover show up here for approval."/> :
+                <DataTable
+                    items={sortedRequests}
+                    columns={[
+                        { key: "media_title", header: "Title", primary: true, render: (val, item) => <div className="min-w-0">
+                            <p className="font-medium truncate max-w-56">{val || item.title_override || "Unknown"}</p>
+                            {item.requested_by && <p className="text-xs text-base-content/45">by {item.requested_by}</p>}
+                        </div> },
+                        { key: "status", header: "Status", render: (val) => <StatusPill label={val} tone={statusBadge(val).replace("badge-", "")}/> },
+                        { key: "requested_at", header: "Requested", render: (val) => <span className="text-base-content/60 whitespace-nowrap" title={Format.dateTime(val)}>{Format.shortDateTime(val)}</span> },
+                        { key: "actions", header: "", render: (_, item) => item.status === "pending" && (
+                            <div className="inline-flex gap-1.5">
+                                {/* in the table Reject is just an X, the cards have room for the word */}
+                                <button
+                                    className="btn btn-sm btn-ghost text-error hover:bg-error/10 @2xl:btn-square"
+                                    disabled={busyId === item.id}
+                                    onClick={() => { setSelectedRequest(item); modalRef.current.showModal() }}
+                                    aria-label="Reject"
+                                >
+                                    <X size={15}/> <span className="@2xl:hidden">Reject</span>
+                                </button>
+                                <button
+                                    className="btn btn-sm btn-primary"
+                                    disabled={busyId === item.id}
+                                    onClick={() => handleApprove(item.id)}
+                                >
+                                    {busyId === item.id ? <span className="loading loading-spinner loading-xs"/> : <Check size={15}/>} Approve
+                                </button>
+                            </div>
+                        )},
+                    ]}
+                />}
+            </Panel>
+            <Panel
+                title="Jobs"
+                icon={Download}
+                meta={!jLoading && !jError && jobs.length > 0 ? jobs.length : null}
+            >
+                {jPollError && <p className="flex items-center gap-2 text-xs text-warning mb-3" role="status">
+                    <WifiOff size={14}/> Lost connection, retrying: {errorMessage(jPollError)}
+                </p>}
+                {jLoading ? <TableSkeleton columns={4}/> :
+                jError ? <ErrorState compact error={jError} onRetry={refetchJobs}/> :
+                jobs.length === 0 ? <EmptyState compact icon={Download} title="No downloads running" hint="Approved requests appear here while they download."/> :
+                <DataTable
+                    items={jobs}
+                    rowKey={job => job.id ?? `${job.media_title}-${job.handler}`}
+                    columns={[
+                        { key: "media_title", header: "Title", primary: true, render: (val) => <p className="font-medium truncate max-w-56">{val}</p> },
+                        { key: "handler", header: "Handler", render: (val) => <span className="text-base-content/60 capitalize">{val}</span> },
+                        { key: "progress_pct", header: "Progress", render: (val) => (
+                            <div className="flex items-center justify-end md:justify-start gap-2.5">
+                                <div className="h-1.5 w-28 rounded-full bg-white/10 overflow-hidden">
+                                    <div className="h-full rounded-full bg-primary transition-[width] duration-500" style={{ width: `${Math.round(val ?? 0)}%` }}></div>
+                                </div>
+                                <span className="w-9 text-xs tabular-nums text-base-content/60">{Math.round(val ?? 0)}%</span>
+                            </div>
+                        )},
+                        { key: "status", header: "Status", render: (val) => (
+                            <StatusPill label={val} tone={statusColor(val).replace("status-", "")} pulse={val === "downloading" || val === "queued"}/>
+                        )},
+                    ]}
+                />}
+            </Panel>
         </div>
-        <Modal ref={modalRef} onConfirm={(notes) => handleReject(selectedRequest.id, notes)} />
+        <Modal ref={modalRef} request={selectedRequest} onConfirm={(notes) => handleReject(selectedRequest.id, notes)} />
     </div>
-}
-
-/**
- *  Builds a table with appropraite column headings and fields
- * @param columns the heading information for the table
- * @param items the data we want to display
- * @returns a table representing some data
- */
-function Table({ columns, items }) {
-    return (
-        <table className="table">
-            <thead>
-                <tr>
-                    {columns.map(col => <th key={col.key}>{col.header}</th>)}
-                </tr>
-            </thead>
-            <tbody>
-                {items.map((item, i) => (
-                    <tr key={i}>
-                        {columns.map(col => (
-                            <td key={col.key}>
-                                {col.render ? col.render(item[col.key], item) : item[col.key]}
-                            </td>
-                        ))}
-                    </tr>
-                ))}
-            </tbody>
-        </table>
-    )
 }
 
 /**
  * A confirmation modal for rejecting a request
  */
-const Modal = forwardRef(function Modal({onConfirm}, ref) {
+const Modal = forwardRef(function Modal({request, onConfirm}, ref) {
 const notesRef = useRef(null);
 
-    return <dialog id="my_modal_3" className="modal modal-bottom sm:modal-middle" ref={ref}>
-    <div className="modal-box">
+    return <dialog className="modal modal-bottom sm:modal-middle" ref={ref} onClose={() => { if (notesRef.current) notesRef.current.value = "" }}>
+    <div className="modal-box flex flex-col gap-4">
         <form method="dialog">
-        <button className="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">✕</button>
+            <button className="btn btn-sm btn-circle btn-ghost absolute right-3 top-3" aria-label="Close">
+                <X size={16}/>
+            </button>
         </form>
-        <h3 className="font-bold text-lg">Reject Download Request</h3>
-        <p className="py-4">Confirm rejection of the Download Request</p>
-        <label className="flex flex-col gap-2 p-2">
-            Notes:
-            <textarea ref={notesRef} className="textarea w-full h-32"/>
+        <div>
+            <h3 className="text-xl font-semibold">Reject request</h3>
+            {request && <p className="text-sm text-base-content/60 mt-1">
+                {request.media_title || request.title_override || "This title"}
+                {request.requested_by ? `, requested by ${request.requested_by}` : ""}
+            </p>}
+        </div>
+        <label className="flex flex-col gap-1.5">
+            <span className="text-xs font-medium uppercase tracking-wider text-base-content/55">Note for the requester (optional)</span>
+            <textarea ref={notesRef} className="textarea w-full h-28 bg-base-100/60 border-white/10 text-base sm:text-sm" placeholder="Why it was rejected"/>
         </label>
-        <div className="flex gap-2 justify-center">
-            <button
-            className="btn btn-error"
-            onClick={() => {
-                onConfirm(notesRef.current.value);
-                ref.current.close();
-            }}
-            >
-                Confirm
+        <div className="flex gap-2 justify-end">
+            <button className="btn btn-ghost" onClick={() => ref.current.close()}>
+                Cancel
             </button>
             <button
-            className="btn btn-info"
-            onClick={() => ref.current.close()}
+                className="btn btn-error"
+                onClick={() => {
+                    onConfirm(notesRef.current.value);
+                    ref.current.close();
+                }}
             >
-                Cancel
+                Reject request
             </button>
         </div>
     </div>

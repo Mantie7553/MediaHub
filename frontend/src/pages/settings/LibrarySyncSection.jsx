@@ -2,6 +2,9 @@ import { useState, useEffect, useRef } from "react";
 import api from "../../services/api";
 import Format from "../../utils/format";
 import { errorMessage } from "../../utils/errors";
+import { BookOpen, BookText, Clapperboard, Music, RefreshCw, Tv } from "lucide-react";
+import { Panel } from "../../components/DataTable";
+import StatusPill from "../../components/StatusPill";
 
 const SOURCE_LABELS = {
     "sonarr": "TV (Sonarr)",
@@ -9,6 +12,14 @@ const SOURCE_LABELS = {
     "manga": "Manga",
     "light-novels": "Light Novels",
     "music": "Music",
+};
+
+const SOURCE_ICONS = {
+    "sonarr": Tv,
+    "radarr": Clapperboard,
+    "manga": BookOpen,
+    "light-novels": BookText,
+    "music": Music,
 };
 
 const POLL_MS = 3000;
@@ -63,61 +74,53 @@ export default function LibrarySyncSection() {
     const done = new Set(results.map(r => r.source));
 
     return (
-        <section className="flex flex-col gap-4">
-            <div className="flex items-center justify-between">
-                <h2 className="font-bold">Library Sync</h2>
-                <button className="btn btn-primary btn-sm" onClick={handleStart} disabled={!status || running}>
-                    {running && <span className="loading loading-spinner loading-xs" />}
-                    {running ? "Syncing…" : "Sync Library"}
-                </button>
-            </div>
-            <p className="text-sm opacity-70">
+        <Panel
+            title="Library Sync"
+            icon={RefreshCw}
+            description={<>
                 Adds anything new from Sonarr, Radarr and the Manga, Light Novels and Music folders.
                 {status?.next_run
-                    ? ` Runs automatically every night, next on ${Format.dateTime(status.next_run)}.`
+                    ? ` Runs every night, next on ${Format.dateTime(status.next_run)}.`
                     : " The nightly sync is turned off."}
-            </p>
-            {error && <p className="text-error text-sm">{error}</p>}
+            </>}
+            actions={<button className="btn btn-sm btn-primary" onClick={handleStart} disabled={!status || running}>
+                {running ? <span className="loading loading-spinner loading-xs" /> : <RefreshCw size={15}/>}
+                {running ? "Syncing…" : "Sync now"}
+            </button>}
+        >
+            {error && <p role="alert" className="text-error text-sm mb-3">{error}</p>}
 
-            {status?.started_at && (
-                <div className="card overflow-x-auto">
-                    <table className="table">
-                        <thead>
-                            <tr>
-                                <th>Source</th>
-                                <th>Result</th>
-                                <th>Time</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {Object.keys(SOURCE_LABELS).map(source => {
-                                const result = results.find(r => r.source === source);
-                                return (
-                                    <tr key={source}>
-                                        <td>{SOURCE_LABELS[source]}</td>
-                                        <td>
-                                            {result ? (
-                                                result.ok
-                                                    ? <span className="badge badge-sm badge-success">{result.detail || "done"}</span>
-                                                    : <span className="text-error text-sm">{result.error}</span>
-                                            ) : running && !done.has(source) ? (
-                                                <span className="badge badge-sm badge-ghost">waiting</span>
-                                            ) : (
-                                                <span className="opacity-50">not run</span>
-                                            )}
-                                        </td>
-                                        <td>{result?.duration ?? ""}</td>
-                                    </tr>
-                                );
-                            })}
-                        </tbody>
-                    </table>
-                    <p className="text-xs opacity-50 px-4 pb-3">
-                        {running ? "Started" : "Last run"} {Format.dateTime(status.started_at)}
-                        {status.trigger === "schedule" ? " (nightly)" : " (manual)"}
-                    </p>
-                </div>
-            )}
-        </section>
+            {status?.started_at && <>
+                <ul className="flex flex-col gap-1">
+                    {Object.keys(SOURCE_LABELS).map(source => {
+                        const result = results.find(r => r.source === source);
+                        const Icon = SOURCE_ICONS[source];
+                        return (
+                            <li key={source} className="flex items-center gap-3 rounded-field px-3 py-2.5 bg-white/[0.03] ring-1 ring-white/5">
+                                <Icon size={17} className="shrink-0 text-base-content/45"/>
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-medium">{SOURCE_LABELS[source]}</p>
+                                    {result && !result.ok && <p className="text-xs text-error break-words">{result.error}</p>}
+                                </div>
+                                {result?.duration && <span className="hidden sm:inline text-xs tabular-nums text-base-content/45">{result.duration}</span>}
+                                {result ? (
+                                    result.ok
+                                        ? <StatusPill label={result.detail || "done"} tone="success"/>
+                                        : <StatusPill label="failed" tone="error"/>
+                                ) : running && !done.has(source) ? (
+                                    <StatusPill label="waiting" tone="info" pulse/>
+                                ) : (
+                                    <StatusPill label="not run"/>
+                                )}
+                            </li>
+                        );
+                    })}
+                </ul>
+                <p className="text-xs text-base-content/45 mt-3">
+                    {running ? "Started" : "Last run"} {Format.dateTime(status.started_at)}
+                    {status.trigger === "schedule" ? " (nightly)" : " (manual)"}
+                </p>
+            </>}
+        </Panel>
     );
 }

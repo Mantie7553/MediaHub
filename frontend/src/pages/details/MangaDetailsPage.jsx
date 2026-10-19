@@ -11,7 +11,8 @@ import { useMediaItem, useUserContent, useRemoveFromList } from "../../hooks";
 import DeleteFromServerButton from "../../components/DeleteFromServerButton";
 import api from "../../services/api";
 import { BookOpen, CheckCheck, Undo2 } from "lucide-react";
-import DetailsHero, { HeroChip } from "../../components/details/DetailsHero";
+import DetailsHero from "../../components/details/DetailsHero";
+import StatusPill from "../../components/StatusPill";
 import { ActionMenu, ActionMenuItem, ListStatusMenu } from "../../components/details/Menus";
 import ItemRow, { ItemList } from "../../components/details/ItemRow";
 
@@ -95,7 +96,7 @@ export default function MangaDetailsPage() {
                 cover={{ src: manga.cover_image_url, source: manga.external_source }}
                 eyebrow="Manga"
                 title={manga.title}
-                badges={manga.metadata.status && <HeroChip label={manga.metadata.status} tone={mangaBadge(manga.metadata.status)?.replace("badge-", "")}/>}
+                badges={manga.metadata.status && <StatusPill label={manga.metadata.status} tone={mangaBadge(manga.metadata.status)?.replace("badge-", "")}/>}
                 meta={[
                     manga.metadata.total_chapters && `${manga.metadata.total_chapters} chapters`,
                     chapters.length > 0 && `${chapters.length} downloaded`,
