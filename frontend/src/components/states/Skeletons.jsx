@@ -41,24 +41,34 @@ export function CardGridSkeleton({ count = 12 }) {
 }
 
 /**
- * A details page: cover on the left, title and text on the right, a list below
+ * A details page, shaped like components/details/DetailsHero.jsx with a list below
+ * @param {boolean} square album art instead of a poster
  */
-export function DetailsSkeleton() {
+export function DetailsSkeleton({ square = false }) {
     return <div className="flex flex-col gap-8" aria-busy="true">
-        <div className="skeleton h-8 w-20"></div>
-        <div className="flex gap-6">
-            <div className="skeleton w-48 h-64 shrink-0"></div>
-            <div className="flex flex-col gap-3 w-full max-w-xl">
-                <div className="skeleton h-8 w-2/3"></div>
-                <div className="skeleton h-4 w-24"></div>
-                <div className="flex gap-1">
-                    <div className="skeleton h-5 w-16"></div>
-                    <div className="skeleton h-5 w-16"></div>
+        <div className="pt-1">
+            <div className="skeleton h-8 w-20"></div>
+            <div className="mt-4 lg:mt-6 flex flex-col sm:flex-row items-center sm:items-end gap-6 lg:gap-10">
+                <div className={`skeleton shrink-0 rounded-box ${square ? "w-52 sm:w-56 lg:w-64 aspect-square" : "w-44 sm:w-52 lg:w-60 aspect-[2/3]"}`}></div>
+                <div className="flex flex-col gap-4 w-full max-w-2xl items-center sm:items-start">
+                    <div className="skeleton h-3 w-16"></div>
+                    <div className="skeleton h-10 w-3/4"></div>
+                    <div className="skeleton h-4 w-48"></div>
+                    <div className="flex gap-1.5">
+                        <div className="skeleton h-5 w-16 rounded-full"></div>
+                        <div className="skeleton h-5 w-20 rounded-full"></div>
+                        <div className="skeleton h-5 w-14 rounded-full"></div>
+                    </div>
+                    <div className="flex flex-col gap-2 w-full">
+                        <div className="skeleton h-3.5 w-full"></div>
+                        <div className="skeleton h-3.5 w-full"></div>
+                        <div className="skeleton h-3.5 w-4/5"></div>
+                    </div>
+                    <div className="flex gap-2 pt-1">
+                        <div className="skeleton h-12 w-44"></div>
+                        <div className="skeleton h-12 w-32"></div>
+                    </div>
                 </div>
-                <div className="skeleton h-4 w-full"></div>
-                <div className="skeleton h-4 w-full"></div>
-                <div className="skeleton h-4 w-4/5"></div>
-                <div className="skeleton h-10 w-32 mt-2"></div>
             </div>
         </div>
         <ListSkeleton/>
@@ -70,8 +80,12 @@ export function DetailsSkeleton() {
  * @param {number} rows how many rows
  */
 export function ListSkeleton({ rows = 5 }) {
-    return <div className="flex flex-col gap-2" aria-busy="true">
-        {Array.from({ length: rows }, (_, i) => <div key={i} className="skeleton h-12 w-full"></div>)}
+    return <div className="surface p-2 flex flex-col gap-1" aria-busy="true">
+        {Array.from({ length: rows }, (_, i) => <div key={i} className="flex items-center gap-4 px-2 py-2.5">
+            <div className="skeleton size-7 rounded-full shrink-0"></div>
+            <div className="skeleton h-3.5 w-8"></div>
+            <div className="skeleton h-3.5 flex-1 max-w-sm"></div>
+        </div>)}
     </div>
 }
 
@@ -93,15 +107,16 @@ export function TableSkeleton({ columns = 4, rows = 4 }) {
  * A reader toolbar with a progress bar
  */
 export function ReaderToolbarSkeleton() {
-    return <div className="sticky top-0 z-10 bg-base-200 border-b border-base-300 w-full" aria-hidden="true">
-        <div className="max-w-2xl mx-auto px-6 py-3 flex items-center gap-3">
-            <div className="skeleton h-8 w-28 shrink-0"></div>
-            <div className="flex-1 flex flex-col gap-2 items-center">
-                <div className="skeleton h-3 w-12"></div>
-                <div className="skeleton h-2 w-full"></div>
+    return <div className="sticky top-0 z-20 bg-base-100/80 border-b border-white/5 pt-[env(safe-area-inset-top)]" aria-hidden="true">
+        <div className="flex items-center gap-3 h-14 px-2 sm:px-4 max-w-5xl mx-auto">
+            <div className="skeleton h-8 w-24 shrink-0"></div>
+            <div className="flex-1 flex flex-col gap-1.5 items-center">
+                <div className="skeleton h-3.5 w-40 max-w-full"></div>
+                <div className="skeleton h-3 w-24"></div>
             </div>
             <div className="skeleton h-8 w-20 shrink-0"></div>
         </div>
+        <div className="h-0.5 bg-white/5"></div>
     </div>
 }
 

@@ -5,7 +5,7 @@ import api from "../../services/api"
 import ErrorState from "../../components/states/ErrorState"
 import { toast } from "../../stores/useToastStore"
 import { exitViewer, switchViewer } from "../../utils/navigation"
-import { ArrowLeft, ArrowRight, Languages } from "lucide-react"
+import { ArrowLeft, Languages, SkipBack, SkipForward } from "lucide-react"
 
 export default function PlayerPage() {
     const location = useLocation();
@@ -31,6 +31,27 @@ export default function PlayerPage() {
     const [buffering, setBuffering] = useState(false);
     // which load has taken long enough to explain the wait, see the effect below
     const [slowLoad, setSlowLoad] = useState(null);
+    // the audio/subtitle panel. Opened by click rather than focus, because opening a
+    // select's native picker takes focus away and would close a focus-based dropdown
+    const [languagesOpen, setLanguagesOpen] = useState(false);
+    const languagesRef = useRef(null);
+
+    // a tap outside the panel or Escape closes it
+    useEffect(() => {
+        if (!languagesOpen) return
+        function onPointerDown(e) {
+            if (!languagesRef.current?.contains(e.target)) setLanguagesOpen(false)
+        }
+        function onKeyDown(e) {
+            if (e.key === "Escape") setLanguagesOpen(false)
+        }
+        document.addEventListener("pointerdown", onPointerDown)
+        document.addEventListener("keydown", onKeyDown)
+        return () => {
+            document.removeEventListener("pointerdown", onPointerDown)
+            document.removeEventListener("keydown", onKeyDown)
+        }
+    }, [languagesOpen])
     const initialPosition = location.state?.position ?? 0;
     const animeId = location.state?.animeId ?? null;
     const episodeList = location.state?.episodes ?? [];
@@ -341,7 +362,7 @@ export default function PlayerPage() {
         exitViewer(navigate, location, type === "movie" ? `/movies/${id}` : animeId ? `/anime/${animeId}` : null)
     }
 
-    if (error) return <div className="min-h-screen bg-base-100">
+    if (error) return <div className="min-h-dvh bg-base-100">
         <ErrorState error={error} title="Couldn't play this video" onRetry={retry} showBack />
     </div>
 
@@ -349,26 +370,50 @@ export default function PlayerPage() {
     const currentEpisode = episodeList[currentIndex]
 
     return (
-    <div className="flex flex-col h-screen bg-black">
-        <div className="flex items-center justify-between px-4 py-2 bg-black/80">
-            <button className="btn btn-ghost btn-sm text-white" onClick={exit}>
-                <ArrowLeft size={18} strokeWidth={2}/> Back
+    <div className="flex flex-col h-dvh bg-black text-white">
+        <header className="relative z-20 flex items-center gap-2 px-2 sm:px-4 pt-[env(safe-area-inset-top)] h-[calc(3.5rem+env(safe-area-inset-top))] bg-linear-to-b from-black/90 to-black/60 backdrop-blur border-b border-white/5">
+            <button className="btn btn-ghost btn-sm gap-1.5 text-white hover:bg-white/10" onClick={exit} aria-label="Back">
+                <ArrowLeft size={18}/> <span className="hidden sm:inline">Back</span>
             </button>
-            {currentEpisode && (
-                <span className="text-sm text-white/70 truncate px-2 hidden sm:block">
-                    EP {currentEpisode.episode_number}{currentEpisode.title ? ` — ${currentEpisode.title}` : ""}
-                </span>
-            )}
-            <div className="flex gap-2">
-                <div className="dropdown dropdown-end">
-                    <div tabIndex={0} role="button" className="btn btn-ghost btn-sm text-white">
-                        <Languages size={18} strokeWidth={2}/> Languages
-                    </div>
-                    <div tabIndex={0} className="dropdown-content z-10 mt-2 w-80 rounded-box bg-base-200 p-4 shadow flex flex-col gap-3">
-                        <label className="flex flex-col gap-1">
-                            <span className="text-sm">Audio</span>
+            <div className="flex-1 min-w-0 text-center">
+                {currentEpisode && <>
+                    <p className="text-sm font-medium truncate">{currentEpisode.title ?? `Episode ${currentEpisode.episode_number}`}</p>
+                    <p className="text-xs text-white/50 tabular-nums">
+                        {currentEpisode.season_number ? `Season ${currentEpisode.season_number} · ` : ""}Episode {currentEpisode.episode_number}
+                    </p>
+                </>}
+            </div>
+            <div className="flex items-center gap-1">
+                {episodeList.length > 0 && <button
+                    className="btn btn-ghost btn-sm btn-square text-white hover:bg-white/10"
+                    disabled={!prevEpisode}
+                    onClick={() => prevEpisode && goToEpisode(prevEpisode)}
+                    aria-label="Previous episode"
+                >
+                    <SkipBack size={18}/>
+                </button>}
+                {episodeList.length > 0 && <button
+                    className="btn btn-ghost btn-sm text-white hover:bg-white/10 gap-1.5"
+                    disabled={!nextEpisode}
+                    onClick={() => nextEpisode && goToEpisode(nextEpisode)}
+                    aria-label="Next episode"
+                >
+                    <span className="hidden sm:inline">Next</span> <SkipForward size={18}/>
+                </button>}
+                <div className="relative" ref={languagesRef}>
+                    <button
+                        className={`btn btn-ghost btn-sm gap-1.5 text-white hover:bg-white/10 ${languagesOpen ? "bg-white/10" : ""}`}
+                        aria-label="Audio and subtitles"
+                        aria-expanded={languagesOpen}
+                        onClick={() => setLanguagesOpen(!languagesOpen)}
+                    >
+                        <Languages size={18}/> <span className="hidden md:inline">Languages</span>
+                    </button>
+                    {languagesOpen && <div className="absolute right-0 top-full surface-raised text-base-content z-30 mt-2 w-[min(20rem,calc(100vw-1rem))] p-4 flex flex-col gap-4 animate-fade-in">
+                        <label className="flex flex-col gap-1.5">
+                            <span className="text-xs font-medium uppercase tracking-wider text-base-content/50">Audio</span>
                             <select
-                                className="select select-bordered select-sm"
+                                className="select select-sm w-full"
                                 value={selectedAudio?.index ?? ""}
                                 disabled={audioTracks.length < 2 || switchingAudio}
                                 onChange={e => switchAudio(Number(e.target.value))}
@@ -378,12 +423,14 @@ export default function PlayerPage() {
                                     <option key={a.index} value={a.index}>{a.label}</option>
                                 ))}
                             </select>
-                            {switchingAudio && <span className="text-xs opacity-70">Switching audio…</span>}
+                            {switchingAudio && <span className="text-xs text-base-content/60 flex items-center gap-2">
+                                <span className="loading loading-spinner loading-xs"></span> Switching audio…
+                            </span>}
                         </label>
-                        <label className="flex flex-col gap-1">
-                            <span className="text-sm">Subtitles</span>
+                        <label className="flex flex-col gap-1.5">
+                            <span className="text-xs font-medium uppercase tracking-wider text-base-content/50">Subtitles</span>
                             <select
-                                className="select select-bordered select-sm"
+                                className="select select-sm w-full"
                                 value={selectedSubtitle}
                                 onChange={e => { setSelectedSubtitle(Number(e.target.value)); setPrefsMessage("") }}
                             >
@@ -393,39 +440,25 @@ export default function PlayerPage() {
                                 ))}
                             </select>
                             {subtitles.length === 0 && (
-                                <span className="text-xs opacity-70">This video has no text subtitles</span>
+                                <span className="text-xs text-base-content/60">This video has no text subtitles</span>
                             )}
                         </label>
                         <button className="btn btn-sm btn-primary" onClick={saveAsDefault}>
                             Use these languages by default
                         </button>
-                        {prefsMessage && <span className="text-xs">{prefsMessage}</span>}
-                    </div>
+                        {prefsMessage && <span className="text-xs text-base-content/70">{prefsMessage}</span>}
+                    </div>}
                 </div>
-                <button
-                    className="btn btn-ghost btn-sm text-white"
-                    disabled={!prevEpisode}
-                    onClick={() => prevEpisode && goToEpisode(prevEpisode)}
-                >
-                    <ArrowLeft size={18} strokeWidth={2}/> Prev
-                </button>
-                <button
-                    className="btn btn-ghost btn-sm text-white"
-                    disabled={!nextEpisode}
-                    onClick={() => nextEpisode && goToEpisode(nextEpisode)}
-                >
-                    Next <ArrowRight  size={18} strokeWidth={2}/>
-                </button>
             </div>
-        </div>
-        <div className="relative flex flex-1 items-center justify-center">
+        </header>
+        <div className="relative flex flex-1 min-h-0 items-center justify-center">
             {/* the video element stays mounted while loading so hls.js always has it to attach to */}
             {loading && (
-                <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 text-white text-center px-6" role="status">
-                    <span className="loading loading-spinner loading-lg"></span>
-                    <p>Preparing the video…</p>
+                <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 text-center px-6" role="status">
+                    <span className="loading loading-ring loading-lg text-primary"></span>
+                    <p className="font-medium">Preparing the video…</p>
                     {slowLoad === loadKey && (
-                        <p className="text-sm text-white/60 max-w-sm">
+                        <p className="text-sm text-white/60 max-w-sm animate-fade-in">
                             The first play of a video takes a little longer while the server gets it ready.
                         </p>
                     )}
@@ -433,14 +466,17 @@ export default function PlayerPage() {
             )}
             {!loading && buffering && (
                 <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none" role="status" aria-label="Buffering">
-                    <span className="loading loading-spinner loading-lg text-white"></span>
+                    <span className="grid size-20 place-items-center rounded-full bg-black/50 backdrop-blur">
+                        <span className="loading loading-spinner loading-lg"></span>
+                    </span>
                 </div>
             )}
             <video
                 ref={videoRef}
                 controls
+                playsInline
                 crossOrigin="anonymous"
-                className={`w-full max-w-6xl ${loading ? "invisible" : ""}`}
+                className={`w-full h-full max-h-full object-contain ${loading ? "invisible" : ""}`}
             >
                 {subtitles.filter(t => subtitleFiles[t.url]).map(t => (
                     <track

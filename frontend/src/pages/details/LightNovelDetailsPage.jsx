@@ -1,18 +1,19 @@
 import { useState, useEffect } from "react";
-import { NavLink, useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import ErrorState from "../../components/states/ErrorState";
 import NotFound from "../../components/states/NotFound";
 import EmptyState from "../../components/states/EmptyState";
 import { DetailsSkeleton } from "../../components/states/Skeletons";
-import Cover from "../../components/Cover";
 import { toast } from "../../stores/useToastStore";
-import { goBack } from "../../utils/navigation";
+import { openViewer } from "../../utils/navigation";
 import { useMediaItem, useUserContent, useRemoveFromList } from "../../hooks";
 import DeleteFromServerButton from "../../components/DeleteFromServerButton";
-import { mediaStatusBadge } from "../../utils/status";
 import api from "../../services/api";
-import { ArrowLeft, Check } from "lucide-react";
+import { BookOpen, CheckCheck, Undo2 } from "lucide-react";
 import Format from "../../utils/format";
+import DetailsHero from "../../components/details/DetailsHero";
+import { ActionMenu, ActionMenuItem, ListStatusMenu } from "../../components/details/Menus";
+import ItemRow, { ItemList } from "../../components/details/ItemRow";
 
 export default function LightNovelDetailsPage() {
     const navigate = useNavigate();
@@ -79,89 +80,74 @@ export default function LightNovelDetailsPage() {
     if (error) return <ErrorState error={error} title="Couldn't load this light novel" onRetry={refetch} showBack />
     if (!ln) return null
 
-    return (
-        <div className="flex flex-col">
-            <button className="btn btn-ghost btn-sm self-start" onClick={() => goBack(navigate)}>
-                <ArrowLeft size={18} strokeWidth={2}/> Back
-            </button>
-            <div className="flex gap-6">
-                <Cover src={ln.cover_image_url} alt={ln.title} className="w-48 h-64 shrink-0 object-contain rounded-md" />
-                <div className="flex flex-col gap-3">
-                    <h2 className="text-2xl font-bold">{ln.title}</h2>
-                    {ln.metadata.author && <span className="text-sm text-neutral-content">by {ln.metadata.author}</span>}
-                    {ln.release_date && (
-                        <span className="text-sm text-neutral-content">{Format.year(ln.release_date)}</span>
-                    )}
-                    <div className="flex flex-wrap gap-1">
-                        {(ln.metadata.genres ?? []).map((genre, i) => (
-                            <span key={i} className="badge">{genre}</span>
-                        ))}
-                    </div>
-                    {ln.description && (
-                        <p className="text-sm max-w-xl" dangerouslySetInnerHTML={{ __html: ln.description }} />
-                    )}
-                    <div className="flex flex-wrap items-center gap-2">
-                        <div className="dropdown">
-                            <div tabIndex={0} className={`badge ${mediaStatusBadge(userEntry?.status)} cursor-pointer`}>
-                                {Format.statusLabel(userEntry?.status, ln.type)}
-                            </div>
-                            <ul tabIndex={0} className="dropdown-content menu bg-base-200 rounded-box z-10 p-2 shadow gap-1">
-                                {["current", "completed", "dropped", "planned"].map(option => (
-                                    <li key={option}>
-                                        <button onClick={() => { updateStatus(option); document.activeElement.blur(); }}>
-                                            {Format.statusLabel(option, ln.type)}
-                                        </button>
-                                    </li>
-                                ))}
-                                {userEntry && (
-                                    <li className="border-t border-base-300 mt-1 pt-1">
-                                        <button className="text-error" onClick={() => { removeEntry(); document.activeElement.blur(); }}>
-                                            Remove from list
-                                        </button>
-                                    </li>
-                                )}
-                            </ul>
-                        </div>
-                        <button className="btn btn-outline btn-sm" onClick={() => markAll(true)}>Mark all read</button>
-                        <button className="btn btn-outline btn-sm" onClick={() => markAll(false)}>Mark all unread</button>
-                        <DeleteFromServerButton item={{ id, title: ln.title, type: ln.type }} />
-                    </div>
-                </div>
-            </div>
+    const volumes = ln.metadata.volumes ?? [];
+    const read = volume => openViewer(navigate, `/light-novels/${id}/volumes/${volume.id}/read`);
+    const volumeName = volume => volume.title ?? `Volume ${volume.volume_number}`;
+    // the first volume not read yet is where the user is up to
+    const nextVolume = volumes.find(v => !readVolumes.has(v.id));
+    const nextStarted = nextVolume && (scrollPosition[nextVolume.id] ?? 0) > 0;
 
-            <h3 className="font-bold text-lg mt-6">Volumes</h3>
-            {!ln.metadata.volumes?.length && (
-                <div className="mt-2">
-                    <EmptyState compact title="No volumes yet" hint="Volumes show up here once they've downloaded." />
-                </div>
+    return (
+        <div className="flex flex-col gap-8">
+            <DetailsHero
+                cover={{ src: ln.cover_image_url }}
+                eyebrow="Light Novel"
+                title={ln.title}
+                meta={[
+                    ln.metadata.author && `by ${ln.metadata.author}`,
+                    ln.release_date && Format.year(ln.release_date),
+                    volumes.length > 0 && `${volumes.length} ${volumes.length === 1 ? "volume" : "volumes"}`,
+                ]}
+                genres={ln.metadata.genres ?? []}
+                description={ln.description}
+                html
+                primary={volumes.length > 0 && <button className="btn btn-primary btn-lg shadow-glow px-6" onClick={() => read(nextVolume ?? volumes[0])}>
+                    <BookOpen size={18}/>
+                    {nextVolume
+                        ? `${nextStarted ? "Continue" : readVolumes.size > 0 ? "Read" : "Start reading"} Vol. ${nextVolume.volume_number}`
+                        : "Read again"}
+                </button>}
+                actions={<>
+                    <ListStatusMenu
+                        status={userEntry?.status}
+                        type={ln.type}
+                        options={["current", "completed", "dropped", "planned"]}
+                        onSelect={updateStatus}
+                        onRemove={removeEntry}
+                    />
+                    <ActionMenu>
+                        <ActionMenuItem icon={CheckCheck} label="Mark all read" onClick={() => markAll(true)}/>
+                        <ActionMenuItem icon={Undo2} label="Mark all unread" onClick={() => markAll(false)}/>
+                        <DeleteFromServerButton asMenuItem item={{ id, title: ln.title, type: ln.type }} />
+                    </ActionMenu>
+                </>}
+            />
+
+            {volumes.length === 0 ? (
+                <EmptyState compact title="No volumes yet" hint="Volumes show up here once they've downloaded." />
+            ) : (
+                <ItemList title="Volumes">
+                    {volumes.map(volume => {
+                        const done = readVolumes.has(volume.id);
+                        const pct = scrollPosition[volume.id] ?? 0;
+                        const started = !done && pct > 0;
+                        return <ItemRow
+                            key={volume.id}
+                            checked={done}
+                            onToggle={() => toggleVolume(volume)}
+                            toggleLabel={`Mark ${volumeName(volume)} ${done ? "unread" : "read"}`}
+                            number={volume.volume_number}
+                            title={volumeName(volume)}
+                            progress={started ? pct : null}
+                            progressLabel={done ? "Read" : started ? `${Math.round(pct * 100)}%` : null}
+                            current={nextVolume?.id === volume.id}
+                            onOpen={() => read(volume)}
+                            openLabel={`Read ${volumeName(volume)}`}
+                            openIcon={BookOpen}
+                        />
+                    })}
+                </ItemList>
             )}
-            <div className="flex flex-col gap-2 mt-2">
-                {(ln.metadata.volumes ?? []).map(volume => (
-                    <div key={volume.id} className="flex items-center gap-3 p-3 rounded-lg bg-base-200">
-                        <button
-                            className={`btn btn-circle btn-xs ${readVolumes.has(volume.id) ? "btn-primary" : "btn-outline"}`}
-                            onClick={() => toggleVolume(volume)}
-                        >
-                            <Check size={10} strokeWidth={3} />
-                        </button>
-                        <NavLink to={`/light-novels/${id}/volumes/${volume.id}/read`} state={{ fromDetails: true }} className="text-sm w-24 shrink-0">
-                            {volume.title ?? `Volume ${volume.volume_number}`}
-                        </NavLink>
-                        {scrollPosition[volume.id] != null && (
-                            <div className="relative flex-1 max-w-48">
-                                <progress
-                                    className="progress progress-primary w-full"
-                                    value={Math.round((scrollPosition[volume.id] ?? 0) * 100)}
-                                    max="100"
-                                />
-                                <span className="absolute inset-0 flex items-center justify-center text-xs font-bold">
-                                    {Math.round((scrollPosition[volume.id] ?? 0) * 100)}%
-                                </span>
-                            </div>
-                        )}
-                    </div>
-                ))}
-            </div>
         </div>
     )
 }

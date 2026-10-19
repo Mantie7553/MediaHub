@@ -9,10 +9,30 @@ export default function AudioPlayer() {
     const { currentTrack, isPlaying, pause, resume, stop, next, prev, queue } = useAudioStore()
     // the bar starts where the sidebar ends
     const sidebarCollapsed = useSidebarStore(state => state.collapsed)
-    // the video player and login page have no tab bar to sit above
+    // the video player, readers and login page fill the screen: no tab bar or sidebar to sit beside
     const { pathname } = useLocation()
-    const hasTabBar = !pathname.startsWith("/watch/") && pathname !== "/login"
+    const inLayout = !pathname.startsWith("/watch/") && !pathname.endsWith("/read") && pathname !== "/login"
     const audioRef = useRef(null)
+    const barRef = useRef(null)
+    const visible = currentTrack !== null
+
+    // --player-h is the bar's height (0px when hidden), pages pad their bottoms by it
+    useEffect(() => {
+        const root = document.documentElement
+        const bar = barRef.current
+        if (!bar) {
+            root.style.setProperty("--player-h", "0px")
+            return
+        }
+        const update = () => root.style.setProperty("--player-h", `${bar.offsetHeight}px`)
+        update()
+        const observer = new ResizeObserver(update)
+        observer.observe(bar)
+        return () => {
+            observer.disconnect()
+            root.style.setProperty("--player-h", "0px")
+        }
+    }, [visible])
     const [progress, setProgress] = useState(0)
     const [duration, setDuration] = useState(0)
 
@@ -100,9 +120,9 @@ export default function AudioPlayer() {
             onPlaying={() => { remintedRef.current = false }}
         />
         {/* sits above the mobile tab bar, and beside the sidebar on desktop */}
-        <div className={`fixed right-0 left-0 z-50 transition-[left] duration-200
-            ${hasTabBar ? "bottom-[calc(4rem+env(safe-area-inset-bottom))]" : "bottom-0 pb-[env(safe-area-inset-bottom)]"} lg:bottom-0 lg:pb-0
-            ${sidebarCollapsed ? "lg:left-[4.5rem]" : "lg:left-60"}
+        <div ref={barRef} className={`fixed right-0 left-0 z-50 transition-[left] duration-200
+            ${inLayout ? "bottom-[calc(4rem+env(safe-area-inset-bottom))] lg:bottom-0" : "bottom-0 pb-[env(safe-area-inset-bottom)]"}
+            ${!inLayout ? "" : sidebarCollapsed ? "lg:left-[4.5rem]" : "lg:left-60"}
             bg-base-300/90 backdrop-blur-xl border-t border-white/5 shadow-[0_-12px_32px_-12px_rgb(0_0_0/0.6)]`}>
             {/* phones: a thin progress line along the top edge, tap to seek */}
             <div className="sm:hidden absolute inset-x-0 top-0 h-4 -translate-y-1/2 cursor-pointer" onClick={handleSeek}>

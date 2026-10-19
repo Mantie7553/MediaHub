@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronUp, ArrowLeft } from 'lucide-react'
+import { ChevronDown, ChevronUp } from 'lucide-react'
 import { useState, useEffect, useRef } from "react"
 import { useParams, useLocation, useNavigate } from "react-router-dom"
 import api from "../../services/api"
@@ -8,6 +8,7 @@ import ErrorState from "../../components/states/ErrorState"
 import NotFound from "../../components/states/NotFound"
 import { ReaderSkeleton, TextSkeleton } from "../../components/states/Skeletons"
 import { exitViewer, switchViewer } from "../../utils/navigation"
+import ReaderToolbar from "../../components/ReaderToolbar"
 
 export default function LightNovelReader() {
     const { id, volumeId } = useParams()
@@ -21,10 +22,10 @@ export default function LightNovelReader() {
     const volumes = ln.metadata?.volumes ?? [];
     const volume = volumes.find(v => v.id === volumeId);
     if (!volume) return <NotFound title="Volume not found" hint="This volume isn't part of the light novel any more. Pick another from the volume list." />
-    return <LightNovelReaderInner key={volumeId} id={id} volumeId={volumeId} volume={volume} volumes={volumes} />
+    return <LightNovelReaderInner key={volumeId} id={id} volumeId={volumeId} volume={volume} volumes={volumes} title={ln.title} />
 }
 
-function LightNovelReaderInner({ id, volumeId, volume, volumes }) {
+function LightNovelReaderInner({ id, volumeId, volume, volumes, title }) {
     const navigate = useNavigate();
     const location = useLocation();
     const initialScroll = volume?.scroll_position ?? 0;
@@ -95,68 +96,64 @@ function LightNovelReaderInner({ id, volumeId, volume, volumes }) {
 
     if (error) return <ErrorState error={error} title="Couldn't load this volume" onRetry={reload} showBack />
 
+    const atStart = scrollPct <= 0
+    const atEnd = scrollPct >= 1
+
     return (
-        <div className="flex flex-col h-screen">
-            <div className="sticky top-0 z-10 bg-base-200 border-b border-base-300">
-                <div className="max-w-2xl mx-auto px-6">
-                    <div className="flex justify-center pt-2">
-                        <span className="text-xs text-neutral-content">{Math.round(scrollPct * 100)}%</span>
-                    </div>
-                    <div className="relative w-full h-1 my-1">
-                        <progress
-                            className="progress progress-primary w-full h-1"
-                            value={Math.round(scrollPct * 100)}
-                            max="100"
-                        />
-                    </div>
-                    <div className="flex justify-center items-center gap-4 p-3">
-                        <button onClick={() => exitViewer(navigate, location, `/light-novels/${id}`)} className="btn btn-sm">
-                            <ArrowLeft size={16} strokeWidth={3}/>
-                            To Volumes
-                        </button>
-                        <button
-                            className="btn btn-sm"
-                            disabled={scrollPct <= 0 && !prevVolume}
-                            onClick={() => {
-                                if (scrollPct <= 0 && prevVolume) {
-                                    saveProgress(scrollPctRef.current);
-                                    switchViewer(navigate, location, `/light-novels/${id}/volumes/${prevVolume.id}/read`);
-                                } else {
-                                    contentRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
-                                }
-                            }}>
-                            <ChevronUp size={20} strokeWidth={3}/>
-                            {scrollPct <= 0 && prevVolume ? "Prev Volume" : "Top"}
-                        </button>
-                        <button
-                            className="btn btn-sm"
-                            disabled={scrollPct >= 1 && !nextVolume}
-                            onClick={() => {
-                                if (scrollPct >= 1 && nextVolume) {
-                                    saveProgress(scrollPctRef.current);
-                                    switchViewer(navigate, location, `/light-novels/${id}/volumes/${nextVolume.id}/read`);
-                                } else {
-                                    const el = contentRef.current;
-                                    if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
-                                }
-                            }}>
-                            <ChevronDown size={20} strokeWidth={3}/>
-                            {scrollPct >= 1 && nextVolume ? "Next Volume" : "Bottom"}
-                        </button>
-                    </div>
-                </div>
-            </div>
+        <div className="flex flex-col h-dvh">
+            <ReaderToolbar
+                onBack={() => exitViewer(navigate, location, `/light-novels/${id}`)}
+                backLabel="Volumes"
+                title={title}
+                subtitle={volume.title ?? `Volume ${volume.volume_number}`}
+                progress={scrollPct}
+                progressLabel={`${Math.round(scrollPct * 100)}%`}
+            >
+                <button
+                    className="btn btn-ghost btn-sm gap-1"
+                    disabled={atStart && !prevVolume}
+                    aria-label={atStart && prevVolume ? "Previous volume" : "Back to top"}
+                    onClick={() => {
+                        if (atStart && prevVolume) {
+                            saveProgress(scrollPctRef.current);
+                            switchViewer(navigate, location, `/light-novels/${id}/volumes/${prevVolume.id}/read`);
+                        } else {
+                            contentRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+                        }
+                    }}>
+                    <ChevronUp size={18}/>
+                    <span className={atStart && prevVolume ? "" : "hidden md:inline"}>{atStart && prevVolume ? "Prev volume" : "Top"}</span>
+                </button>
+                <button
+                    className={`btn btn-sm gap-1 ${atEnd && nextVolume ? "btn-primary" : "btn-ghost"}`}
+                    disabled={atEnd && !nextVolume}
+                    aria-label={atEnd && nextVolume ? "Next volume" : "Jump to the end"}
+                    onClick={() => {
+                        if (atEnd && nextVolume) {
+                            saveProgress(scrollPctRef.current);
+                            switchViewer(navigate, location, `/light-novels/${id}/volumes/${nextVolume.id}/read`);
+                        } else {
+                            const el = contentRef.current;
+                            if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+                        }
+                    }}>
+                    <ChevronDown size={18}/>
+                    <span className={atEnd && nextVolume ? "" : "hidden md:inline"}>{atEnd && nextVolume ? "Next volume" : "End"}</span>
+                </button>
+            </ReaderToolbar>
             {/* the toolbar stays up while the text loads */}
             {loading ? <TextSkeleton /> : <div
                 ref={contentRef}
-                className="flex-1 overflow-y-auto flex flex-col items-center"
+                className="flex-1 overflow-y-auto flex flex-col items-center px-3 sm:px-6 py-4 sm:py-8 pb-[calc(2rem+var(--player-h,0px)+env(safe-area-inset-bottom))]"
             >
-                <div className="w-full max-w-2xl px-6 py-4">
-                    <div
-                        className="prose prose-invert max-w-none bg-white text-black text-xs px-2"
-                        dangerouslySetInnerHTML={{ __html: content }}
-                    />
-                </div>
+                {/* a warm page to read on, the text comes with its own markup from the EPUB */}
+                <article
+                    className="w-full max-w-2xl rounded-box bg-[#f7f2e8] text-[#1f1a14] shadow-raised px-5 sm:px-12 py-8 sm:py-12
+                        text-[1.0625rem] leading-relaxed font-[Georgia,'Times_New_Roman',serif]
+                        [&_p]:mb-4 [&_img]:max-w-full [&_img]:h-auto [&_img]:mx-auto [&_img]:my-6 [&_img]:rounded
+                        [&_h1]:text-2xl [&_h1]:font-semibold [&_h1]:mb-4 [&_h2]:text-xl [&_h2]:font-semibold [&_h2]:mb-3 [&_h3]:font-semibold [&_h3]:mb-2"
+                    dangerouslySetInnerHTML={{ __html: content }}
+                />
             </div>}
         </div>
     )

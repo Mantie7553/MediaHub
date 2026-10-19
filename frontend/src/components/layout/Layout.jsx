@@ -1,7 +1,6 @@
 import Sidebar, { Avatar } from "./Sidebar";
 import Logo from "./Logo";
 import MobileNav from "./MobileNav";
-import useAudioStore from "../../stores/useAudioStore";
 import useMe from "../../hooks/useMe";
 
 /**
@@ -12,8 +11,6 @@ import useMe from "../../hooks/useMe";
  */
 export default function Layout({children}) {
     const { me } = useMe();
-    // leave room so the tab bar and audio player never cover the end of the page
-    const playing = useAudioStore(state => state.currentTrack !== null);
 
     return <div className="drawer lg:drawer-open">
         <input id="my-drawer-3" type="checkbox" className="drawer-toggle" />
@@ -24,8 +21,9 @@ export default function Layout({children}) {
                     <Avatar name={me?.username} className="size-8 text-sm"/>
                 </label>
             </header>
-            <main className={`w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-10 pt-5 sm:pt-6 lg:py-8
-                ${playing ? "pb-[calc(10rem+env(safe-area-inset-bottom))] lg:pb-28" : "pb-[calc(6rem+env(safe-area-inset-bottom))] lg:pb-8"}`}>
+            {/* the bottom padding keeps the tab bar and audio player (--player-h) off the end of the page */}
+            <main className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-10 pt-5 sm:pt-6 lg:pt-8
+                pb-[calc(6rem+var(--player-h,0px)+env(safe-area-inset-bottom))] lg:pb-[calc(2rem+var(--player-h,0px))]">
                 {children}
             </main>
         </div>

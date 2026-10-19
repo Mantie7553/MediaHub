@@ -10,7 +10,7 @@ export default function Toaster() {
 
     if (toasts.length === 0) return null
 
-    return <div className="toast toast-center sm:toast-end toast-bottom z-[60] mb-[calc(9rem+env(safe-area-inset-bottom))] lg:mb-20" role="status" aria-live="polite">
+    return <div className="toast toast-center sm:toast-end toast-bottom z-[60] mb-[calc(5rem+var(--player-h,0px)+env(safe-area-inset-bottom))] lg:mb-[calc(1rem+var(--player-h,0px))]" role="status" aria-live="polite">
         {toasts.map(t => {
             const error = t.type === "error"
             const Icon = error ? AlertCircle : CheckCircle2
