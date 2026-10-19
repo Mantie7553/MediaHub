@@ -37,7 +37,7 @@ backend/
     clients/               Wrappers for external APIs (anilist, arr, mangadex,
                            musicbrainz, ytdlp)
     downloader/            Routes approved requests to a download tool and runs
-                           yt-dlp / mangal jobs
+                           yt-dlp and MangaDex jobs
     cleanup/               Background job that clears old HLS transcodes
   migrations/              Goose migrations for database structure
 frontend/
@@ -124,9 +124,9 @@ See [`backend/migrations/`](backend/migrations/) for the full schema.
 4. On approval, `downloader.Dispatch` picks a destination folder under `MEDIA_ROOT` and a handler based on media type, then inserts a `download_jobs` row:
    - anime → Sonarr (`TV Shows`)
    - movie → Radarr (`Movies`)
-   - manga → mangal (`Manga`)
+   - manga → MangaDex (`Manga`)
    - music and anything else → yt-dlp (`Music` / `Downloads`)
-5. Sonarr and Radarr download on their own schedule. mangal and yt-dlp run in a goroutine that updates the job's status and progress as it goes.
+5. Sonarr and Radarr download on their own schedule. MangaDex and yt-dlp jobs run in a goroutine that updates the job's status and progress as it goes. Manga is fetched straight from the MangaDex API by the title's MangaDex id: every English chapter it hosts (licensed chapters that only link to the publisher are skipped) is saved as `Manga/<title>/[0012] Chapter 12 - <title>.cbz`. Chapters already on disk are kept, so requesting a manga again fills in what is missing.
 6. When Sonarr or Radarr finishes, it calls `/api/webhooks/sonarr` or `/api/webhooks/radarr`. The webhook handler writes the file path into `episodes` or `movie_metadata`, which makes the content playable.
 
 ### Playback
@@ -161,11 +161,10 @@ Admins can trigger syncs from the backend for each media type (`/api/admin/sync/
 |---------|----------|-------|
 | AniList | Anime and movie search, metadata enrichment | GraphQL. Rate limit of 90 req/min, so syncs sleep between calls |
 | Fribb anime-lists | TVDB/TMDB → AniList ID mapping | Fetched from GitHub during syncs. Avoids unreliable title matching |
-| MangaDex | Manga search and metadata, cover images | Covers are fetched through `/api/proxy/cover`, which only allows `uploads.mangadex.org` |
+| MangaDex | Manga search, metadata, cover images and chapter downloads | Covers are fetched through `/api/proxy/cover`, which only allows `uploads.mangadex.org`. Chapter pages come from MangaDex@Home servers, about 40 chapters a minute at most, so downloads pause between chapters |
 | Sonarr | Anime downloads and library | Notifies MediaHub through a webhook on download |
 | Radarr | Movie downloads and library | Notifies MediaHub through a webhook on download |
 | qBittorrent | Torrent client behind Sonarr and Radarr | MediaHub never talks to it directly |
-| mangal | Manga downloads | Run as a subprocess, path from `MANGAL_PATH` |
 | yt-dlp | Music search and downloads | Run as a subprocess. Progress is read from its output |
 | ffmpeg | HLS transcoding and subtitle extraction | Uses AMD hardware encoding (`h264_amf`) |
 | MusicBrainz | Music metadata | Client exists but is not wired into any handler yet |
@@ -212,6 +211,5 @@ Backend variables live in `backend/.env`. Frontend variables live in `frontend/.
 | `SONARR_QUALITY_PROFILE`, `RADARR_QUALITY_PROFILE` | Optional. Name of the quality profile new series/movies get. Defaults to `Anime`, falls back to profile id 1 if it doesn't exist |
 | `RADARR_URL`, `RADARR_API_KEY` | Radarr API access |
 | `MANGADEX_URL` | MangaDex API base URL |
-| `MANGAL_PATH` | Path to the mangal executable |
 | `YTDLP_PATH`, `MUSIC_DIR` | yt-dlp executable and music download folder |
 | `VITE_API_URL` | Frontend API base URL, set to `/api` |

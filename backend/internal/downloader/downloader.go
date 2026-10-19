@@ -1,14 +1,11 @@
 package downloader
 
 import (
-	"archive/zip"
 	"bufio"
 	"bytes"
 	"database/sql"
-	"io/fs"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -130,126 +127,6 @@ func Run(db *sql.DB, jobID string, mediaItemID string) {
 	db.Exec(`UPDATE download_jobs 
         SET status = 'complete', progress_pct = 100, completed_at = NOW()
         WHERE id = $1`, jobID)
-}
-
-func RunMangal(db *sql.DB, jobID string, mediaItemID string, sourceURL string, dest string) {
-	logger.Info("Mangal running job %s", jobID)
-	row := db.QueryRow(`
-        UPDATE download_jobs 
-        SET status = 'downloading', started_at = NOW()
-        WHERE id = $1
-        RETURNING source_url, destination_path`,
-		jobID,
-	)
-
-	if row.Err() != nil {
-		markFailed(db, jobID, row.Err().Error())
-		return
-	}
-
-	var mangaTitle string
-	err := db.QueryRow(`SELECT title FROM media_items WHERE id = $1`, mediaItemID).Scan(&mangaTitle)
-
-	if err != nil {
-		markFailed(db, jobID, err.Error())
-		return
-	}
-
-	mangalPath := os.Getenv("MANGAL_PATH")
-	if mangalPath == "" {
-		mangalPath = "mangal"
-	}
-
-	cmd := exec.Command(mangalPath, "inline",
-		"-q", mangaTitle,
-		"-m", "0",
-		"-c", "all",
-		"-d",
-		"-S", "Mangadex",
-	)
-
-	cmd.Env = append(os.Environ(),
-		"MANGAL_DOWNLOADER_PATH="+dest,
-		"MANGAL_FORMATS_USE=cbz",
-	)
-
-	_, err = cmd.CombinedOutput()
-	if err != nil {
-		markFailed(db, jobID, err.Error())
-		return
-	}
-
-	// find the most recently modified directory
-	entries, _ := os.ReadDir(dest)
-	var mangaDir string
-	var newestTime int64
-	for _, e := range entries {
-		if !e.IsDir() {
-			continue
-		}
-		info, err := e.Info()
-		if err != nil {
-			continue
-		}
-		if info.ModTime().UnixNano() > newestTime {
-			newestTime = info.ModTime().UnixNano()
-			mangaDir = filepath.Join(dest, e.Name())
-		}
-	}
-
-	if mangaDir == "" {
-		markFailed(db, jobID, "could not find downloaded manga directory")
-		return
-	}
-
-	err = filepath.WalkDir(mangaDir, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			logger.Error("WalkDir failed at %s: %s", path, err.Error())
-			return err
-		}
-		if d.IsDir() || strings.ToLower(filepath.Ext(path)) != ".cbz" {
-			return nil
-		}
-
-		base := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
-		chapterNum := 0.0
-		if strings.HasPrefix(base, "[") {
-			end := strings.Index(base, "]")
-			if end > 1 {
-				chapterNum, _ = strconv.ParseFloat(strings.TrimSpace(base[1:end]), 64)
-			}
-		}
-
-		r, err := zip.OpenReader(path)
-		pageCount := 0
-		if err == nil {
-			for _, f := range r.File {
-				ext := strings.ToLower(filepath.Ext(f.Name))
-				if ext == ".jpg" || ext == ".jpeg" || ext == ".png" || ext == ".webp" {
-					pageCount++
-				}
-			}
-			r.Close()
-		}
-
-		db.Exec(
-			`INSERT INTO manga_chapters (media_item_id, chapter_number, file_path, page_count)
-			VALUES ($1, $2, $3, $4)
-			ON CONFLICT DO NOTHING`,
-			mediaItemID, chapterNum, path, pageCount,
-		)
-		return nil
-	})
-
-	if err != nil {
-		markFailed(db, jobID, err.Error())
-		return
-	}
-
-	db.Exec(`UPDATE download_jobs 
-		SET status = 'complete', progress_pct = 100, completed_at = NOW()
-		WHERE id = $1`, jobID)
-	logger.Info("Mangal completed job %s", jobID)
 }
 
 func markFailed(db *sql.DB, jobID string, message string) {
