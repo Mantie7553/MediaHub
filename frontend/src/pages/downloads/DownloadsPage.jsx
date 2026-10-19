@@ -142,7 +142,7 @@ function Table({ columns, items }) {
 const Modal = forwardRef(function Modal({onConfirm}, ref) {
 const notesRef = useRef(null);
 
-    return <dialog id="my_modal_3" className="modal" ref={ref}>
+    return <dialog id="my_modal_3" className="modal modal-bottom sm:modal-middle" ref={ref}>
     <div className="modal-box">
         <form method="dialog">
         <button className="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">✕</button>

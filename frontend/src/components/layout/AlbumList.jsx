@@ -54,7 +54,7 @@ export default function AlbumList({ albums, heading, loading = false, emptyText 
         <SectionHeader title={heading} count={albums.length}/>
         <Shelf>
             {albums.map(album => (
-                <li key={album.id} className="group w-40 md:w-44 shrink-0">
+                <li key={album.id} className="group w-[8.5rem] sm:w-40 md:w-44 shrink-0">
                     <Link to={`/albums/${album.id}`} className="block outline-none">
                         <div className="relative aspect-square overflow-hidden rounded-box bg-base-300 shadow-card ring-1 ring-white/5
                             transition-all duration-300 ease-out

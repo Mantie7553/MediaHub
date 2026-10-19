@@ -8,7 +8,7 @@
  * @param {boolean} fluid fills its grid cell
  */
 export function CardSkeleton({ square = false, fluid = false }) {
-    return <li className={`${fluid ? "min-w-0" : "w-40 md:w-44 shrink-0"} flex flex-col gap-2`} aria-hidden="true">
+    return <li className={`${fluid ? "min-w-0" : "w-[8.5rem] sm:w-40 md:w-44 shrink-0"} flex flex-col gap-2`} aria-hidden="true">
         <div className={`skeleton w-full rounded-box ${square ? "aspect-square" : "aspect-[2/3]"}`}></div>
         <div className="skeleton h-3.5 w-3/4 mt-1"></div>
         <div className="skeleton h-3 w-1/2"></div>
@@ -24,7 +24,7 @@ export function CardSkeleton({ square = false, fluid = false }) {
 export function CardRowSkeleton({ heading, count = 8, square = false }) {
     return <section aria-busy="true">
         {heading ? <h2 className="text-lg font-semibold tracking-tight mb-3">{heading}</h2> : <div className="skeleton h-5 w-32 mb-3"></div>}
-        <ul className="flex gap-4 overflow-hidden flex-nowrap pt-1 pb-3">
+        <ul className="flex gap-3 sm:gap-4 overflow-hidden flex-nowrap pt-1 pb-3">
             {Array.from({ length: count }, (_, i) => <CardSkeleton key={i} square={square}/>)}
         </ul>
     </section>

@@ -1,28 +1,17 @@
 import { create } from "zustand"
+import { readStored, writeStored } from "../utils/storage"
 
 const STORAGE_KEY = "sidebar_collapsed"
-
-function readCollapsed() {
-    try {
-        return localStorage.getItem(STORAGE_KEY) === "1"
-    } catch {
-        return false
-    }
-}
 
 /**
  * Whether the desktop sidebar is shrunk to an icon rail, remembered in this browser
  */
 const useSidebarStore = create((set, get) => ({
-    collapsed: readCollapsed(),
+    collapsed: readStored(STORAGE_KEY, "0") === "1",
 
     toggle: () => {
         const collapsed = !get().collapsed
-        try {
-            localStorage.setItem(STORAGE_KEY, collapsed ? "1" : "0")
-        } catch {
-            // private windows can refuse storage, the toggle still works for this visit
-        }
+        writeStored(STORAGE_KEY, collapsed ? "1" : "0")
         set({ collapsed })
     },
 }))

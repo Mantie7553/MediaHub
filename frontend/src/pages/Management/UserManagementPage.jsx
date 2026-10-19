@@ -164,7 +164,7 @@ const UserModal = forwardRef(function UserModal({ user, onSave }, ref) {
     const isEdit = !!user;
 
     return (
-        <dialog className="modal" ref={ref}>
+        <dialog className="modal modal-bottom sm:modal-middle" ref={ref}>
             <div className="modal-box flex flex-col gap-4">
                 <h3 className="font-bold text-lg">{isEdit ? `Edit ${user.username}` : "Add User"}</h3>
 
@@ -218,7 +218,7 @@ const UserModal = forwardRef(function UserModal({ user, onSave }, ref) {
  */
 const DeleteModal = forwardRef(function DeleteModal({ user, onConfirm }, ref) {
     return (
-        <dialog className="modal" ref={ref}>
+        <dialog className="modal modal-bottom sm:modal-middle" ref={ref}>
             <div className="modal-box flex flex-col gap-4">
                 <h3 className="font-bold text-lg">Delete User</h3>
                 <p>Are you sure you want to delete <span className="font-semibold">{user?.username}</span>? This cannot be undone.</p>

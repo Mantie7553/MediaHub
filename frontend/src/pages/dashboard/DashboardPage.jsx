@@ -8,6 +8,7 @@ import AlbumList from "../../components/layout/AlbumList";
 import ErrorState from "../../components/states/ErrorState";
 import EmptyState from "../../components/states/EmptyState";
 import PageHeader from "../../components/layout/PageHeader";
+import SegmentedTabs from "../../components/SegmentedTabs";
 
 const sortOrder = (a, b) => (a.title ?? "").localeCompare(b.title ?? "");
 
@@ -86,7 +87,7 @@ export default function DashboardPage() {
         { key: "light_novel", count: serverLightNovels.length, error: library.error, reload: library.reload, render: () => <ContentList items={serverLightNovels} heading="Light Novels" {...available}/> },
     ];
 
-    return <div className="flex flex-col gap-14">
+    return <div className="flex flex-col gap-10 sm:gap-14">
         <PageHeader
             title={me?.username ? <>Welcome back, <span className="text-primary">{me.username}</span></> : "Welcome back"}
             subtitle="Pick up where you left off, or find something new."
@@ -131,30 +132,17 @@ function DashboardSection({ title, rows, loading, error, onRetry, empty }) {
     const shownErrors = new Set();
 
     return <section className="flex flex-col gap-6">
-        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/5 pb-4">
-            <h2 className="text-2xl font-semibold tracking-tight flex items-center gap-3">
+        <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center justify-between gap-3 sm:gap-4 border-b border-white/5 pb-4">
+            <h2 className="text-xl sm:text-2xl font-semibold tracking-tight flex items-center gap-3">
                 <span className="w-1 h-6 rounded-full bg-primary shadow-[0_0_10px_rgb(242_89_18/0.7)]"></span>
                 {title}
             </h2>
-            <div className="flex flex-wrap gap-1.5" role="tablist" aria-label={`Filter ${title}`}>
-                {filters.map(f => {
-                    const count = f.key === "all" ? null : rows.find(row => row.key === f.key)?.count;
-                    const active = filter === f.key;
-                    return <button
-                        key={f.key}
-                        role="tab"
-                        aria-selected={active}
-                        onClick={() => setFilter(f.key)}
-                        className={`h-8 px-3.5 rounded-full text-sm transition-all duration-150 flex items-center gap-1.5
-                            ${active
-                                ? "bg-primary text-primary-content shadow-glow font-medium"
-                                : "bg-white/5 text-base-content/70 hover:bg-white/10 hover:text-base-content"}`}
-                    >
-                        {f.label}
-                        {!loading && count > 0 && <span className={`text-xs tabular-nums ${active ? "text-primary-content/80" : "text-base-content/40"}`}>{count}</span>}
-                    </button>
-                })}
-            </div>
+            <SegmentedTabs
+                options={filters.map(f => ({ ...f, count: loading || f.key === "all" ? 0 : rows.find(row => row.key === f.key)?.count }))}
+                value={filter}
+                onChange={setFilter}
+                label={`Filter ${title}`}
+            />
         </div>
 
         {error ? (

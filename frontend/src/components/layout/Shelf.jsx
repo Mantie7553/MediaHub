@@ -36,11 +36,11 @@ export default function Shelf({ children }) {
     // fade only the edges that have more content past them
     const mask = `linear-gradient(to right, ${edges.start ? "#000" : "transparent"}, #000 3rem, #000 calc(100% - 3rem), ${edges.end ? "#000" : "transparent"})`
 
-    return <div className="group/shelf relative -mx-1">
+    return <div className="group/shelf relative -mx-4 sm:-mx-6 lg:-mx-1">
         <ul
             ref={ref}
             onScroll={update}
-            className="shelf flex gap-4 overflow-x-auto flex-nowrap px-1 pt-1 pb-3"
+            className="shelf flex gap-3 sm:gap-4 overflow-x-auto flex-nowrap px-4 sm:px-6 lg:px-1 scroll-px-4 sm:scroll-px-6 lg:scroll-px-1 pt-1 pb-3"
             style={{ maskImage: mask, WebkitMaskImage: mask }}
         >
             {children}
@@ -57,7 +57,7 @@ function ShelfArrow({ side, hidden, onClick }) {
         tabIndex={-1}
         aria-hidden="true"
         onClick={onClick}
-        className={`hidden md:grid absolute top-[38%] -translate-y-1/2 ${side === "left" ? "-left-3" : "-right-3"} z-20 size-10 place-items-center rounded-full glass text-base-content shadow-raised
+        className={`hidden md:grid absolute top-[38%] -translate-y-1/2 ${side === "left" ? "left-2 lg:-left-3" : "right-2 lg:-right-3"} z-20 size-10 place-items-center rounded-full glass text-base-content shadow-raised
             transition-all duration-200 hover:bg-primary hover:text-primary-content
             ${hidden ? "opacity-0 pointer-events-none" : "opacity-0 group-hover/shelf:opacity-100"}`}
     >

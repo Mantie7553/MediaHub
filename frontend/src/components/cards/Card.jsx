@@ -77,7 +77,7 @@ export default function Card({item, showActions=false, userContentMap={}, onList
         body = card
     }
 
-    return <li className={`group ${fluid ? "min-w-0" : "w-40 md:w-44 shrink-0"}`}>{body}</li>
+    return <li className={`group ${fluid ? "min-w-0" : "w-[8.5rem] sm:w-40 md:w-44 shrink-0"}`}>{body}</li>
 }
 
 /**

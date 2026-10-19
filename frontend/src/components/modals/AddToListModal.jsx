@@ -30,7 +30,7 @@ export default function AddToListModal({item, onConfirm, dialogRef, initialValue
         }
     }
 
-    return <dialog className="modal" ref={dialogRef} onClick={e => { e.stopPropagation(); e.preventDefault(); }}>
+    return <dialog className="modal modal-bottom sm:modal-middle" ref={dialogRef} onClick={e => { e.stopPropagation(); e.preventDefault(); }}>
         <div className="modal-box flex flex-col gap-4">
             <h2 className="text-xl font-semibold">{item.title || item.media_title}</h2>
             <section>
@@ -58,7 +58,7 @@ export default function AddToListModal({item, onConfirm, dialogRef, initialValue
                 <h4 className="text-xs font-medium text-base-content/80 uppercase tracking-wide mb-1">Score</h4>
                 <ScrollPicker value={score} onChange={setScore} max={10}/>
             </section>
-            <section className="flex gap-2 pt-2 pl-4">
+            <section className="flex flex-wrap gap-2 pt-2 pl-4">
                 <button className="btn btn-primary" onClick={() => {onConfirm({ status, score, progress}); dialogRef.current.close()}}>Confirm</button>
                 <button className="btn btn-ghost" onClick={() => dialogRef.current.close()}>Cancel</button>
                 {initialValues && onRemove && (
