@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/Mantie7553/MediaHub/backend/internal/clients/mangadex"
+	"github.com/Mantie7553/MediaHub/backend/internal/mangafiles"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/logger"
 )
 
@@ -33,9 +33,9 @@ type pageSource interface {
 
 /*
 Function:	RunMangaDex
-Purpose:	Download every chapter MangaDex hosts for a manga as CBZ files in
-dest/<title>/, record them in manga_chapters and report progress on the job. Chapters
-already on disk are kept, so running it again only fetches what is missing
+Purpose:	Download every chapter MangaDex hosts for a manga that the library doesn't have
+yet, as CBZ files in the manga's folder, record them in manga_chapters and report progress
+on the job. Running it again only fetches what is missing, so it also picks up new chapters
 
 Params:
   - db: a pointer to our database
@@ -73,21 +73,36 @@ func RunMangaDex(db *sql.DB, jobID string, mediaItemID string, dest string) {
 		return
 	}
 
-	dir := filepath.Join(dest, sanitizeFileName(title))
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	have, err := ChapterNumbers(db, mediaItemID)
+	if err != nil {
+		markFailed(db, jobID, err.Error())
+		return
+	}
+	dir, err := MangaFolder(db, mediaItemID, dest, title)
+	if err != nil {
 		markFailed(db, jobID, err.Error())
 		return
 	}
 
-	failed := 0
+	added, failed, skipped := 0, 0, 0
 	for i, ch := range chapters {
-		path := existingChapter(dir, ch)
+		progress := func() {
+			db.Exec(`UPDATE download_jobs SET progress_pct = $1 WHERE id = $2`, (i+1)*100/len(chapters), jobID)
+		}
+		// already in the library, whatever its file is called (uploads, imports)
+		if have[ch.NumberValue()] {
+			skipped++
+			progress()
+			continue
+		}
+
+		path := mangafiles.ExistingChapter(dir, ch.Number)
 		pages := 0
 		var chErr error
 		if path != "" {
-			pages = cbzPageCount(path)
+			pages = mangafiles.PageCount(path)
 		} else {
-			path = filepath.Join(dir, chapterFileName(ch))
+			path = filepath.Join(dir, mangafiles.FileName(ch.Number, ch.Title))
 			pages, chErr = downloadChapter(client, ch, path)
 			if i < len(chapters)-1 {
 				time.Sleep(chapterDelay)
@@ -98,31 +113,82 @@ func RunMangaDex(db *sql.DB, jobID string, mediaItemID string, dest string) {
 			failed++
 			logger.Error("job %s: chapter %s failed: %s", jobID, ch.Number, chErr.Error())
 		} else if _, dbErr := db.Exec(
-			`INSERT INTO manga_chapters (media_item_id, chapter_number, file_path, page_count)
-			VALUES ($1, $2, $3, $4)
+			`INSERT INTO manga_chapters (media_item_id, chapter_number, title, file_path, page_count, created_at)
+			VALUES ($1, $2, NULLIF($3, ''), $4, $5, NOW())
 			ON CONFLICT (media_item_id, chapter_number) DO NOTHING`,
-			mediaItemID, ch.NumberValue(), path, pages,
+			mediaItemID, ch.NumberValue(), ch.Title, path, pages,
 		); dbErr != nil {
+			failed++
 			logger.Error("job %s: saving chapter %s failed: %s", jobID, ch.Number, dbErr.Error())
+		} else {
+			added++
 		}
-
-		db.Exec(`UPDATE download_jobs SET progress_pct = $1 WHERE id = $2`, (i+1)*100/len(chapters), jobID)
+		progress()
 	}
 
-	if failed == len(chapters) {
-		markFailed(db, jobID, "every chapter failed to download, see the server log")
+	if failed > 0 && added == 0 {
+		markFailed(db, jobID, fmt.Sprintf("all %d missing chapters failed to download, see the server log", failed))
 		return
 	}
 
-	// a few failed chapters still leave a usable manga, the note says to run it again
-	var note sql.NullString
+	// what happened, shown on the Downloads page
+	note := fmt.Sprintf("%d new chapters", added)
+	if skipped > 0 {
+		note += fmt.Sprintf(", %d already in the library", skipped)
+	}
 	if failed > 0 {
-		note = sql.NullString{String: fmt.Sprintf("%d of %d chapters failed, request it again to retry them", failed, len(chapters)), Valid: true}
+		note += fmt.Sprintf(", %d failed (check again to retry them)", failed)
 	}
 	db.Exec(`UPDATE download_jobs
 		SET status = 'complete', progress_pct = 100, completed_at = NOW(), error_message = $1
 		WHERE id = $2`, note, jobID)
-	logger.Info("MangaDex completed job %s: %d chapters, %d failed", jobID, len(chapters), failed)
+	logger.Info("MangaDex completed job %s: %s", jobID, note)
+}
+
+/*
+Function:	ChapterNumbers
+Purpose:	The chapter numbers a manga already has in the library
+*/
+func ChapterNumbers(db *sql.DB, mediaItemID string) (map[float64]bool, error) {
+	rows, err := db.Query(
+		`SELECT chapter_number FROM manga_chapters WHERE media_item_id = $1 AND chapter_number IS NOT NULL`,
+		mediaItemID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	have := map[float64]bool{}
+	for rows.Next() {
+		var n float64
+		if err := rows.Scan(&n); err != nil {
+			return nil, err
+		}
+		have[n] = true
+	}
+	return have, rows.Err()
+}
+
+/*
+Function:	MangaFolder
+Purpose:	The folder a manga's chapters go in: wherever its existing chapters are, so new
+ones land beside them, otherwise <mangaRoot>/<title>. The folder is created if needed
+*/
+func MangaFolder(db *sql.DB, mediaItemID string, mangaRoot string, title string) (string, error) {
+	var existing sql.NullString
+	db.QueryRow(
+		`SELECT file_path FROM manga_chapters
+		WHERE media_item_id = $1 AND file_path IS NOT NULL
+		ORDER BY chapter_number DESC LIMIT 1`,
+		mediaItemID,
+	).Scan(&existing)
+
+	dir := filepath.Join(mangaRoot, mangafiles.SanitizeFileName(title))
+	if existing.Valid && existing.String != "" {
+		dir = filepath.Dir(existing.String)
+	}
+	return dir, os.MkdirAll(dir, 0o755)
 }
 
 /*
@@ -160,7 +226,7 @@ func downloadChapter(src pageSource, ch mangadex.Chapter, path string) (int, err
 		if err != nil {
 			return 0, fmt.Errorf("page %d: %w", i+1, err)
 		}
-		// zero padded so the reader's name sort is page order
+		// zero padded so the pages sort in order
 		w, err := zw.CreateHeader(&zip.FileHeader{Name: fmt.Sprintf("%03d%s", i+1, pageExt(u)), Method: zip.Store})
 		if err != nil {
 			return 0, err
@@ -198,91 +264,8 @@ func fetchWithRetry(src pageSource, url string) ([]byte, error) {
 // pageExt is the image's extension from its URL, .jpg when it has none the reader knows
 func pageExt(url string) string {
 	ext := strings.ToLower(filepath.Ext(url))
-	switch ext {
-	case ".jpg", ".jpeg", ".png", ".webp", ".gif":
+	if mangafiles.ImageType(ext) != "" {
 		return ext
 	}
 	return ".jpg"
-}
-
-/*
-Function:	chapterFileName
-Purpose:	The CBZ name for a chapter: "[0012] Chapter 12 - Title.cbz". The number in
-brackets is what the library sync reads back, and the same pattern mangal used, so
-chapters it downloaded are recognised and not fetched again
-*/
-func chapterFileName(ch mangadex.Chapter) string {
-	name := "Oneshot"
-	if ch.Number != "" {
-		name = "Chapter " + ch.Number
-	}
-	if ch.Title != "" {
-		name += " - " + ch.Title
-	}
-	return sanitizeFileName(fmt.Sprintf("[%s] %s", paddedNumber(ch), name)) + ".cbz"
-}
-
-// paddedNumber writes the chapter number with 4 whole digits: 12 -> 0012, 52.5 -> 0052.5
-func paddedNumber(ch mangadex.Chapter) string {
-	whole, frac, _ := strings.Cut(ch.Number, ".")
-	n, err := strconv.Atoi(whole)
-	if err != nil {
-		n = 0
-	}
-	if frac != "" {
-		return fmt.Sprintf("%04d.%s", n, frac)
-	}
-	return fmt.Sprintf("%04d", n)
-}
-
-/*
-Function:	existingChapter
-Purpose:	The path of a CBZ already in dir for this chapter number, whatever its title
-part says, or "" when there is none
-*/
-func existingChapter(dir string, ch mangadex.Chapter) string {
-	prefix := "[" + paddedNumber(ch) + "]"
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return ""
-	}
-	for _, e := range entries {
-		name := e.Name()
-		if !e.IsDir() && strings.HasPrefix(name, prefix) && strings.EqualFold(filepath.Ext(name), ".cbz") {
-			return filepath.Join(dir, name)
-		}
-	}
-	return ""
-}
-
-// cbzPageCount counts the images in a CBZ, 0 when it can't be opened
-func cbzPageCount(path string) int {
-	r, err := zip.OpenReader(path)
-	if err != nil {
-		return 0
-	}
-	defer r.Close()
-	count := 0
-	for _, f := range r.File {
-		switch strings.ToLower(filepath.Ext(f.Name)) {
-		case ".jpg", ".jpeg", ".png", ".webp", ".gif":
-			count++
-		}
-	}
-	return count
-}
-
-// sanitizeFileName drops characters Windows and SMB shares refuse in file names
-func sanitizeFileName(name string) string {
-	name = strings.Map(func(r rune) rune {
-		if r < 32 || strings.ContainsRune(`<>:"/\|?*`, r) {
-			return -1
-		}
-		return r
-	}, name)
-	name = strings.TrimRight(strings.TrimSpace(name), ".")
-	if name == "" {
-		return "Untitled"
-	}
-	return name
 }

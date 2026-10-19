@@ -33,11 +33,13 @@ backend/
       server/              Chi router and all route registration (routes.go)
       utils/               JSON and error response helpers
     handlers/              One folder per domain (media, lists, requests, jobs,
-                           search, stream, sync, users, webhooks, music)
+                           search, stream, sync, users, webhooks, music, manga)
     clients/               Wrappers for external APIs (anilist, arr, mangadex,
                            musicbrainz, ytdlp)
     downloader/            Routes approved requests to a download tool and runs
                            yt-dlp and MangaDex jobs
+    mangafiles/            Manga chapter files: reading chapter numbers from file
+                           names, naming chapter files, the page images in a CBZ
     cleanup/               Background job that clears old HLS transcodes
   migrations/              Goose migrations for database structure
 frontend/
@@ -146,6 +148,14 @@ See [`backend/migrations/`](backend/migrations/) for the full schema.
 Admins can trigger syncs from the backend for each media type (`/api/admin/sync/*`):
 - **Sonarr / Radarr:** pull the library from the *arr API, map TVDB or TMDB IDs to AniList IDs using the Fribb anime-lists mapping, and fetch metadata from AniList by ID.
 - **Manga, light novels, music:** scan the matching folder under `MEDIA_ROOT` and create or update rows for what's on disk.
+
+### Adding Manga Chapters
+A manga's chapters can come from three places, and all of them skip chapter numbers the library already has:
+- **MangaDex downloads** (see Requesting a Download). Admins can run one again for any manga linked to MangaDex with `POST /api/admin/manga/{id}/check` (*Check MangaDex for new chapters* on the manga page), which picks up new releases and fills gaps. It reuses the manga's latest download request, or records one for the admin if the manga came from a sync.
+- **Uploads:** `POST /api/admin/manga/{id}/chapters` takes one `.cbz`/`.zip` per request (multipart `file`, optional `number`), so each stays under Cloudflare's 100 MB request limit; files up to 500 MB are accepted. The archive must open and hold page images. It is saved beside the manga's other chapters as `[0098] Chapter 98.cbz`.
+- **Files dropped into `Manga/<title>/`**, picked up by the library sync.
+
+`mangafiles.ParseChapter` reads the chapter number from a file name for uploads and the sync: `[0098] Chapter 98 - Title`, `c098`, `Ch. 98`, `Chapter 98`, `#98`, or the last number once the series title is removed. Whole volumes (`v12` with no chapter) are skipped, since chapters are numbered. The reader only counts the image files in an archive as pages, sorted naturally (`2.jpg` before `10.jpg`), so `ComicInfo.xml`, folders and unpadded names in imported archives don't break it. CBR (RAR) archives aren't supported.
 
 ### Removing Content
 - **From a list** (any user): `DELETE /api/me/media/{entryId}` deletes only the caller's own list entry; the title stays in the library.

@@ -24,3 +24,27 @@ export function deleteMedia(id) {
 export function deleteAlbum(id) {
     return api.delete(`/albums/${id}`)
 }
+
+/**
+ * Admin only: add a chapter file (CBZ or ZIP) to a manga
+ * @param {string} mangaId the manga's media item id
+ * @param {File} file the chapter archive
+ * @param {string} number the chapter number, read from the file name when empty
+ * @param {function} onProgress called with 0 to 1 as the file uploads
+ */
+export function uploadChapter(mangaId, file, number, onProgress) {
+    const form = new FormData()
+    form.append("file", file)
+    if (number) form.append("number", number)
+    return api.post(`/admin/manga/${mangaId}/chapters`, form, {
+        onUploadProgress: e => e.total && onProgress?.(e.loaded / e.total),
+    })
+}
+
+/**
+ * Admin only: start a job that downloads the chapters MangaDex has that the library doesn't
+ * @param {string} mangaId the manga's media item id
+ */
+export function checkForChapters(mangaId) {
+    return api.post(`/admin/manga/${mangaId}/check`)
+}

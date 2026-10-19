@@ -16,6 +16,7 @@ import (
 	"github.com/Mantie7553/MediaHub/backend/internal/clients/anilist"
 	"github.com/Mantie7553/MediaHub/backend/internal/clients/arr"
 	"github.com/Mantie7553/MediaHub/backend/internal/clients/mangadex"
+	"github.com/Mantie7553/MediaHub/backend/internal/mangafiles"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/logger"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/utils"
 	"github.com/dhowden/tag"
@@ -447,42 +448,28 @@ func (h *Handler) syncManga() error {
 			logger.Error("failed to insert manga metadata for %s: %s", title, err.Error())
 		}
 
-		// Walk CBZ files and insert chapters
+		// Walk the chapter archives and add the ones the library doesn't have
 		mangaDir := filepath.Join(mangaRoot, dir.Name())
 		filepath.WalkDir(mangaDir, func(path string, d fs.DirEntry, walkErr error) error {
 			if walkErr != nil {
 				return walkErr
 			}
-			if d.IsDir() || strings.ToLower(filepath.Ext(path)) != ".cbz" {
+			if d.IsDir() || !mangafiles.IsArchive(path) {
 				return nil
 			}
 
-			base := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
-			chapterNum := 0.0
-			if strings.HasPrefix(base, "[") {
-				end := strings.Index(base, "]")
-				if end > 1 {
-					chapterNum, _ = strconv.ParseFloat(strings.TrimSpace(base[1:end]), 64)
-				}
-			}
-
-			zr, zErr := zip.OpenReader(path)
-			pageCount := 0
-			if zErr == nil {
-				for _, f := range zr.File {
-					ext := strings.ToLower(filepath.Ext(f.Name))
-					if ext == ".jpg" || ext == ".jpeg" || ext == ".png" || ext == ".webp" {
-						pageCount++
-					}
-				}
-				zr.Close()
+			chapter, ok := mangafiles.ParseChapter(d.Name(), title)
+			if !ok {
+				// whole volumes can't be told apart from chapters by number
+				logger.Warn("no chapter number in %s, skipping it", path)
+				return nil
 			}
 
 			h.db.Exec(
-				`INSERT INTO manga_chapters (media_item_id, chapter_number, file_path, page_count)
-				VALUES ($1, $2, $3, $4)
+				`INSERT INTO manga_chapters (media_item_id, chapter_number, title, file_path, page_count, created_at)
+				VALUES ($1, $2, NULLIF($3, ''), $4, $5, NOW())
 				ON CONFLICT (media_item_id, chapter_number) DO NOTHING`,
-				mediaItemID, chapterNum, path, pageCount,
+				mediaItemID, chapter.Value, chapter.Title, path, mangafiles.PageCount(path),
 			)
 			return nil
 		})

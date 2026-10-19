@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { mangaBadge } from "../../utils/status";
 import ErrorState from "../../components/states/ErrorState";
@@ -10,11 +10,14 @@ import { openViewer } from "../../utils/navigation";
 import { useMediaItem, useUserContent, useRemoveFromList } from "../../hooks";
 import DeleteFromServerButton from "../../components/DeleteFromServerButton";
 import api from "../../services/api";
-import { BookOpen, CheckCheck, Undo2 } from "lucide-react";
+import { BookOpen, CheckCheck, RefreshCw, Undo2, Upload } from "lucide-react";
 import DetailsHero from "../../components/details/DetailsHero";
 import StatusPill from "../../components/StatusPill";
 import { ActionMenu, ActionMenuItem, ListStatusMenu } from "../../components/details/Menus";
 import ItemRow, { ItemList } from "../../components/details/ItemRow";
+import UploadChaptersModal from "../../components/modals/UploadChaptersModal";
+import { checkForChapters } from "../../services/mediaService";
+import { getRole } from "../../utils/auth";
 
 export default function MangaDetailsPage() {
     const navigate = useNavigate();
@@ -25,6 +28,8 @@ export default function MangaDetailsPage() {
     const removeEntry = useRemoveFromList(userEntry, refresh);
     const [readChapters, setReadChapters] = useState(new Set());
     const [pageProgress, setPageProgress] = useState({});
+    const uploadRef = useRef(null);
+    const isAdmin = getRole() === "admin";
 
 
     useEffect(() => {
@@ -78,6 +83,12 @@ export default function MangaDetailsPage() {
             .catch(err => toast.error(err, "Could not update the chapters"));
     }
 
+    function handleCheck() {
+        checkForChapters(id)
+            .then(() => toast.success("Checking MangaDex for chapters you don't have yet. Follow it on the Downloads page"))
+            .catch(err => toast.error(err, "Could not start the check"));
+    }
+
     if (loading) return <DetailsSkeleton />
     if (notFound) return <NotFound title="Manga not found" hint="This manga isn't in the library any more. It may have been removed." />
     if (error) return <ErrorState error={error} title="Couldn't load this manga" onRetry={refetch} showBack />
@@ -120,13 +131,18 @@ export default function MangaDetailsPage() {
                     <ActionMenu>
                         <ActionMenuItem icon={CheckCheck} label="Mark all read" onClick={() => markAll(true)}/>
                         <ActionMenuItem icon={Undo2} label="Mark all unread" onClick={() => markAll(false)}/>
+                        {isAdmin && <>
+                            {manga.external_source === "mangadex" && <ActionMenuItem icon={RefreshCw} label="Check MangaDex for new chapters" onClick={handleCheck}/>}
+                            <ActionMenuItem icon={Upload} label="Add chapter files…" onClick={() => uploadRef.current.showModal()}/>
+                        </>}
                         <DeleteFromServerButton asMenuItem item={{ id, title: manga.title, type: manga.type }} />
                     </ActionMenu>
                 </>}
             />
 
             {chapters.length === 0 ? (
-                <EmptyState compact title="No chapters yet" hint="Chapters show up here once they've downloaded." />
+                <EmptyState compact title="No chapters yet" hint="Chapters show up here once they've downloaded."
+                    action={isAdmin ? { label: "Add chapter files", onClick: () => uploadRef.current.showModal() } : undefined} />
             ) : (
                 <ItemList title="Chapters">
                     {chapters.map(chapter => {
@@ -149,6 +165,13 @@ export default function MangaDetailsPage() {
                     })}
                 </ItemList>
             )}
+
+            {isAdmin && <UploadChaptersModal
+                dialogRef={uploadRef}
+                manga={{ id, title: manga.title }}
+                haveNumbers={chapters.map(c => c.chapter_number)}
+                onUploaded={() => refetch(false)}
+            />}
         </div>
     )
 }
