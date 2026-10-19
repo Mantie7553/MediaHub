@@ -3,6 +3,7 @@ import { LibraryBig } from "lucide-react";
 import ContentGrid from "../../components/layout/ContentGrid";
 import EmptyState from "../../components/states/EmptyState";
 import { useUserContent } from "../../hooks";
+import PageHeader from "../../components/layout/PageHeader";
 
 /**
  * Every item of one dashboard row ("Show All"). The items come from the dashboard in the
@@ -22,7 +23,8 @@ export default function Library() {
         />
     }
 
-    return <div className="pt-4">
-        <ContentGrid items={items} heading={heading} userContentMap={userContentMap} onListChange={refresh} emptyText="Nothing here yet"/>
+    return <div>
+        <PageHeader title={heading} subtitle={`${items.length} ${items.length === 1 ? "title" : "titles"}`}/>
+        <ContentGrid items={items} userContentMap={userContentMap} onListChange={refresh} emptyText="Nothing here yet"/>
     </div>
 }

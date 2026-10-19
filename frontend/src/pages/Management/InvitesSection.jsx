@@ -128,7 +128,7 @@ const CreateInviteModal = forwardRef(function CreateInviteModal({ onCreated }, r
     }
 
     return (
-        <dialog className="modal" ref={ref} onClose={reset}>
+        <dialog className="modal modal-bottom sm:modal-middle" ref={ref} onClose={reset}>
             <div className="modal-box flex flex-col gap-4">
                 <h3 className="font-bold text-lg">Create Invite</h3>
 

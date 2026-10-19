@@ -1,3 +1,4 @@
+import PageHeader from "../../components/layout/PageHeader"
 import { useRef, forwardRef, useState } from "react";
 import { Download } from "lucide-react";
 import useJobs from "../../hooks/useJobs";
@@ -39,9 +40,11 @@ export default function DownloadsPage() {
             .finally(() => setBusyId(null))
     }
 
-    return<div className="flex flex-wrap gap-10 justify-center pt-4">
-        <section className="card min-w-80">
-            <h1 className="text-xl font-bold mb-2">Requests</h1>
+    return <div>
+        <PageHeader title="Downloads" subtitle="Approve requests and keep an eye on what's downloading."/>
+        <div className="grid gap-6 xl:grid-cols-2 items-start">
+        <section className="surface p-5 min-w-0 overflow-x-auto">
+            <h2 className="text-lg font-semibold tracking-tight mb-4">Requests</h2>
             {rLoading ? <TableSkeleton columns={4}/> :
             rError ? <ErrorState compact error={rError} onRetry={refetchRequests}/> :
             requests.length === 0 ? <EmptyState compact title="No requests yet" hint="Requests people make from Discover show up here for approval."/> :
@@ -72,8 +75,8 @@ export default function DownloadsPage() {
             items={requests}
             />}
         </section>
-        <section className="card min-w-80">
-            <h1 className="text-xl font-bold mb-2">Jobs</h1>
+        <section className="surface p-5 min-w-0 overflow-x-auto">
+            <h2 className="text-lg font-semibold tracking-tight mb-4">Jobs</h2>
             {jPollError && <p className="text-xs text-warning mb-2" role="status">
                 Lost connection, retrying: {errorMessage(jPollError)}
             </p>}
@@ -99,6 +102,7 @@ export default function DownloadsPage() {
             items={jobs}
             />}
         </section>
+        </div>
         <Modal ref={modalRef} onConfirm={(notes) => handleReject(selectedRequest.id, notes)} />
     </div>
 }
@@ -138,7 +142,7 @@ function Table({ columns, items }) {
 const Modal = forwardRef(function Modal({onConfirm}, ref) {
 const notesRef = useRef(null);
 
-    return <dialog id="my_modal_3" className="modal" ref={ref}>
+    return <dialog id="my_modal_3" className="modal modal-bottom sm:modal-middle" ref={ref}>
     <div className="modal-box">
         <form method="dialog">
         <button className="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">✕</button>

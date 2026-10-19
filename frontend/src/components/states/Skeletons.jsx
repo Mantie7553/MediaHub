@@ -4,11 +4,13 @@
 
 /**
  * One card, the same size as components/cards/Card.jsx
+ * @param {boolean} square album covers instead of posters
+ * @param {boolean} fluid fills its grid cell
  */
-export function CardSkeleton() {
-    return <li className="w-44 shrink-0 flex flex-col gap-2" aria-hidden="true">
-        <div className="skeleton h-56 w-full"></div>
-        <div className="skeleton h-4 w-3/4"></div>
+export function CardSkeleton({ square = false, fluid = false }) {
+    return <li className={`${fluid ? "min-w-0" : "w-[8.5rem] sm:w-40 md:w-44 shrink-0"} flex flex-col gap-2`} aria-hidden="true">
+        <div className={`skeleton w-full rounded-box ${square ? "aspect-square" : "aspect-[2/3]"}`}></div>
+        <div className="skeleton h-3.5 w-3/4 mt-1"></div>
         <div className="skeleton h-3 w-1/2"></div>
     </li>
 }
@@ -17,14 +19,15 @@ export function CardSkeleton() {
  * A heading and a row of cards, like components/layout/ContentList.jsx
  * @param {string} heading shown as is, so the page keeps its labels while loading
  * @param {number} count how many cards
+ * @param {boolean} square album covers instead of posters
  */
-export function CardRowSkeleton({ heading, count = 6 }) {
-    return <div className="my-4" aria-busy="true">
-        {heading ? <h2 className="font-bold mb-2">{heading}</h2> : <div className="skeleton h-5 w-32 mb-2"></div>}
-        <ul className="flex gap-4 overflow-hidden flex-nowrap">
-            {Array.from({ length: count }, (_, i) => <CardSkeleton key={i}/>)}
+export function CardRowSkeleton({ heading, count = 8, square = false }) {
+    return <section aria-busy="true">
+        {heading ? <h2 className="text-lg font-semibold tracking-tight mb-3">{heading}</h2> : <div className="skeleton h-5 w-32 mb-3"></div>}
+        <ul className="flex gap-3 sm:gap-4 overflow-hidden flex-nowrap pt-1 pb-3">
+            {Array.from({ length: count }, (_, i) => <CardSkeleton key={i} square={square}/>)}
         </ul>
-    </div>
+    </section>
 }
 
 /**
@@ -32,8 +35,8 @@ export function CardRowSkeleton({ heading, count = 6 }) {
  * @param {number} count how many cards
  */
 export function CardGridSkeleton({ count = 12 }) {
-    return <ul className="flex flex-wrap gap-4" aria-busy="true">
-        {Array.from({ length: count }, (_, i) => <CardSkeleton key={i}/>)}
+    return <ul className="grid grid-cols-[repeat(auto-fill,minmax(9.5rem,1fr))] md:grid-cols-[repeat(auto-fill,minmax(10.5rem,1fr))] gap-x-4 gap-y-6" aria-busy="true">
+        {Array.from({ length: count }, (_, i) => <CardSkeleton key={i} fluid/>)}
     </ul>
 }
 

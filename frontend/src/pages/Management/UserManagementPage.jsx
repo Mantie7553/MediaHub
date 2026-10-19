@@ -1,3 +1,5 @@
+import PageHeader from "../../components/layout/PageHeader";
+import { UserPlus } from "lucide-react";
 import { forwardRef, useRef, useState, useEffect } from "react";
 import api from "../../services/api";
 import useApi from "../../hooks/useApi";
@@ -55,11 +57,12 @@ export default function UserManagementPage() {
 
     return (
         <div className="flex flex-col gap-6">
-            <div className="flex items-center justify-between">
-                <h1>User Management</h1>
-                <button className="btn btn-primary btn-sm" onClick={handleAdd}>Add User</button>
-            </div>
-            <section className="card">
+            <PageHeader
+                title="Users"
+                subtitle="Manage who can sign in and what they're allowed to download."
+                actions={<button className="btn btn-primary" onClick={handleAdd}><UserPlus size={16}/> Add User</button>}
+            />
+            <section className="surface p-5 overflow-x-auto">
                 <Table
                     columns={[
                         { key: "username", header: "Username" },
@@ -161,7 +164,7 @@ const UserModal = forwardRef(function UserModal({ user, onSave }, ref) {
     const isEdit = !!user;
 
     return (
-        <dialog className="modal" ref={ref}>
+        <dialog className="modal modal-bottom sm:modal-middle" ref={ref}>
             <div className="modal-box flex flex-col gap-4">
                 <h3 className="font-bold text-lg">{isEdit ? `Edit ${user.username}` : "Add User"}</h3>
 
@@ -215,7 +218,7 @@ const UserModal = forwardRef(function UserModal({ user, onSave }, ref) {
  */
 const DeleteModal = forwardRef(function DeleteModal({ user, onConfirm }, ref) {
     return (
-        <dialog className="modal" ref={ref}>
+        <dialog className="modal modal-bottom sm:modal-middle" ref={ref}>
             <div className="modal-box flex flex-col gap-4">
                 <h3 className="font-bold text-lg">Delete User</h3>
                 <p>Are you sure you want to delete <span className="font-semibold">{user?.username}</span>? This cannot be undone.</p>

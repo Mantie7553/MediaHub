@@ -14,7 +14,7 @@ export default function MusicRequestModal({dialogRef, track, onConfirm}) {
         dialogRef.current.close();
     }
 
-    return <dialog className="modal" ref={dialogRef} onClick={e => { e.stopPropagation(); e.preventDefault(); }}>
+    return <dialog className="modal modal-bottom sm:modal-middle" ref={dialogRef} onClick={e => { e.stopPropagation(); e.preventDefault(); }}>
         <div className="modal-box flex flex-col gap-4">
             <h2 className="font-bold text-lg">{track?.title}</h2>
             <section className="flex flex-col gap-2">
@@ -35,7 +35,7 @@ export default function MusicRequestModal({dialogRef, track, onConfirm}) {
                 />
             </section>
             <section className="flex gap-2 justify-end">
-                <button className="btn btn-secondary" onClick={() => dialogRef.current.close()}>Cancel</button>
+                <button className="btn btn-ghost" onClick={() => dialogRef.current.close()}>Cancel</button>
                 <button className="btn btn-primary" onClick={handleConfirm}>Confirm</button>
             </section>
         </div>

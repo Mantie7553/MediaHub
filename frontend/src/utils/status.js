@@ -42,6 +42,22 @@ export function mediaStatusBadge(status) {
     }
 }
 
+/**
+ * The dot color for a list status, used on the chips over cover art
+ * @param status the status we are matching the color to
+ * @returns the background class for the dot
+ */
+export function mediaStatusDot(status) {
+    switch(status) {
+        case "completed": return "bg-success"
+        case "current": return "bg-info"
+        case "planned": return "bg-warning"
+        case "dropped": return "bg-error"
+        case "wishlist": return "bg-secondary"
+        default: return "bg-neutral-content"
+    }
+}
+
 export function mangaBadge(status) {
     switch(status) {
         case "ongoing": return "badge-info"

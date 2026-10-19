@@ -46,7 +46,7 @@ export default function DeleteMediaModal({ dialogRef, item, onDeleted }) {
     }
 
     return <dialog
-        className="modal"
+        className="modal modal-bottom sm:modal-middle"
         ref={dialogRef}
         // cards render this inside their link, keep clicks inside from following it
         onClick={e => { e.stopPropagation(); e.preventDefault(); }}

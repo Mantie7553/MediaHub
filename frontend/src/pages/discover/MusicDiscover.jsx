@@ -1,5 +1,5 @@
 import { useState, useRef } from "react"
-import { Search, Clock, Plus } from "lucide-react"
+import { Clock, Plus } from "lucide-react"
 import api from "../../services/api"
 import useApi from "../../hooks/useApi"
 import ErrorState from "../../components/states/ErrorState"
@@ -9,6 +9,8 @@ import Cover from "../../components/Cover"
 import MusicRequestModal from "../../components/modals/MusicRequestModal"
 import AlbumList from "../../components/layout/AlbumList"
 import { toast } from "../../stores/useToastStore"
+import SearchField from "../../components/SearchField"
+import SectionHeader from "../../components/layout/SectionHeader"
 
 export default function MusicDiscover({ onListChange }) {
     const albums = useApi("/albums", { initial: [] });
@@ -55,27 +57,23 @@ export default function MusicDiscover({ onListChange }) {
         .catch(err => toast.error(err, "Could not request the download"))
     }
 
-    return <div className="flex flex-col gap-4">
-        {/* Search Bar */}
-        <div className="flex gap-2">
-            <input
-                className="input input-bordered flex-1 max-w-1/2"
-                placeholder="Search YouTube Music..."
-                value={query}
-                onChange={e => setQuery(e.target.value)}
-                onKeyDown={e => e.key === "Enter" && handleSearch()}
-            />
-            <button className="btn btn-primary" onClick={handleSearch} disabled={searching}>
-                {searching ? <span className="loading loading-spinner loading-xs" /> : <Search size={16} />} Search
-            </button>
-            <select className="select select-bordered w-fit" value={limitVal} onChange={e => setLimitVal(Number(e.target.value))}>
+    return <div className="flex flex-col gap-10">
+        <SearchField
+            value={query}
+            onChange={setQuery}
+            onSubmit={handleSearch}
+            onClear={() => { setSearch(null); setQuery(""); }}
+            searching={searching}
+            placeholder="Search YouTube Music…"
+        >
+            <select className="select select-ghost select-sm w-fit bg-white/5 rounded-lg" value={limitVal} onChange={e => setLimitVal(Number(e.target.value))} aria-label="Number of results">
                 <option value={5}>5</option>
                 <option value={10}>10</option>
                 <option value={15}>15</option>
                 <option value={20}>20</option>
                 <option value={25}>25</option>
             </select>
-        </div>
+        </SearchField>
 
         {searching ? (
             <ListSkeleton rows={4} />
@@ -84,35 +82,35 @@ export default function MusicDiscover({ onListChange }) {
         ) : search && search.results.length === 0 ? (
             <EmptyState compact title={`No results for "${search.query}"`} hint="Try fewer words, or the artist's name." />
         ) : search && (
-            <div className="flex flex-col gap-1">
-                <h2 className="font-bold">Results for "{search.query}"</h2>
-                <ul className="flex flex-col">
+            <section>
+                <SectionHeader title={`Results for "${search.query}"`} count={search.results.length}/>
+                <ul className="surface flex flex-col p-1.5">
                     {search.results.map(track => (
-                        <li key={track.id} className="flex items-center gap-3 p-3 hover:bg-base-200 rounded-lg">
-                            <Cover src={track.thumbnail} alt={track.title} className="w-12 h-12 shrink-0 rounded object-cover" />
+                        <li key={track.id} className="flex items-center gap-3 p-2.5 hover:bg-white/5 rounded-field transition-colors">
+                            <Cover src={track.thumbnail} alt={track.title} className="size-12 shrink-0 rounded-lg object-cover" />
                             <div className="flex-1 min-w-0">
                                 <p className="font-medium text-sm truncate">{track.title}</p>
-                                <p className="text-xs opacity-70">{track.uploader}</p>
+                                <p className="text-xs text-base-content/60 truncate">{track.uploader}</p>
                             </div>
-                            <span className="text-xs opacity-50 flex items-center gap-1">
+                            <span className="hidden sm:flex text-xs text-base-content/50 items-center gap-1 tabular-nums">
                                 <Clock size={12} />
                                 {formatDuration(track.duration_secs)}
                             </span>
-                            <button className="btn btn-primary btn-xs" aria-label={`Request ${track.title}`} onClick={() => { setSelectedTrack(track); dialogRef.current.showModal(); }}>
-                                <Plus size={14}/>
+                            <button className="btn btn-primary btn-sm btn-circle" aria-label={`Request ${track.title}`} onClick={() => { setSelectedTrack(track); dialogRef.current.showModal(); }}>
+                                <Plus size={16}/>
                             </button>
                         </li>
                     ))}
                 </ul>
-            </div>
+            </section>
         )}
         <MusicRequestModal dialogRef={dialogRef} track={selectedTrack} onConfirm={handleRequest} />
 
         {albums.error ? (
-            <div className="my-4">
-                <h2 className="font-bold mb-2">Available Now</h2>
+            <section>
+                <SectionHeader title="Available Now"/>
                 <ErrorState compact error={albums.error} onRetry={albums.reload} />
-            </div>
+            </section>
         ) : (
             <AlbumList albums={albums.data} heading="Available Now" loading={albums.loading}
                 emptyText="No music yet" emptyHint="Search above and request tracks to download them." />
