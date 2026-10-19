@@ -1,22 +1,23 @@
 import { useRef } from "react"
-import { useNavigate, useParams } from "react-router-dom"
-import { Play, Clock, Music, ArrowLeft, BookmarkPlus } from "lucide-react"
+import { useParams } from "react-router-dom"
+import { Play, Clock, BookmarkPlus, Check } from "lucide-react"
 import api from "../../services/api"
 import useApi from "../../hooks/useApi"
 import ErrorState from "../../components/states/ErrorState"
 import NotFound from "../../components/states/NotFound"
 import EmptyState from "../../components/states/EmptyState"
 import { DetailsSkeleton } from "../../components/states/Skeletons"
-import Cover from "../../components/Cover"
 import { toast } from "../../stores/useToastStore"
-import { goBack } from "../../utils/navigation"
 import DeleteFromServerButton from "../../components/DeleteFromServerButton"
 import useAudioStore from "../../stores/useAudioStore"
 import { useUserContent, useRemoveFromList } from "../../hooks"
 import AddToListModal from "../../components/modals/AddToListModal"
+import DetailsHero from "../../components/details/DetailsHero"
+import { ActionMenu } from "../../components/details/Menus"
+import { getRole } from "../../utils/auth"
+import Format from "../../utils/format"
 
 export default function AlbumDetailsPage() {
-    const navigate = useNavigate();
     const dialogRef = useRef(null);
     const { id } = useParams();
     const { userContentMap, refresh } = useUserContent();
@@ -25,6 +26,7 @@ export default function AlbumDetailsPage() {
     const { data: album, loading, error, notFound, reload } = useApi(`/albums/${id}`);
     const playAlbum = useAudioStore(state => state.playAlbum);
     const currentTrack = useAudioStore(state => state.currentTrack);
+    const isPlaying = useAudioStore(state => state.isPlaying);
 
     function formatDuration(secs) {
         if (!secs) return "--:--"
@@ -42,7 +44,7 @@ export default function AlbumDetailsPage() {
            .catch(err => toast.error(err, "Could not update your list"))
    }
 
-    if (loading) return <DetailsSkeleton />
+    if (loading) return <DetailsSkeleton square />
     if (notFound) return <NotFound title="Album not found" hint="This album isn't in the library any more. It may have been removed." />
     if (error) return <ErrorState error={error} title="Couldn't load this album" onRetry={reload} showBack />
     if (!album) return null
@@ -54,60 +56,70 @@ export default function AlbumDetailsPage() {
         artist: album.artist,
         thumbnail: album.cover_image_url,
     }))
+    const totalSecs = tracks.reduce((sum, t) => sum + (t.duration_secs ?? 0), 0)
 
     return (
         <div className="flex flex-col gap-8">
-            <button className="btn btn-ghost btn-sm self-start" onClick={() => goBack(navigate)}>
-                <ArrowLeft size={18} strokeWidth={2}/> Back
-            </button>
-            {/* Album Header */}
-            <div className="flex gap-6">
-                <Cover src={album.cover_image_url} alt={album.title} className="w-48 h-48 shrink-0 object-cover rounded-md" />
-                <div className="flex flex-col gap-2 justify-end">
-                    <p className="text-sm opacity-70">Album</p>
-                    <h2 className="text-3xl font-bold">{album.title}</h2>
-                    <p className="opacity-70">{album.artist} · {tracks.length} tracks</p>
-                    <button className="btn btn-primary btn-sm w-fit" onClick={() => playAlbum(queueTracks, 0)} disabled={tracks.length === 0}>
-                        <Play size={16} /> Play
+            <DetailsHero
+                cover={{ src: album.cover_image_url }}
+                square
+                eyebrow="Album"
+                title={album.title}
+                meta={[
+                    album.artist && <span className="font-medium text-base-content">{album.artist}</span>,
+                    `${tracks.length} ${tracks.length === 1 ? "track" : "tracks"}`,
+                    totalSecs > 0 && `${Math.round(totalSecs / 60)} min`,
+                ]}
+                actions={<>
+                    <button className="btn btn-primary btn-lg shadow-glow px-6" onClick={() => playAlbum(queueTracks, 0)} disabled={tracks.length === 0}>
+                        <Play size={18} fill="currentColor"/> Play
                     </button>
-                    <button className="btn btn-outline btn-sm w-fit" onClick={() => dialogRef.current.showModal()}>
-                        <BookmarkPlus size={16} /> {userContent ? "Edit List" : "Add to List"}
+                    <button className="btn border-white/10 bg-white/10 hover:bg-white/15 gap-2 font-medium" onClick={() => dialogRef.current.showModal()}>
+                        {userContent ? <Check size={16} className="text-primary"/> : <BookmarkPlus size={16}/>}
+                        {userContent ? Format.statusLabel(userContent.status, "music_album") : "Add to list"}
                     </button>
-                    <DeleteFromServerButton item={{ id, title: album.title, type: "music_album" }} />
-                </div>
-            </div>
+                    {getRole() === "admin" && <ActionMenu>
+                        <DeleteFromServerButton asMenuItem item={{ id, title: album.title, type: "music_album" }} />
+                    </ActionMenu>}
+                </>}
+            />
 
             {/* Track List */}
-            <div className="flex flex-col">
-                <div className="flex items-center gap-3 px-3 py-2 text-xs opacity-50 border-b border-base-300">
-                    <span className="w-8 text-right">#</span>
-                    <span className="flex-1">Title</span>
-                    <Clock size={12} />
-                </div>
-                {tracks.length === 0 && (
-                    <div className="mt-2">
-                        <EmptyState compact title="No tracks yet" hint="Tracks show up here once they've downloaded." />
+            {tracks.length === 0 ? (
+                <EmptyState compact title="No tracks yet" hint="Tracks show up here once they've downloaded." />
+            ) : (
+                <section className="surface p-1.5 sm:p-2 animate-fade-up">
+                    <div className="flex items-center gap-4 px-3 py-2 text-xs uppercase tracking-wider text-base-content/40 border-b border-white/5 mb-1">
+                        <span className="w-8 text-right">#</span>
+                        <span className="flex-1">Title</span>
+                        <Clock size={14} />
                     </div>
-                )}
-                {tracks.map((track, i) => (
-                    <div
-                        key={track.media_item_id}
-                        className="flex items-center gap-3 px-3 py-3 hover:bg-base-200 rounded-lg cursor-pointer group"
-                        onClick={() => playAlbum(queueTracks, i)}
-                    >
-                        <span className="w-8 text-right text-sm opacity-50 group-hover:hidden">
-                            {currentTrack?.id === track.media_item_id 
-                                ? <Music size={14} className="text-primary ml-auto" />
-                                : track.track_number ?? i + 1}
-                        </span>
-                        <span className="w-8 text-right hidden group-hover:block text-primary">
-                            <Play size={14} />
-                        </span>
-                        <span className="flex-1 text-sm font-medium">{track.title}</span>
-                        <span className="text-xs opacity-50">{formatDuration(track.duration_secs)}</span>
-                    </div>
-                ))}
-            </div>
+                    <ol className="flex flex-col gap-0.5">
+                        {tracks.map((track, i) => {
+                            const playing = currentTrack?.id === track.media_item_id
+                            return <li key={track.media_item_id}>
+                                <button
+                                    className={`group w-full flex items-center gap-4 px-3 py-2.5 rounded-field text-left transition-colors hover:bg-white/5
+                                        ${playing ? "bg-primary/8" : ""}`}
+                                    onClick={() => playAlbum(queueTracks, i)}
+                                    aria-label={`Play ${track.title}`}
+                                >
+                                    <span className="w-8 flex justify-end text-sm tabular-nums text-base-content/40">
+                                        {playing
+                                            ? <Equalizer animate={isPlaying}/>
+                                            : <>
+                                                <span className="group-hover:hidden">{track.track_number ?? i + 1}</span>
+                                                <Play size={14} fill="currentColor" className="hidden group-hover:block text-primary"/>
+                                            </>}
+                                    </span>
+                                    <span className={`flex-1 min-w-0 truncate text-sm font-medium ${playing ? "text-primary" : ""}`}>{track.title}</span>
+                                    <span className="text-xs tabular-nums text-base-content/45">{formatDuration(track.duration_secs)}</span>
+                                </button>
+                            </li>
+                        })}
+                    </ol>
+                </section>
+            )}
 
             <AddToListModal
                 dialogRef={dialogRef}
@@ -118,4 +130,16 @@ export default function AlbumDetailsPage() {
             />
         </div>
     )
+}
+
+/**
+ * Three bouncing bars marking the track that's playing
+ * @param {boolean} animate bounces while playing, still when paused
+ */
+function Equalizer({ animate }) {
+    return <span className="flex items-end gap-[2px] h-3.5 text-primary" aria-label="Now playing">
+        {[0, 0.2, 0.4].map(delay => (
+            <span key={delay} className={`w-[3px] rounded-sm bg-current ${animate ? "animate-eq" : "h-1.5"}`} style={{ animationDelay: `${delay}s` }}></span>
+        ))}
+    </span>
 }

@@ -25,7 +25,10 @@ function App() {
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route element={<ProtectedRoute><PageBoundary><Outlet/></PageBoundary></ProtectedRoute>}>
+          {/* viewers fill the screen, without the sidebar or tab bar */}
           <Route path='/watch/:type/:id' element={<PlayerPage/>} />
+          <Route path="/light-novels/:id/volumes/:volumeId/read" element={<LightNovelReader/>} />
+          <Route path='/manga/:id/chapters/:chapterId/read' element={<MangaReader/>} />
         </Route>
         <Route element={<ProtectedRoute><Layout><PageBoundary><Outlet /></PageBoundary></Layout></ProtectedRoute>}>
           <Route path="/" element={<DashboardPage/>} />
@@ -39,8 +42,6 @@ function App() {
           <Route path="/light-novels/:id" element={<LightNovelDetailsPage />} />
           <Route path="/manga/:id" element={<MangaDetailsPage/>}/>
           <Route path='/movies/:id' element={<MovieDetailsPage/>}/>
-          <Route path="/light-novels/:id/volumes/:volumeId/read" element={<LightNovelReader/>} />
-          <Route path='manga/:id/chapters/:chapterId/read' element={<MangaReader/>} />
           <Route path="*" element={<NotFound/>} />
         </Route>
       </Routes>

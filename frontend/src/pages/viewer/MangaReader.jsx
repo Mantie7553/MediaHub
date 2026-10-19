@@ -1,12 +1,13 @@
 import { useRef, useEffect } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom"
-import { ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react"
+import { ChevronLeft, ChevronRight } from "lucide-react"
 import { useMediaItem, usePages } from "../../hooks";
 import ErrorState from "../../components/states/ErrorState";
 import NotFound from "../../components/states/NotFound";
 import { PageSkeleton, ReaderSkeleton } from "../../components/states/Skeletons";
 import api from "../../services/api";
 import { exitViewer, switchViewer } from "../../utils/navigation";
+import ReaderToolbar from "../../components/ReaderToolbar";
 
 export default function MangaReader() {
     const { id, chapterId } = useParams();
@@ -20,10 +21,10 @@ export default function MangaReader() {
     const chapters = item.metadata?.chapters ?? [];
     const chapter = chapters.find(c => c.id === chapterId);
     if (!chapter) return <NotFound title="Chapter not found" hint="This chapter isn't part of the manga any more. Pick another from the chapter list." />
-    return <MangaReaderInner key={chapterId} id={id} chapterId={chapterId} chapter={chapter} chapters={chapters} />
+    return <MangaReaderInner key={chapterId} id={id} chapterId={chapterId} chapter={chapter} chapters={chapters} title={item.title} />
 }
 
-function MangaReaderInner({ id, chapterId, chapter, chapters }) {
+function MangaReaderInner({ id, chapterId, chapter, chapters, title }) {
     const navigate = useNavigate();
     const location = useLocation();
     const initialPage = chapter?.last_page_read ?? 0;
@@ -94,32 +95,25 @@ function MangaReaderInner({ id, chapterId, chapter, chapters }) {
     const progressPct = totalPages ? Math.round(((currentPage + 1) / totalPages) * 100) : 0;
 
     return (
-        <div className="flex flex-col">
-            <div className="sticky top-0 z-10 bg-base-200 border-b border-base-300 w-full">
-                <div className="max-w-2xl mx-auto px-6 py-2">
-                    <div className="flex items-center gap-3">
-                        <button onClick={() => exitViewer(navigate, location, `/manga/${id}`)} className="btn btn-sm shrink-0">
-                            <ArrowLeft size={16} strokeWidth={3}/>
-                            To Chapters
-                        </button>
-                        <div className="flex-1 flex flex-col gap-1">
-                            <p className={`text-xs text-center ${currentPage !== totalPages - 1 ? "text-neutral-content" : ""}`}>
-                                {currentPage + 1} / <strong>{totalPages}</strong>
-                            </p>
-                            <progress className="progress progress-primary w-full" value={progressPct} max="100"/>
-                        </div>
-                        <div className="flex gap-2 shrink-0">
-                            <button onClick={handlePageDown} disabled={currentPage === 0 && !prevChapter} className="btn btn-sm">
-                                <ChevronLeft size={16} strokeWidth={4}/>
-                            </button>
-                            <button onClick={handlePageUp} disabled={currentPage >= totalPages - 1 && !nextChapter} className="btn btn-sm">
-                                <ChevronRight size={16} strokeWidth={4}/>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div className="flex flex-col items-center">
+        <div className="flex flex-col min-h-dvh bg-black/30">
+            <ReaderToolbar
+                onBack={() => exitViewer(navigate, location, `/manga/${id}`)}
+                backLabel="Chapters"
+                title={title}
+                subtitle={chapter.title ?? `Chapter ${chapter.chapter_number}`}
+                progress={progressPct / 100}
+                progressLabel={totalPages ? `Page ${currentPage + 1} of ${totalPages}` : null}
+            >
+                <button onClick={handlePageDown} disabled={currentPage === 0 && !prevChapter} className="btn btn-ghost btn-sm btn-square"
+                    aria-label={currentPage === 0 ? "Previous chapter" : "Previous page"}>
+                    <ChevronLeft size={20}/>
+                </button>
+                <button onClick={handlePageUp} disabled={currentPage >= totalPages - 1 && !nextChapter} className="btn btn-ghost btn-sm btn-square"
+                    aria-label={currentPage >= totalPages - 1 ? "Next chapter" : "Next page"}>
+                    <ChevronRight size={20}/>
+                </button>
+            </ReaderToolbar>
+            <div className="flex-1 flex flex-col items-center">
                 {/* the toolbar stays while a page loads or fails, so the reader can still move on */}
                 {error ? (
                     <div className="max-w-xl w-full mt-8 px-4">
@@ -127,10 +121,11 @@ function MangaReaderInner({ id, chapterId, chapter, chapters }) {
                     </div>
                 ) : loading ? (
                     <PageSkeleton />
-                ) : <div className="flex-1 overflow-hidden relative">
-                    <img src={imageSrc} alt={`Page ${currentPage + 1}`} className="max-h-[calc(100vh-5rem)] max-w-full object-contain mt-2"/>
-                    <div className="absolute inset-y-0 left-0 w-1/2 cursor-pointer hover:bg-black/10" onClick={handlePageDown}></div>
-                    <div className="absolute inset-y-0 right-0 w-1/2 cursor-pointer hover:bg-black/10" onClick={handlePageUp}></div>
+                ) : <div className="relative select-none">
+                    <img src={imageSrc} alt={`Page ${currentPage + 1}`} className="block max-h-[calc(100dvh-3.75rem-env(safe-area-inset-top))] max-w-full object-contain shadow-raised"/>
+                    {/* tap the left or right half to turn the page */}
+                    <div className="absolute inset-y-0 left-0 w-1/2 cursor-w-resize" onClick={handlePageDown}></div>
+                    <div className="absolute inset-y-0 right-0 w-1/2 cursor-e-resize" onClick={handlePageUp}></div>
                 </div>}
             </div>
         </div>

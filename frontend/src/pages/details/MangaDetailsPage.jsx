@@ -1,18 +1,19 @@
 import { useState, useEffect } from "react";
-import { NavLink, useNavigate, useParams } from "react-router-dom";
-import { mangaBadge, mediaStatusBadge } from "../../utils/status";
+import { useNavigate, useParams } from "react-router-dom";
+import { mangaBadge } from "../../utils/status";
 import ErrorState from "../../components/states/ErrorState";
 import NotFound from "../../components/states/NotFound";
 import EmptyState from "../../components/states/EmptyState";
 import { DetailsSkeleton } from "../../components/states/Skeletons";
-import Cover from "../../components/Cover";
 import { toast } from "../../stores/useToastStore";
-import { goBack } from "../../utils/navigation";
+import { openViewer } from "../../utils/navigation";
 import { useMediaItem, useUserContent, useRemoveFromList } from "../../hooks";
 import DeleteFromServerButton from "../../components/DeleteFromServerButton";
 import api from "../../services/api";
-import { ArrowLeft, Check } from "lucide-react";
-import Format from "../../utils/format";
+import { BookOpen, CheckCheck, Undo2 } from "lucide-react";
+import DetailsHero, { HeroChip } from "../../components/details/DetailsHero";
+import { ActionMenu, ActionMenuItem, ListStatusMenu } from "../../components/details/Menus";
+import ItemRow, { ItemList } from "../../components/details/ItemRow";
 
 export default function MangaDetailsPage() {
     const navigate = useNavigate();
@@ -54,7 +55,7 @@ export default function MangaDetailsPage() {
                 updateStatus(status);
             })
             .catch(err => toast.error(err, "Could not update the chapter"));
-        api.put(`/manga/${id}/chapters/${chapter.id}/progress`, 
+        api.put(`/manga/${id}/chapters/${chapter.id}/progress`,
             { last_page_read: read ? chapter.page_count -1 : 0, completed: read })
         .then(() => setPageProgress(prev => ({ ...prev, [chapter.id]: read ? (chapter.page_count - 1) : 0 })))
         // the read mark above already reports a failure
@@ -81,88 +82,76 @@ export default function MangaDetailsPage() {
     if (error) return <ErrorState error={error} title="Couldn't load this manga" onRetry={refetch} showBack />
     if (!manga) return null
 
+    const chapters = manga.metadata.chapters ?? [];
+    const read = chapter => openViewer(navigate, `/manga/${id}/chapters/${chapter.id}/read`);
+    const chapterName = chapter => chapter.title ?? `Chapter ${chapter.chapter_number}`;
+    // the first chapter not read yet is where the user is up to
+    const nextChapter = chapters.find(c => !readChapters.has(c.id));
+    const nextStarted = nextChapter && (pageProgress[nextChapter.id] ?? 0) > 0;
+
     return (
-        <div className="flex flex-col">
-            <button className="btn btn-ghost btn-sm self-start" onClick={() => goBack(navigate)}>
-                <ArrowLeft size={18} strokeWidth={2}/> Back
-            </button>
-            <div className="flex gap-6">
-                <Cover src={manga.cover_image_url} source={manga.external_source} alt={manga.title} className="w-48 h-64 shrink-0 object-cover rounded-md" />
-                <div className="flex flex-col gap-3">
-                    <h2 className="text-2xl font-bold">{manga.title}</h2>
-                    <span className={`badge ${mangaBadge(manga.metadata.status)}`}>{manga.metadata.status}</span>
-                    <span className="text-sm text-neutral-content">{manga.metadata.total_chapters ?? "N/A"} chapters</span>
-                    <div className="flex flex-wrap gap-1">
-                        {(manga.metadata.genres ?? []).map((genre, i) => (
-                            <span key={`${manga.title}-${i}`} className="badge">{genre}</span>
-                        ))}
-                    </div>
-                    {manga.description && (
-                        <p className="text-sm max-w-xl">{manga.description}</p>
-                    )}
-                    <div className="flex flex-wrap items-center gap-2">
-                        <div className="dropdown">
-                            <div tabIndex={0} className={`badge ${mediaStatusBadge(userEntry?.status)} cursor-pointer`}>
-                                {Format.statusLabel(userEntry?.status, manga.type)}
-                            </div>
-                            <ul tabIndex={0} className="dropdown-content menu bg-base-200 rounded-box z-10 p-2 shadow gap-1">
-                                {["current", "completed", "dropped", "planned"].map(option => (
-                                    <li key={option}>
-                                        <button onClick={() => { updateStatus(option); document.activeElement.blur(); }}>
-                                            {Format.statusLabel(option, manga.type)}
-                                        </button>
-                                    </li>
-                                ))}
-                                {userEntry && (
-                                    <li className="border-t border-base-300 mt-1 pt-1">
-                                        <button className="text-error" onClick={() => { removeEntry(); document.activeElement.blur(); }}>
-                                            Remove from list
-                                        </button>
-                                    </li>
-                                )}
-                            </ul>
-                        </div>
-                        <button className="btn btn-outline btn-sm" onClick={() => markAll(true)}>Mark all read</button>
-                        <button className="btn btn-outline btn-sm" onClick={() => markAll(false)}>Mark all unread</button>
-                        <DeleteFromServerButton item={{ id, title: manga.title, type: manga.type }} />
-                    </div>
-                </div>
-            </div>
+        <div className="flex flex-col gap-8">
+            <DetailsHero
+                cover={{ src: manga.cover_image_url, source: manga.external_source }}
+                eyebrow="Manga"
+                title={manga.title}
+                badges={manga.metadata.status && <HeroChip label={manga.metadata.status} tone={mangaBadge(manga.metadata.status)?.replace("badge-", "")}/>}
+                meta={[
+                    manga.metadata.total_chapters && `${manga.metadata.total_chapters} chapters`,
+                    chapters.length > 0 && `${chapters.length} downloaded`,
+                ]}
+                genres={manga.metadata.genres ?? []}
+                description={manga.description}
+                actions={<>
+                    {chapters.length > 0 && <button className="btn btn-primary btn-lg shadow-glow px-6" onClick={() => read(nextChapter ?? chapters[0])}>
+                        <BookOpen size={18}/>
+                        {nextChapter
+                            ? `${nextStarted ? "Continue" : readChapters.size > 0 ? "Read" : "Start reading"} Ch. ${nextChapter.chapter_number}`
+                            : "Read again"}
+                    </button>}
+                    <ListStatusMenu
+                        status={userEntry?.status}
+                        type={manga.type}
+                        options={["current", "completed", "dropped", "planned"]}
+                        onSelect={updateStatus}
+                        onRemove={removeEntry}
+                    />
+                    <ActionMenu>
+                        <ActionMenuItem icon={CheckCheck} label="Mark all read" onClick={() => markAll(true)}/>
+                        <ActionMenuItem icon={Undo2} label="Mark all unread" onClick={() => markAll(false)}/>
+                        <DeleteFromServerButton asMenuItem item={{ id, title: manga.title, type: manga.type }} />
+                    </ActionMenu>
+                </>}
+            />
 
-            {!manga.metadata.chapters?.length && (
-                <div className="mt-4">
-                    <EmptyState compact title="No chapters yet" hint="Chapters show up here once they've downloaded." />
-                </div>
+            {chapters.length === 0 ? (
+                <EmptyState compact title="No chapters yet" hint="Chapters show up here once they've downloaded." />
+            ) : (
+                <ItemList title="Chapters">
+                    {chapters.map(chapter => {
+                        const done = readChapters.has(chapter.id);
+                        const { progress, label } = chapterProgress(pageProgress[chapter.id] ?? 0, chapter.page_count, done);
+                        return <ItemRow
+                            key={chapter.id}
+                            checked={done}
+                            onToggle={() => toggleChapter(chapter)}
+                            toggleLabel={`Mark ${chapterName(chapter)} ${done ? "unread" : "read"}`}
+                            number={chapter.chapter_number}
+                            title={chapterName(chapter)}
+                            progress={progress}
+                            progressLabel={label}
+                            current={nextChapter?.id === chapter.id}
+                            onOpen={() => read(chapter)}
+                            openLabel={`Read ${chapterName(chapter)}`}
+                            openIcon={BookOpen}
+                        />
+                    })}
+                </ItemList>
             )}
-
-            {manga.metadata.chapters?.length > 0 && <>
-                <h3 className="font-bold text-lg mt-4">Chapters</h3>
-                <div className="flex flex-col gap-2 mt-2">
-                    {manga.metadata.chapters.map(chapter => (
-                        <div key={chapter.id} className="flex items-center gap-3 p-3 rounded-lg bg-base-200">
-                            <button
-                                className={`btn btn-circle btn-xs ${readChapters.has(chapter.id) ? "btn-primary" : "btn-outline"}`}
-                                onClick={() => toggleChapter(chapter)}
-                            >
-                                <Check size={10} strokeWidth={3} />
-                            </button>
-                            <NavLink to={`/manga/${id}/chapters/${chapter.id}/read`} state={{ fromDetails: true }} className="text-sm w-24 shrink-0">
-                                {chapter.title ?? `Chapter ${chapter.chapter_number}`}
-                            </NavLink>
-                            {chapter.page_count > 0 && (
-                                <ChapterProgress
-                                    page={pageProgress[chapter.id] ?? 0}
-                                    pageCount={chapter.page_count}
-                                    read={readChapters.has(chapter.id)}
-                                />
-                            )}
-                        </div>
-                    ))}
-                </div>
-            </>}
         </div>
     )
 }
+
 /**
  * How far into a chapter the user is. Page 0 is saved both for "never opened" and "marked
  * unread" (and for closing the reader on the first page), so a chapter only counts as started
@@ -170,19 +159,11 @@ export default function MangaDetailsPage() {
  * @param {number} page the last page read, from 0
  * @param {number} pageCount pages in the chapter
  * @param {boolean} read marked as read
+ * @returns progress (0 to 1, null when not started or done) and label
  */
-function ChapterProgress({ page, pageCount, read }) {
-    const started = read || page > 0;
-    const shown = read ? pageCount : page + 1;
-
-    return <div className="relative flex-1 max-w-48">
-        <progress
-            className="progress progress-primary w-full"
-            value={started ? shown : 0}
-            max={pageCount}
-        />
-        <span className="absolute inset-0 flex items-center justify-center text-xs font-bold">
-            {started ? `${shown} / ${pageCount}` : `${pageCount} pages`}
-        </span>
-    </div>
+function chapterProgress(page, pageCount, read) {
+    if (!pageCount) return { progress: null, label: read ? "Read" : null };
+    if (read) return { progress: null, label: "Read" };
+    if (page > 0) return { progress: (page + 1) / pageCount, label: `${page + 1} / ${pageCount}` };
+    return { progress: null, label: `${pageCount} pages` };
 }
