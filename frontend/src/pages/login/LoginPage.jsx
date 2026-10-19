@@ -91,10 +91,15 @@ export default function Login() {
     }
 
     return <div className="relative isolate min-h-dvh flex items-center justify-center px-4 py-10 pt-[max(2.5rem,env(safe-area-inset-top))] overflow-hidden">
-        {/* slow drifting glows in the brand colors */}
-        <div className="pointer-events-none absolute inset-0 -z-10" aria-hidden="true">
-            <div className="absolute -top-48 -left-40 size-[34rem] rounded-full bg-secondary/30 blur-3xl animate-blob"></div>
-            <div className="absolute -bottom-48 -right-40 size-[32rem] rounded-full bg-primary/25 blur-3xl animate-blob [animation-delay:-9s]"></div>
+        {/* slow drifting glows that mirror the logo: orange from the top left, purple along the bottom */}
+        <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden" aria-hidden="true">
+            <div className="absolute inset-0 bg-linear-135 from-primary/12 via-transparent to-secondary/18"></div>
+            <div className="absolute -top-56 -left-48 size-[40rem] rounded-full bg-primary/35 blur-3xl animate-blob"></div>
+            <div className="absolute top-[18%] left-[22%] size-[22rem] rounded-full bg-[#c2410c]/30 blur-3xl animate-blob-alt [animation-duration:26s]"></div>
+            <div className="absolute -top-24 right-[8%] size-[18rem] rounded-full bg-accent/15 blur-3xl animate-blob-alt [animation-duration:30s] [animation-direction:reverse]"></div>
+            <div className="absolute -bottom-56 -left-40 size-[34rem] rounded-full bg-secondary/35 blur-3xl animate-blob-alt [animation-duration:22s] [animation-delay:-7s]"></div>
+            <div className="absolute -bottom-64 -right-48 size-[42rem] rounded-full bg-secondary/40 blur-3xl animate-blob [animation-duration:28s] [animation-delay:-12s]"></div>
+            <div className="absolute top-[45%] -right-24 size-[20rem] rounded-full bg-[#a855f7]/20 blur-3xl animate-blob [animation-duration:20s] [animation-direction:reverse]"></div>
         </div>
 
         <div className="w-full max-w-md animate-fade-up">

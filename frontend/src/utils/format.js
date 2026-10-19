@@ -16,6 +16,23 @@ export default class Format {
     }
 
     /**
+     * Format Dates compactly as -- Oct 18, 9:38 PM, with the year only when it isn't this year
+     * @param {any} date the date to format
+     * @returns a date in the short display format
+     */
+    static shortDateTime(date) {
+        const d = new Date(date);
+        const thisYear = d.getFullYear() === new Date().getFullYear();
+        return new Intl.DateTimeFormat('en-US', {
+            month: 'short',
+            day: 'numeric',
+            ...(thisYear ? {} : { year: 'numeric' }),
+            hour: 'numeric',
+            minute: '2-digit',
+        }).format(d);
+    }
+
+    /**
      * Format Dates as -- YYYY Month, dd
      * @param {any} date the date to format
      * @returns a date in the proper display format

@@ -45,6 +45,7 @@
   --animate-toast-in: toast-in 0.35s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
   --animate-eq: eq 0.9s ease-in-out infinite alternate;
   --animate-blob: blob 18s ease-in-out infinite;
+  --animate-blob-alt: blob-alt 24s ease-in-out infinite;
 
   @keyframes fade-up {
     from { opacity: 0; transform: translateY(8px); }
@@ -60,8 +61,15 @@
   }
   @keyframes blob {
     0%, 100% { transform: translate(0, 0) scale(1); }
-    33% { transform: translate(4rem, 3rem) scale(1.1); }
-    66% { transform: translate(-2rem, 5rem) scale(0.95); }
+    25% { transform: translate(9rem, 4rem) scale(1.15); }
+    50% { transform: translate(3rem, 10rem) scale(0.9); }
+    75% { transform: translate(-5rem, 5rem) scale(1.08); }
+  }
+  @keyframes blob-alt {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    30% { transform: translate(-8rem, -5rem) scale(1.2); }
+    60% { transform: translate(6rem, -9rem) scale(0.85); }
+    80% { transform: translate(4rem, 3rem) scale(1.05); }
   }
   @keyframes eq {
     from { height: 20%; }

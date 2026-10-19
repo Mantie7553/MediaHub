@@ -62,7 +62,7 @@ export default function InvitesSection() {
                         </div> },
                         { key: "note", header: "Note", hideOnMobile: true, className: "max-w-48 truncate text-base-content/70", render: (val) => val ?? "" },
                         { key: "status", header: "Status", render: (val) => <StatusPill label={val} tone={STATUS_TONE[val]}/> },
-                        { key: "expires_at", header: "Expires", render: (val) => <span className="text-base-content/60 whitespace-nowrap">{Format.dateTime(val)}</span> },
+                        { key: "expires_at", header: "Expires", render: (val) => <span className="text-base-content/60 whitespace-nowrap" title={Format.dateTime(val)}>{Format.shortDateTime(val)}</span> },
                         { key: "used_by", header: "Used by", render: (val) => val ?? <span className="text-base-content/30">—</span> },
                         { key: "created_by", header: "Created by", render: (val) => <span className="text-base-content/60">{val ?? ""}</span> },
                         { key: "actions", header: "", render: (_, invite) => invite.status === "active" && (

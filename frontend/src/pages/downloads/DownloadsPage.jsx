@@ -64,19 +64,21 @@ export default function DownloadsPage() {
                     items={sortedRequests}
                     columns={[
                         { key: "media_title", header: "Title", primary: true, render: (val, item) => <div className="min-w-0">
-                            <p className="font-medium truncate max-w-xs">{val || item.title_override || "Unknown"}</p>
+                            <p className="font-medium truncate max-w-56">{val || item.title_override || "Unknown"}</p>
                             {item.requested_by && <p className="text-xs text-base-content/45">by {item.requested_by}</p>}
                         </div> },
                         { key: "status", header: "Status", render: (val) => <StatusPill label={val} tone={statusBadge(val).replace("badge-", "")}/> },
-                        { key: "requested_at", header: "Requested", render: (val) => <span className="text-base-content/60 whitespace-nowrap">{Format.dateTime(val)}</span> },
+                        { key: "requested_at", header: "Requested", render: (val) => <span className="text-base-content/60 whitespace-nowrap" title={Format.dateTime(val)}>{Format.shortDateTime(val)}</span> },
                         { key: "actions", header: "", render: (_, item) => item.status === "pending" && (
                             <div className="inline-flex gap-1.5">
+                                {/* in the table Reject is just an X, the cards have room for the word */}
                                 <button
-                                    className="btn btn-sm btn-ghost text-error hover:bg-error/10"
+                                    className="btn btn-sm btn-ghost text-error hover:bg-error/10 @2xl:btn-square"
                                     disabled={busyId === item.id}
                                     onClick={() => { setSelectedRequest(item); modalRef.current.showModal() }}
+                                    aria-label="Reject"
                                 >
-                                    <X size={15}/> Reject
+                                    <X size={15}/> <span className="@2xl:hidden">Reject</span>
                                 </button>
                                 <button
                                     className="btn btn-sm btn-primary"
@@ -105,7 +107,7 @@ export default function DownloadsPage() {
                     items={jobs}
                     rowKey={job => job.id ?? `${job.media_title}-${job.handler}`}
                     columns={[
-                        { key: "media_title", header: "Title", primary: true, render: (val) => <p className="font-medium truncate max-w-xs">{val}</p> },
+                        { key: "media_title", header: "Title", primary: true, render: (val) => <p className="font-medium truncate max-w-56">{val}</p> },
                         { key: "handler", header: "Handler", render: (val) => <span className="text-base-content/60 capitalize">{val}</span> },
                         { key: "progress_pct", header: "Progress", render: (val) => (
                             <div className="flex items-center justify-end md:justify-start gap-2.5">

@@ -1,6 +1,7 @@
 /**
- * Rows of records: a table on wider screens, a stack of cards on phones where a table would
- * need sideways scrolling
+ * Rows of records: a table when there is room, a stack of cards when there isn't (phones, narrow
+ * panels). Room is measured on the table's own container, not the window, so a half width
+ * panel on a wide screen gets cards too. Cells can use @2xl: variants to adapt the same way
  * @param {object[]} columns { key, header, render?(value, item), primary?, hideOnMobile?, className? }.
  *  The primary column is the card's title on phones; the "actions" key sits at the card's foot
  * @param {object[]} items the records
@@ -12,8 +13,10 @@ export default function DataTable({ columns, items, rowKey = item => item.id }) 
     const actions = columns.find(col => col.key === "actions")
     const details = columns.filter(col => col !== primary && col !== actions && !col.hideOnMobile)
 
-    return <>
-        <table className="hidden md:table w-full text-sm">
+    return <div className="@container">
+        {/* scrolls inside the panel rather than spilling out if a cell is still too wide */}
+        <div className="hidden @2xl:block overflow-x-auto">
+        <table className="w-full text-sm">
             <thead>
                 <tr className="text-left text-xs uppercase tracking-wider text-base-content/45">
                     {columns.map(col => <th key={col.key} className={`font-medium px-3 pb-3 ${col.key === "actions" ? "text-right" : ""}`}>{col.header}</th>)}
@@ -31,8 +34,9 @@ export default function DataTable({ columns, items, rowKey = item => item.id }) 
                 ))}
             </tbody>
         </table>
+        </div>
 
-        <ul className="md:hidden flex flex-col gap-2">
+        <ul className="@2xl:hidden flex flex-col gap-2">
             {items.map(item => (
                 <li key={rowKey(item)} className="rounded-field bg-white/[0.03] ring-1 ring-white/5 p-3.5 flex flex-col gap-2.5">
                     <div className="font-medium min-w-0">{cell(primary, item)}</div>
@@ -46,7 +50,7 @@ export default function DataTable({ columns, items, rowKey = item => item.id }) 
                 </li>
             ))}
         </ul>
-    </>
+    </div>
 }
 
 /**
