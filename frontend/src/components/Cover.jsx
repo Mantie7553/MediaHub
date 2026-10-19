@@ -10,10 +10,12 @@ import { ImageOff } from "lucide-react"
  */
 export default function Cover({ src, source, alt = "", className = "" }) {
     const [failedSrc, setFailedSrc] = useState(null)
+    // fades the image in once it has loaded instead of painting it in line by line
+    const [loadedSrc, setLoadedSrc] = useState(null)
 
     if (!src || failedSrc === src) {
-        return <div className={`${className} bg-base-300 flex items-center justify-center`} role="img" aria-label={alt || "No cover"}>
-            <ImageOff size={28} className="text-neutral-content"/>
+        return <div className={`${className} bg-linear-to-br from-base-300 to-neutral/60 flex items-center justify-center`} role="img" aria-label={alt || "No cover"}>
+            <ImageOff size={28} className="text-neutral-content/60"/>
         </div>
     }
 
@@ -22,5 +24,12 @@ export default function Cover({ src, source, alt = "", className = "" }) {
         ? `/api/proxy/cover?url=${encodeURIComponent(src)}`
         : src
 
-    return <img src={url} alt={alt} loading="lazy" className={className} onError={() => setFailedSrc(src)}/>
+    return <img
+        src={url}
+        alt={alt}
+        loading="lazy"
+        className={`${className} transition-opacity duration-500 ${loadedSrc === src ? "opacity-100" : "opacity-0"}`}
+        onLoad={() => setLoadedSrc(src)}
+        onError={() => setFailedSrc(src)}
+    />
 }

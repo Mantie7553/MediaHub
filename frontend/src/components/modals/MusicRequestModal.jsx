@@ -35,7 +35,7 @@ export default function MusicRequestModal({dialogRef, track, onConfirm}) {
                 />
             </section>
             <section className="flex gap-2 justify-end">
-                <button className="btn btn-secondary" onClick={() => dialogRef.current.close()}>Cancel</button>
+                <button className="btn btn-ghost" onClick={() => dialogRef.current.close()}>Cancel</button>
                 <button className="btn btn-primary" onClick={handleConfirm}>Confirm</button>
             </section>
         </div>

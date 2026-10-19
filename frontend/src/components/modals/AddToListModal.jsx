@@ -40,7 +40,7 @@ export default function AddToListModal({item, onConfirm, dialogRef, initialValue
                         <button
                             key={option}
                             type="button"
-                            className={`btn btn-sm ${option === status ? "btn-primary" : "btn-outline"}`}
+                            className={`btn btn-sm ${option === status ? "btn-primary" : "btn-ghost bg-white/5 hover:bg-white/10"}`}
                             onClick={() => setStatus(option)}
                         >
                             {Format.statusLabel(option, item.type ?? item.media_type)}
@@ -60,7 +60,7 @@ export default function AddToListModal({item, onConfirm, dialogRef, initialValue
             </section>
             <section className="flex gap-2 pt-2 pl-4">
                 <button className="btn btn-primary" onClick={() => {onConfirm({ status, score, progress}); dialogRef.current.close()}}>Confirm</button>
-                <button className="btn btn-secondary btn-outline" onClick={() => dialogRef.current.close()}>Cancel</button>
+                <button className="btn btn-ghost" onClick={() => dialogRef.current.close()}>Cancel</button>
                 {initialValues && onRemove && (
                     <button className="btn btn-ghost text-error ml-auto" onClick={() => { dialogRef.current.close(); onRemove(); }}>
                         Remove from list
@@ -68,7 +68,7 @@ export default function AddToListModal({item, onConfirm, dialogRef, initialValue
                 )}
             </section>
             {onDelete && (
-                <section className="border-t border-base-300 pt-3 pl-4">
+                <section className="border-t border-white/5 pt-3 pl-4">
                     <button className="link link-error text-sm" onClick={() => { dialogRef.current.close(); onDelete(); }}>
                         Delete from server…
                     </button>

@@ -1,6 +1,7 @@
 import { Card } from "../cards";
 import { CardGridSkeleton } from "../states/Skeletons";
 import EmptyState from "../states/EmptyState";
+import SectionHeader from "./SectionHeader";
 
 /**
  * A wrapping grid of cards
@@ -11,19 +12,19 @@ import EmptyState from "../states/EmptyState";
  * @param {string} emptyHint what the user can do about it
  */
 export default function ContentGrid({items = [], heading, showActions=false, userContentMap={}, onListChange, loading=false, emptyText, emptyHint}) {
-    if (loading) return <div className="flex flex-col gap-2">
-        {heading && <h2 className="font-bold">{heading}</h2>}
+    if (loading) return <section>
+        {heading && <SectionHeader title={heading}/>}
         <CardGridSkeleton/>
-    </div>
+    </section>
 
     if (items.length === 0) {
         return emptyText ? <EmptyState compact title={emptyText} hint={emptyHint}/> : null
     }
 
-    return <div>
-        {heading && <h2 className="font-bold mb-2">{heading}</h2>}
-        <ul className="flex flex-wrap gap-4">
-            {items.map(item => <Card key={item.id ?? item.external_id} item={item} showActions={showActions} userContentMap={userContentMap} onListChange={onListChange}/>)}
+    return <section className="animate-fade-up">
+        {heading && <SectionHeader title={heading} count={items.length}/>}
+        <ul className="grid grid-cols-[repeat(auto-fill,minmax(9.5rem,1fr))] md:grid-cols-[repeat(auto-fill,minmax(10.5rem,1fr))] gap-x-4 gap-y-6">
+            {items.map(item => <Card key={item.id ?? item.external_id} item={item} showActions={showActions} userContentMap={userContentMap} onListChange={onListChange} fluid/>)}
         </ul>
-    </div>
+    </section>
 }

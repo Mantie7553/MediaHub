@@ -2,6 +2,8 @@ import { useNavigate } from "react-router-dom"
 import { Card } from "../cards"
 import { CardRowSkeleton } from "../states/Skeletons"
 import EmptyState from "../states/EmptyState"
+import SectionHeader from "./SectionHeader"
+import Shelf from "./Shelf"
 
 /**
  * A list of some content type
@@ -22,22 +24,16 @@ export default function ContentList({items, heading, userContentMap={}, onListCh
         navigate("/library", { state: {items, heading}});
     }
 
-    return <div className="my-4">
-        <div className="flex justify-between items-center mb-2">
-            <h2 className="font-bold">{heading}</h2>
-            { items.length > 8 && <button className="link" onClick={handleShowAll}>Show All</button> }
-        </div>
+    return <section className="animate-fade-up">
+        <SectionHeader title={heading} count={items.length} onShowAll={items.length > 12 ? handleShowAll : undefined}/>
         {items.length === 0 ? (
             <EmptyState compact title={emptyText} hint={emptyHint} action={emptyAction}/>
         ) : (
-            <>
-                <ul className="flex gap-4 overflow-x-auto flex-nowrap">
-                    {items.slice(0,9).map(item => {
-                        return <Card key={item.id} item={item} userContentMap={userContentMap} onListChange={onListChange}/>
-                    })}
-                </ul>
-                <div className="divider"></div>
-            </>
+            <Shelf>
+                {items.slice(0,12).map(item => {
+                    return <Card key={item.id} item={item} userContentMap={userContentMap} onListChange={onListChange}/>
+                })}
+            </Shelf>
         )}
-    </div>
+    </section>
 }

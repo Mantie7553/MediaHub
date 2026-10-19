@@ -1,3 +1,5 @@
+import PageHeader from "../../components/layout/PageHeader";
+import { UserPlus } from "lucide-react";
 import { forwardRef, useRef, useState, useEffect } from "react";
 import api from "../../services/api";
 import useApi from "../../hooks/useApi";
@@ -55,11 +57,12 @@ export default function UserManagementPage() {
 
     return (
         <div className="flex flex-col gap-6">
-            <div className="flex items-center justify-between">
-                <h1>User Management</h1>
-                <button className="btn btn-primary btn-sm" onClick={handleAdd}>Add User</button>
-            </div>
-            <section className="card">
+            <PageHeader
+                title="Users"
+                subtitle="Manage who can sign in and what they're allowed to download."
+                actions={<button className="btn btn-primary" onClick={handleAdd}><UserPlus size={16}/> Add User</button>}
+            />
+            <section className="surface p-5 overflow-x-auto">
                 <Table
                     columns={[
                         { key: "username", header: "Username" },

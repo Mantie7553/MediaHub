@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState } from "react"
 import { Play, Pause, X, Music, SkipBack, SkipForward } from "lucide-react"
 import useAudioStore from "../../stores/useAudioStore"
+import useSidebarStore from "../../stores/useSidebarStore"
 import api from "../../services/api"
 
 export default function AudioPlayer() {
     const { currentTrack, isPlaying, pause, resume, stop, next, prev, queue } = useAudioStore()
+    // the bar starts where the sidebar ends
+    const sidebarCollapsed = useSidebarStore(state => state.collapsed)
     const audioRef = useRef(null)
     const [progress, setProgress] = useState(0)
     const [duration, setDuration] = useState(0)
@@ -90,7 +93,7 @@ export default function AudioPlayer() {
             onError={handleError}
             onPlaying={() => { remintedRef.current = false }}
         />
-        <div className="fixed bottom-0 right-0 left-0 lg:left-48 bg-base-300 border-t border-base-content/10 px-4 py-2 flex items-center gap-4 z-50">
+        <div className={`fixed bottom-0 right-0 left-0 ${sidebarCollapsed ? "lg:left-[4.5rem]" : "lg:left-60"} transition-[left] duration-200 bg-base-300 border-t border-base-content/10 px-4 py-2 flex items-center gap-4 z-50`}>
             {/* Track Info */}
             <div className="flex items-center gap-3 min-w-0 w-64">
                 {currentTrack.thumbnail ? (

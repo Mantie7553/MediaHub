@@ -6,6 +6,8 @@ import Cover from "../Cover"
 import EmptyState from "../states/EmptyState"
 import { CardRowSkeleton } from "../states/Skeletons"
 import { toast } from "../../stores/useToastStore"
+import SectionHeader from "./SectionHeader"
+import Shelf from "./Shelf"
 
 /**
  * A row of album cards with a play button on each
@@ -39,40 +41,47 @@ export default function AlbumList({ albums, heading, loading = false, emptyText 
         }).catch(err => toast.error(err, "Could not play this album"))
     }
 
-    if (loading) return <CardRowSkeleton heading={heading}/>
+    if (loading) return <CardRowSkeleton heading={heading} square/>
 
     if (!albums || albums.length === 0) {
-        return <div className="my-4">
-            <h2 className="font-bold mb-2">{heading}</h2>
+        return <section>
+            <SectionHeader title={heading}/>
             <EmptyState compact title={emptyText} hint={emptyHint} action={emptyAction}/>
-        </div>
+        </section>
     }
 
-    return <div className="my-4">
-        <h2 className="font-bold mb-2">{heading}</h2>
-        <ul className="flex gap-4 overflow-x-auto flex-nowrap">
+    return <section className="animate-fade-up">
+        <SectionHeader title={heading} count={albums.length}/>
+        <Shelf>
             {albums.map(album => (
-                <Link key={album.id} to={`/albums/${album.id}`}>
-                    <li className="card border border-base-300 w-44 shrink-0 bg-base-300 h-full">
-                        <figure className="relative">
-                            <Cover src={album.cover_image_url} alt={album.title} className="w-full h-44 object-cover"/>
+                <li key={album.id} className="group w-40 md:w-44 shrink-0">
+                    <Link to={`/albums/${album.id}`} className="block outline-none">
+                        <div className="relative aspect-square overflow-hidden rounded-box bg-base-300 shadow-card ring-1 ring-white/5
+                            transition-all duration-300 ease-out
+                            group-hover:-translate-y-1 group-hover:shadow-raised group-hover:ring-primary/40
+                            group-focus-within:ring-primary/60">
+                            <Cover src={album.cover_image_url} alt={album.title}
+                                className="size-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.04]"/>
+                            <div className="absolute inset-x-0 bottom-0 h-1/2 bg-linear-to-t from-black/60 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100 pointer-events-none"></div>
                             <button
-                                className="absolute bottom-2 right-2 btn btn-circle btn-sm btn-primary"
+                                className="absolute bottom-3 right-3 grid size-11 place-items-center rounded-full bg-primary text-primary-content shadow-glow
+                                    opacity-0 translate-y-2 transition-all duration-300 group-hover:opacity-100 group-hover:translate-y-0 group-focus-within:opacity-100 group-focus-within:translate-y-0
+                                    hover:scale-110 hover-reveal"
                                 onClick={(e) => handlePlay(e, album.id)}
                                 aria-label={`Play ${album.title}`}
                             >
-                                <Play size={14} />
+                                <Play size={18} fill="currentColor" className="ml-0.5"/>
                             </button>
-                        </figure>
-                        <div className="card-body p-2 gap-1">
-                            <h3 className="card-title text-sm line-clamp-2">{album.title}</h3>
-                            <span className="text-xs opacity-70">{album.artist}</span>
-                            {album.track_count != null && <span className="text-xs opacity-50">{album.track_count} tracks</span>}
                         </div>
-                    </li>
-                </Link>
+                        <div className="mt-2.5 px-0.5">
+                            <h3 className="text-sm font-medium leading-snug line-clamp-2 transition-colors group-hover:text-primary">{album.title}</h3>
+                            <p className="mt-0.5 text-xs text-base-content/50 truncate">
+                                {[album.artist, album.track_count != null ? `${album.track_count} tracks` : null].filter(Boolean).join(" · ")}
+                            </p>
+                        </div>
+                    </Link>
+                </li>
             ))}
-        </ul>
-        <div className="divider"></div>
-    </div>
+        </Shelf>
+    </section>
 }

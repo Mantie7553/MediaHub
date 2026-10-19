@@ -7,6 +7,7 @@ import ContentList from "../../components/layout/ContentList";
 import ContentGrid from "../../components/layout/ContentGrid";
 import useUserContent from "../../hooks/useUserContent";
 import MusicDiscover from "./MusicDiscover";
+import PageHeader from "../../components/layout/PageHeader";
 
 const emptySections = { trending: [], popular: [], top_rated: [] };
 
@@ -43,7 +44,9 @@ export default function Discover() {
     const listProps = { showActions: true, userContentMap, onListChange: refresh, loading: sections.loading };
     const topRatedHeading = activeTab === "manga" ? "Latest Updates" : "Top Rated";
 
-    return <div className="flex flex-col gap-6">
+    return <div className="flex flex-col gap-10">
+        <div>
+        <PageHeader title="Discover" subtitle="Find something new to watch, read or listen to."/>
         {/* Tabs */}
         <div className="tabs tabs-lift">
             <input type="radio" name="tabs" className="tab" aria-label="Anime"
@@ -62,6 +65,7 @@ export default function Discover() {
                 checked={activeTab === "music_track"}
                 onChange={() => handleTabChange("music_track")}
             />
+        </div>
         </div>
 
         {activeTab === "music_track" ? (
