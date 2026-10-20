@@ -15,6 +15,7 @@ import (
 	"github.com/Mantie7553/MediaHub/backend/internal/musicfiles"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/auth"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/logger"
+	"github.com/Mantie7553/MediaHub/backend/internal/platform/cache"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/utils"
 	"github.com/go-chi/chi/v5"
 )
@@ -327,7 +328,7 @@ func (h *Handler) ServeTrack(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "audio/mpeg")
-	http.ServeFile(w, r, filePath)
+	http.ServeFile(w, r, cache.Disk().Local(filePath))
 }
 
 func (h *Handler) ServeCover(w http.ResponseWriter, r *http.Request) {
@@ -343,7 +344,7 @@ func (h *Handler) ServeCover(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	f, err := os.Open(musicfiles.CoverPath(filePath))
+	f, err := os.Open(cache.Disk().Local(musicfiles.CoverPath(filePath)))
 	if os.IsNotExist(err) {
 		utils.Error(w, http.StatusNotFound, "cover not found")
 		return

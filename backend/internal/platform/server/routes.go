@@ -30,6 +30,7 @@ type Server struct {
 	router *chi.Mux
 	db     *sql.DB
 	sync   *sync.Handler
+	search *search.Handler
 }
 
 func New(db *sql.DB) *Server {
@@ -43,10 +44,12 @@ func New(db *sql.DB) *Server {
 
 /*
 Function:	StartBackgroundJobs
-Purpose:	start work that runs on its own schedule (the nightly library sync)
+Purpose:	start work that runs on its own schedule (the nightly library sync), and fetch
+Discover's lists so the first visit doesn't wait for them
 */
 func (s *Server) StartBackgroundJobs() {
 	s.sync.StartSchedule()
+	s.search.WarmDiscovery()
 }
 
 func (s *Server) Start(addr string) error {
@@ -74,6 +77,7 @@ func (s *Server) routes() {
 	musicHandler := music.NewHandler(s.db)
 	requestsHandler := requests.NewHandler(s.db)
 	searchHandler := search.NewHandler(s.db)
+	s.search = searchHandler
 	streamHandler := stream.NewHandler(s.db)
 	syncHandler := sync.NewHandler(s.db)
 	s.sync = syncHandler

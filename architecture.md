@@ -28,6 +28,7 @@ backend/
   internal/
     platform/              Shared infrastructure
       auth/                JWT, refresh tokens, auth middleware, rate limiting
+      cache/               In-memory results from external APIs, local copies of NAS files
       database/            Postgres connection
       logger/              Logging helpers
       server/              Chi router and all route registration (routes.go)
@@ -96,7 +97,7 @@ Routes are defined in `App.jsx` with React Router. `/login` is public. Everythin
 
 ### State
 - **Global:** only audio playback (`useAudioStore`). The current track and queue need to survive page changes, so `AudioPlayer` is rendered outside the routes and reads from the store.
-- **Server data:** fetched per page through the hooks in `src/hooks`, not cached globally.
+- **Server data:** fetched per page through the hooks in `src/hooks`. `useApi` remembers each path's last answer in memory (`services/apiCache.js`, 100 paths), so a page seen before shows its data straight away while it reloads in the background. Signing out clears it.
 - **Auth:** the access and refresh tokens live in `localStorage`. The Axios client in `services/api.js` attaches the access token to every request. On a 401 it tries one refresh, retries the original request, and sends the user to `/login` if the refresh fails.
 
 ## Data Model
@@ -145,6 +146,12 @@ See [`backend/migrations/`](backend/migrations/) for the full schema.
 7. HLS.js starts at the resume position. The player downloads each subtitle file itself, retrying while it's still being extracted, and only adds a `<track>` once the file is there (a `<track>` that fails to load never retries). The **Languages** menu on the player switches subtitles instantly, switches audio by requesting the other audio transcode and resuming at the current time, and can save the current languages as the user's defaults (`PUT /api/me/preferences`).
 8. The player saves progress every 5 seconds and on unmount through `PUT /api/episodes/{id}/progress` or `PUT /api/movies/{id}/progress`. Movie details include the saved position so the page can offer Resume.
 9. The `cleanup` package deletes transcode folders older than 48 hours, checking once an hour.
+
+### Caching
+- **Discover lists** (AniList, MangaDex) are kept in memory for an hour, and for up to a day after that they are still answered straight away while they are fetched again in the background. They are fetched at startup so the first visit doesn't wait. Text searches are kept 15 minutes and YouTube searches an hour (`platform/cache.Memo`).
+- **MangaDex covers** in search results use MangaDex's 512px thumbnails. The cover proxy keeps every cover it fetches on disk and tells browsers to keep it for a week.
+- **NAS files** (manga chapters, light novel EPUBs, music tracks and covers) are read through `cache.Disk().Local(path)`. The first read comes from the NAS while a copy is made on the server's own disk (`CACHE_DIR`, default `/data/.cache/mediahub` in the backend-data volume); later reads use the copy. Copies are named after the file's path, size and modified time, so a changed file is copied again, and the least recently used are deleted past `CACHE_MAX_GB` (default 5, 0 turns it off). Video transcodes stay in `MEDIA_ROOT/temp`.
+- **Browsers** keep manga pages and light novel images for a day. Caddy marks the hashed build files under `/assets` as immutable and makes everything else revalidate, so a deploy shows up on the next load.
 
 ### Library Sync
 Admins can trigger syncs from the backend for each media type (`/api/admin/sync/*`):

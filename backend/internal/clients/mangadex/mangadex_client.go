@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"sync"
 	"time"
 )
 
@@ -93,19 +94,24 @@ func (c *MangaDexClient) Discovery(limit int) (*DiscoveryResult, error) {
     latestParams.Set("limit", limitStr)
     latestParams.Add("order[latestUploadedChapter]", "desc")
 
-    trending, err := c.fetch(trendingParams)
-    if err != nil {
-        return nil, fmt.Errorf("trending: %w", err)
-    }
+    // three independent lists: fetched together, Discover waits for the slowest instead of all three
+    var trending, popular, latest []Manga
+    var trendingErr, popularErr, latestErr error
+    var wg sync.WaitGroup
+    wg.Add(3)
+    go func() { defer wg.Done(); trending, trendingErr = c.fetch(trendingParams) }()
+    go func() { defer wg.Done(); popular, popularErr = c.fetch(popularParams) }()
+    go func() { defer wg.Done(); latest, latestErr = c.fetch(latestParams) }()
+    wg.Wait()
 
-    popular, err := c.fetch(popularParams)
-    if err != nil {
-        return nil, fmt.Errorf("popular: %w", err)
+    if trendingErr != nil {
+        return nil, fmt.Errorf("trending: %w", trendingErr)
     }
-
-    latest, err := c.fetch(latestParams)
-    if err != nil {
-        return nil, fmt.Errorf("latest: %w", err)
+    if popularErr != nil {
+        return nil, fmt.Errorf("popular: %w", popularErr)
+    }
+    if latestErr != nil {
+        return nil, fmt.Errorf("latest: %w", latestErr)
     }
 
     return &DiscoveryResult{
