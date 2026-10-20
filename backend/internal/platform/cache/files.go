@@ -43,6 +43,7 @@ type Files struct {
 	stats   map[string]statEntry // by source path
 	copying map[string]bool      // file names being copied
 	sem     chan struct{}
+	copies  sync.WaitGroup // background copies still running
 }
 
 type fileEntry struct {
@@ -176,6 +177,7 @@ func (f *Files) Local(src string) string {
 		return src
 	}
 	f.copying[name] = true
+	f.copies.Add(1)
 	go f.copy(src, name)
 	return src
 }
@@ -249,6 +251,7 @@ func (f *Files) stat(src string) (os.FileInfo, error) {
 
 // copies src into the cache as name, at most maxCopies at once
 func (f *Files) copy(src, name string) {
+	defer f.copies.Done()
 	f.sem <- struct{}{}
 	defer func() { <-f.sem }()
 	defer func() {

@@ -16,6 +16,18 @@ func writeFile(t *testing.T, path, content string) {
 	}
 }
 
+// a cache in a temp folder that waits for its background copies before the folder is removed
+func newTestFiles(t *testing.T, max int64) *Files {
+	t.Helper()
+	f, err := NewFiles(t.TempDir(), max)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// cleanups run newest first, so this runs before TempDir deletes the folder
+	t.Cleanup(f.copies.Wait)
+	return f
+}
+
 // waits for the background copy of src, returning the cached path
 func cachedPath(t *testing.T, f *Files, src string) string {
 	t.Helper()
@@ -31,13 +43,11 @@ func entryCount(f *Files) int {
 }
 
 func TestLocalServesTheSourceUntilCopied(t *testing.T) {
-	nas, dir := t.TempDir(), t.TempDir()
+	nas := t.TempDir()
 	src := filepath.Join(nas, "Chapter 1.cbz")
 	writeFile(t, src, "pages")
-	f, err := NewFiles(dir, 1<<20)
-	if err != nil {
-		t.Fatal(err)
-	}
+	f := newTestFiles(t, 1<<20)
+	dir := f.dir
 
 	if got := f.Local(src); got != src {
 		t.Errorf("first read = %s, want the source while it copies", got)
@@ -52,10 +62,10 @@ func TestLocalServesTheSourceUntilCopied(t *testing.T) {
 }
 
 func TestLocalCopiesAgainWhenTheSourceChanges(t *testing.T) {
-	nas, dir := t.TempDir(), t.TempDir()
+	nas := t.TempDir()
 	src := filepath.Join(nas, "cover.jpg")
 	writeFile(t, src, "old")
-	f, _ := NewFiles(dir, 1<<20)
+	f := newTestFiles(t, 1<<20)
 	old := cachedPath(t, f, src)
 
 	writeFile(t, src, "new cover")
@@ -71,8 +81,8 @@ func TestLocalCopiesAgainWhenTheSourceChanges(t *testing.T) {
 }
 
 func TestLocalSkipsMissingAndHugeFiles(t *testing.T) {
-	nas, dir := t.TempDir(), t.TempDir()
-	f, _ := NewFiles(dir, 100)
+	nas := t.TempDir()
+	f := newTestFiles(t, 100)
 
 	missing := filepath.Join(nas, "gone.mp3")
 	if got := f.Local(missing); got != missing {
@@ -89,8 +99,8 @@ func TestLocalSkipsMissingAndHugeFiles(t *testing.T) {
 }
 
 func TestEvictsLeastRecentlyUsed(t *testing.T) {
-	nas, dir := t.TempDir(), t.TempDir()
-	f, _ := NewFiles(dir, 100)
+	nas := t.TempDir()
+	f := newTestFiles(t, 100)
 
 	var srcs []string
 	for _, name := range []string{"a", "b", "c", "d", "e"} {
@@ -127,7 +137,7 @@ func TestNewFilesKeepsCopiesAndDropsUnfinishedOnes(t *testing.T) {
 }
 
 func TestRemoteFetchesOnce(t *testing.T) {
-	f, _ := NewFiles(t.TempDir(), 1<<20)
+	f := newTestFiles(t, 1<<20)
 	calls := 0
 	fetch := func() ([]byte, error) { calls++; return []byte("img"), nil }
 
