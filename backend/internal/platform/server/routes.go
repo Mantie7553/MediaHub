@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/deletion"
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/invites"
@@ -22,6 +23,7 @@ import (
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/webhooks"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/archive"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/auth"
+	"github.com/Mantie7553/MediaHub/backend/internal/platform/logger"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
 )
@@ -53,7 +55,16 @@ func (s *Server) StartBackgroundJobs() {
 }
 
 func (s *Server) Start(addr string) error {
-	return http.ListenAndServe(addr, s.router)
+	srv := &http.Server{
+		Addr:    addr,
+		Handler: s.router,
+		// a client that sends its headers slowly can't hold connections open forever.
+		// There is no overall write timeout: streams and long downloads stay open
+		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       2 * time.Minute,
+		MaxHeaderBytes:    64 << 10,
+	}
+	return srv.ListenAndServe()
 }
 
 func (s *Server) routes() {
@@ -66,6 +77,11 @@ func (s *Server) routes() {
 	}
 	if os.Getenv("MEDIA_SIGNING_SECRET") == os.Getenv("JWT_SECRET") {
 		log.Fatal("MEDIA_SIGNING_SECRET must be different from JWT_SECRET")
+	}
+	for _, key := range []string{"JWT_SECRET", "MEDIA_SIGNING_SECRET"} {
+		if len(os.Getenv(key)) < 32 {
+			logger.Warn("%s is shorter than 32 characters, tokens signed with it are easier to forge; the install script generates a long one", key)
+		}
 	}
 	authHandler := auth.NewHandler(s.db)
 	invitesHandler := invites.NewHandler(s.db)
@@ -84,6 +100,8 @@ func (s *Server) routes() {
 	webhooksHandler := webhooks.NewHandler(s.db)
 	usersHandler := users.NewHandler(s.db)
 
+	s.router.Use(secureHeaders)
+	s.router.Use(limitBody)
 	s.router.Use(cors.Handler(cors.Options{
 		AllowedOrigins: []string{corsOrigin},
 		AllowedMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
@@ -95,8 +113,13 @@ func (s *Server) routes() {
 	})
 
 	s.router.Route("/api", func(r chi.Router) {
-		r.Delete("/auth/logout", authHandler.Logout)
-		r.Post("/auth/refresh", authHandler.Refresh)
+		// the session cookie's endpoints, limited per IP more loosely than sign in since every
+		// open tab refreshes its access token
+		r.Group(func(r chi.Router) {
+			r.Use(auth.RateLimitSessions)
+			r.Delete("/auth/logout", authHandler.Logout)
+			r.Post("/auth/refresh", authHandler.Refresh)
+		})
 
 		r.Get("/proxy/cover", mediaHandler.ProxyCover)
 
@@ -141,6 +164,10 @@ func (s *Server) routes() {
 		r.Group(func(r chi.Router) {
 			r.Use(auth.Middleware)
 			r.Get("/me", authHandler.Me)
+			// account changes check the current password, so they are rate limited too
+			r.With(auth.RateLimit).Put("/me", authHandler.UpdateAccount)
+			r.With(auth.RateLimit).Put("/me/password", authHandler.ChangePassword)
+			r.Post("/auth/logout-all", authHandler.LogoutAll)
 			r.Get("/me/preferences", usersHandler.GetPreferences)
 			r.Put("/me/preferences", usersHandler.UpdatePreferences)
 

@@ -15,6 +15,10 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+// how long an access token works. Short, because it can't be revoked: a signed out, demoted
+// or deleted user keeps access only this long. The frontend renews it with the session cookie
+const AccessTokenTTL = 15 * time.Minute
+
 /*
 UserID: The id for the current user
 Role: the role for the user
@@ -53,6 +57,10 @@ func CheckPassword(password, hash string) bool {
 func ValidatePassword(password string) error {
 	if len(password) < 12 {
 		return fmt.Errorf("password must be at least 12 characters")
+	}
+	// bcrypt only uses the first 72 bytes and refuses longer passwords
+	if len(password) > 72 {
+		return fmt.Errorf("password must be at most 72 bytes")
 	}
 
 	var hasUpper, hasLower, hasNumber, hasSpecial bool
@@ -98,7 +106,7 @@ func GenerateToken(userID, role string) (string, error) {
 		UserID: userID,
 		Role:   role,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(AccessTokenTTL)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 		},
 	}
@@ -158,7 +166,7 @@ func GenerateRefreshToken(db *sql.DB, userID string) (string, error) {
 	_, err := db.Exec(
 		`INSERT INTO refresh_tokens (user_id, token_hash, expires_at)
 		VALUES ($1, $2, $3)`,
-		userID, tokenHash, time.Now().Add(30*24*time.Hour),
+		userID, tokenHash, time.Now().Add(RefreshTokenTTL),
 	)
 
 	if err != nil {

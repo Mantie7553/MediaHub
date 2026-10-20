@@ -53,3 +53,17 @@ func SetInitialAdminPassword(db *sql.DB) (bool, error) {
 	n, err := res.RowsAffected()
 	return n > 0, err
 }
+
+/*
+Function:	DefaultAdminPasswordInUse
+Purpose:	whether the admin account still has the password every install starts with (it is
+in the repository, so anyone can look it up). Set ADMIN_PASSWORD or change it on Settings
+*/
+func DefaultAdminPasswordInUse(db *sql.DB) (bool, error) {
+	var inUse bool
+	err := db.QueryRow(
+		`SELECT EXISTS (SELECT 1 FROM users WHERE username = 'admin' AND password_hash = $1)`,
+		seededAdminHash,
+	).Scan(&inUse)
+	return inUse, err
+}

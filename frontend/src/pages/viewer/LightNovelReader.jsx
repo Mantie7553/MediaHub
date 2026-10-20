@@ -1,5 +1,5 @@
 import { ChevronDown, ChevronUp } from 'lucide-react'
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import { useParams, useLocation, useNavigate } from "react-router-dom"
 import api from "../../services/api"
 import { useMediaItem } from "../../hooks"
@@ -9,6 +9,7 @@ import NotFound from "../../components/states/NotFound"
 import { ReaderSkeleton, TextSkeleton } from "../../components/states/Skeletons"
 import { exitViewer, switchViewer } from "../../utils/navigation"
 import ReaderToolbar from "../../components/ReaderToolbar"
+import { sanitizeHtml } from "../../utils/sanitize"
 
 export default function LightNovelReader() {
     const { id, volumeId } = useParams()
@@ -31,6 +32,8 @@ function LightNovelReaderInner({ id, volumeId, volume, volumes, title }) {
     const initialScroll = volume?.scroll_position ?? 0;
 
     const { data: content, loading, error, reload } = useApi(`/light-novels/${id}/volumes/${volumeId}/content`);
+    // an EPUB is a file from anywhere: its markup can't be allowed to run code in the page
+    const safeContent = useMemo(() => sanitizeHtml(content), [content]);
     const [scrollPct, setScrollPct] = useState(initialScroll);
     const contentRef = useRef(null);
     const scrollPctRef = useRef(initialScroll);
@@ -152,7 +155,7 @@ function LightNovelReaderInner({ id, volumeId, volume, volumes, title }) {
                         text-[1.0625rem] leading-relaxed font-[Georgia,'Times_New_Roman',serif]
                         [&_p]:mb-4 [&_img]:max-w-full [&_img]:h-auto [&_img]:mx-auto [&_img]:my-6 [&_img]:rounded
                         [&_h1]:text-2xl [&_h1]:font-semibold [&_h1]:mb-4 [&_h2]:text-xl [&_h2]:font-semibold [&_h2]:mb-3 [&_h3]:font-semibold [&_h3]:mb-2"
-                    dangerouslySetInnerHTML={{ __html: content }}
+                    dangerouslySetInnerHTML={{ __html: safeContent }}
                 />
             </div>}
         </div>

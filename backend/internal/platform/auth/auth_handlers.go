@@ -48,12 +48,35 @@ type loginRequest struct {
 }
 
 /*
-Token: JWT token used for authorization
-RefreshToken: Token used to refresh a JWT when it times out
+Token: JWT access token used for authorization. The refresh token goes in an HttpOnly cookie
+and never appears in a response body
 */
 type authResponse struct {
-	Token        string `json:"token"`
-	RefreshToken string `json:"refresh_token"`
+	Token string `json:"token"`
+}
+
+/*
+Function:	startSession
+Purpose:	create a refresh token for a user, set it as the session cookie and answer with an
+access token
+Params:
+  - w: http response writer to respond to the front end
+  - r: http request coming from the frontend
+  - userID: the user signing in
+  - role: their role, for the access token
+  - status: the HTTP status to answer with
+*/
+func (h *Handler) startSession(w http.ResponseWriter, r *http.Request, userID, role string, status int) {
+	token, err := GenerateToken(userID, role)
+	if utils.InternalError(w, err) {
+		return
+	}
+	refreshToken, err := GenerateRefreshToken(h.db, userID)
+	if utils.InternalError(w, err) {
+		return
+	}
+	setRefreshCookie(w, r, refreshToken)
+	utils.JSON(w, authResponse{Token: token}, status)
 }
 
 /*
@@ -70,6 +93,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		utils.Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
+	req.Email = NormalizeEmail(req.Email)
 
 	// check that all fields have been provided if not return bad request
 	if req.Username == "" || req.Email == "" || req.Password == "" || req.InviteCode == "" {
@@ -77,9 +101,11 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := ValidatePassword(req.Password); err != nil {
-		utils.Error(w, http.StatusBadRequest, err.Error())
-		return
+	for _, err := range []error{ValidateUsername(req.Username), ValidateEmail(req.Email), ValidatePassword(req.Password)} {
+		if err != nil {
+			utils.Error(w, http.StatusBadRequest, err.Error())
+			return
+		}
 	}
 
 	// check the invite before the (slow) password hash so bad codes are cheap to reject
@@ -146,20 +172,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// set the JWT
-	token, err := GenerateToken(userID, "user")
-	if utils.InternalError(w, err) {
-		return
-	}
-
-	// set the refresh token
-	refreshToken, err := GenerateRefreshToken(h.db, userID)
-	if utils.InternalError(w, err) {
-		return
-	}
-
-	// return the tokens
-	utils.JSON(w, authResponse{Token: token, RefreshToken: refreshToken}, http.StatusCreated)
+	h.startSession(w, r, userID, "user", http.StatusCreated)
 }
 
 /*
@@ -176,132 +189,98 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		utils.Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
+	email := NormalizeEmail(req.Email)
+
+	// guessing one account's password from many addresses is limited too
+	if !allowPasswordAttempt("login:" + email) {
+		w.Header().Set("Retry-After", "60")
+		utils.Error(w, http.StatusTooManyRequests, "too many attempts for this account, try again in a minute")
+		return
+	}
 
 	// look for the user in the database
 	var userID, passwordHash, role string
 	err := h.db.QueryRow(
-		`SELECT id, password_hash, role FROM users WHERE email = $1`,
-		req.Email,
+		`SELECT id, password_hash, role FROM users WHERE LOWER(email) = $1`,
+		email,
 	).Scan(&userID, &passwordHash, &role)
-	if err != nil {
-		http.Error(w, "invalid credentials", http.StatusUnauthorized)
+	if err != nil && err != sql.ErrNoRows {
+		utils.InternalError(w, err)
 		return
 	}
 
-	// check that the password actually matches
-	if !CheckPassword(req.Password, passwordHash) {
+	// an unknown email takes as long as a wrong password and gets the same answer
+	if !CheckPasswordOrDummy(req.Password, passwordHash) {
 		utils.Error(w, http.StatusUnauthorized, "invalid credentials")
 		return
 	}
+	accountLimiter.Reset("login:" + email)
 
-	// set the JWT token
-	token, err := GenerateToken(userID, role)
-	if utils.InternalError(w, err) {
-		return
-	}
+	// expired sessions are tidied up here rather than by a job of their own
+	h.db.Exec(`DELETE FROM refresh_tokens WHERE expires_at < NOW()`)
 
-	// set the refresh token
-	refreshToken, err := GenerateRefreshToken(h.db, userID)
-	if utils.InternalError(w, err) {
-		return
-	}
-
-	// return the tokens
-	utils.JSON(w, authResponse{Token: token, RefreshToken: refreshToken})
+	h.startSession(w, r, userID, role, http.StatusOK)
 }
 
 /*
 Function:	Refresh
-Purpose:	Handle refreshing the JWT
+Purpose:	Give the browser a new access token for its session cookie, and extend the session
 Params:
   - w: http response writer to respond to the front end
   - r: http request coming from the frontend
 */
 func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		RefreshToken string `json:"refresh_token"`
-	}
-	// decode the incoming request, check that the structure is correct
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.RefreshToken == "" {
-		utils.Error(w, http.StatusBadRequest, "invalid request body")
+	refreshToken := refreshTokenFrom(r)
+	if refreshToken == "" {
+		utils.Error(w, http.StatusUnauthorized, "not signed in")
 		return
 	}
+	tokenHash := hashToken(refreshToken)
 
-	// hash the refresh token
-	tokenHash := hashToken(req.RefreshToken)
-
-	// find the refresh token from the database
+	// the session is extended rather than replaced: replacing it on every refresh signs out
+	// tabs that refresh at the same moment (several tabs restored together)
 	var userID, role string
-	var expiresAt time.Time
 	err := h.db.QueryRow(
-		`SELECT u.id, u.role, rt.expires_at
-		FROM refresh_tokens rt
-		JOIN users u ON u.id = rt.user_id
-		WHERE rt.token_hash = $1`,
-		tokenHash,
-	).Scan(&userID, &role, &expiresAt)
-
-	// check that something was actually returned
+		`UPDATE refresh_tokens rt SET expires_at = $2
+		FROM users u
+		WHERE u.id = rt.user_id AND rt.token_hash = $1 AND rt.expires_at > NOW()
+		RETURNING u.id, u.role`,
+		tokenHash, time.Now().Add(RefreshTokenTTL),
+	).Scan(&userID, &role)
 	if err == sql.ErrNoRows {
-		utils.Error(w, http.StatusUnauthorized, "invalid refresh token")
+		clearRefreshCookie(w, r)
+		utils.Error(w, http.StatusUnauthorized, "session expired, sign in again")
 		return
 	}
 	if utils.InternalError(w, err) {
 		return
 	}
 
-	// check if the refresh token has expired
-	if time.Now().After(expiresAt) {
-		utils.Error(w, http.StatusUnauthorized, "refresh token expired")
-		return
-	}
-
-	if _, err := h.db.Exec(`DELETE FROM refresh_tokens WHERE token_hash = $1`, tokenHash); err != nil {
-		utils.InternalError(w, err)
-		return
-	}
-	newRefresh, err := GenerateRefreshToken(h.db, userID)
-	if utils.InternalError(w, err) {
-		return
-	}
-
-	// if the token is still valid generate a new JWT
 	token, err := GenerateToken(userID, role)
 	if utils.InternalError(w, err) {
 		return
 	}
 
-	// return the tokens
-	utils.JSON(w, authResponse{Token: token, RefreshToken: newRefresh})
+	// a browser that sent its token in the body moves it into the cookie now
+	setRefreshCookie(w, r, refreshToken)
+	utils.JSON(w, authResponse{Token: token})
 }
 
 /*
 Function:	Logout
-Purpose:	Handle logging out a user (removing tokens)
+Purpose:	End this browser's session
 Params:
   - w: http response writer to respond to the front end
   - r: http request coming from the frontend
 */
 func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		RefreshToken string `json:"refresh_token"`
+	if refreshToken := refreshTokenFrom(r); refreshToken != "" {
+		_, err := h.db.Exec(`DELETE FROM refresh_tokens WHERE token_hash = $1`, hashToken(refreshToken))
+		if utils.InternalError(w, err) {
+			return
+		}
 	}
-	// decode the incoming request, check that the structure is correct
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.RefreshToken == "" {
-		utils.Error(w, http.StatusBadRequest, "invalid request body")
-		return
-	}
-
-	// delete the refresh token
-	_, err := h.db.Exec(
-		`DELETE FROM refresh_tokens WHERE token_hash = $1`,
-		hashToken(req.RefreshToken),
-	)
-	if utils.InternalError(w, err) {
-		return
-	}
-
-	// return nothing
+	clearRefreshCookie(w, r)
 	w.WriteHeader(http.StatusNoContent)
 }
 
