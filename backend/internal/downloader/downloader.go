@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/Mantie7553/MediaHub/backend/internal/clients/ytdlp"
 	"github.com/Mantie7553/MediaHub/backend/internal/musicfiles"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/logger"
 )
@@ -79,6 +80,7 @@ func Run(db *sql.DB, jobID string, mediaItemID string) {
 		sourceURL,
 		"--print-to-file", "after_move:filepath", tmpFile.Name(),
 	)
+	cmd.Env = ytdlp.Env()
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {

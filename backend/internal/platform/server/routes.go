@@ -162,6 +162,7 @@ func (s *Server) routes() {
 			r.Get("/albums", musicHandler.GetAlbums)
 			r.Get("/albums/{id}", musicHandler.GetAlbum)
 			r.Get("/music/recommended", musicHandler.GetRecommended)
+			r.Get("/music/artists", musicHandler.GetArtists)
 
 			// List Handler endpoints
 			r.Get("/light-novels/{id}/volumes/{volumeId}/content", mediaHandler.ServeVolume)

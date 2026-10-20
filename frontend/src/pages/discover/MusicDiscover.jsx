@@ -15,6 +15,8 @@ import SectionHeader from "../../components/layout/SectionHeader"
 export default function MusicDiscover({ onListChange }) {
     const albums = useApi("/albums", { initial: [] });
     const recommended = useApi("/music/recommended", { initial: [] });
+    // suggestions for the request form; it still works without them
+    const artists = useApi("/music/artists", { initial: [] });
     const [query, setQuery] = useState("");
     const [searching, setSearching] = useState(false);
     // the finished search: its query, results and error. null before the first search
@@ -53,7 +55,7 @@ export default function MusicDiscover({ onListChange }) {
             duration_secs: selectedTrack.duration_secs,
             action: "download",
         })
-        .then(() => { toast.success(`Downloading "${selectedTrack.title}"`); onListChange?.() })
+        .then(() => { toast.success(`Downloading "${selectedTrack.title}"`); onListChange?.(); artists.reload(true) })
         .catch(err => toast.error(err, "Could not request the download"))
     }
 
@@ -104,7 +106,7 @@ export default function MusicDiscover({ onListChange }) {
                 </ul>
             </section>
         )}
-        <MusicRequestModal dialogRef={dialogRef} track={selectedTrack} onConfirm={handleRequest} />
+        <MusicRequestModal dialogRef={dialogRef} track={selectedTrack} artists={artists.data} onConfirm={handleRequest} />
 
         {albums.error ? (
             <section>

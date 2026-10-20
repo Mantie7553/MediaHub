@@ -121,7 +121,7 @@ See [`backend/migrations/`](backend/migrations/) for the full schema.
 ## Key Flows
 
 ### Requesting a Download
-1. The user finds a title on the Discover page, which searches AniList (anime, movies) or MangaDex (manga) through `GET /api/search`.
+1. The user finds a title on the Discover page, which searches AniList (anime, movies) or MangaDex (manga) through `GET /api/search`. Music searches YouTube with yt-dlp (`GET /api/music/yt-search`); results are kept in memory per query for an hour. The yt-dlp release binary unpacks itself on every run, so it gets a local temp folder (`YTDLP_TMPDIR`, `/tmp` in the image) instead of `TMPDIR` on the media disk. When requesting a track, the artist and album fields suggest what the library already has (`GET /api/music/artists`) and adopt its spelling, so a different case doesn't start a second folder.
 2. Saving or requesting it creates a `media_items` row if one doesn't exist yet (`POST /api/search/save`), then `POST /api/requests` creates a `download_requests` row.
 3. `requests_handler` checks the user's download permission. `vetted` requests stay `pending` until an admin approves them from the Downloads page. `auto_approved` requests are approved right away.
 4. On approval, `downloader.Dispatch` picks a destination folder under `MEDIA_ROOT` and a handler based on media type, then inserts a `download_jobs` row:
