@@ -170,5 +170,29 @@ func (c *YtdlpClient) SearchMusic(query string, limit int) ([]SearchResult, erro
 
 // command builds an exec.Cmd for the yt-dlp binary; isolated so tests can stub it.
 func (c *YtdlpClient) command(args ...string) *exec.Cmd {
-	return exec.Command(c.config.BinaryPath, args...)
+	cmd := exec.Command(c.config.BinaryPath, args...)
+	cmd.Env = Env()
+	return cmd
+}
+
+/*
+Function:	Env
+Purpose:	the environment to run yt-dlp with. The release binary unpacks itself into TMPDIR on
+every run, and the container points TMPDIR at the media disk (often a NAS) for transcodes,
+which made each search wait on dozens of network file writes. YTDLP_TMPDIR, when set, gives
+yt-dlp a local temp folder instead
+*/
+func Env() []string {
+	env := os.Environ()
+	dir := os.Getenv("YTDLP_TMPDIR")
+	if dir == "" {
+		return env
+	}
+	out := make([]string, 0, len(env)+1)
+	for _, kv := range env {
+		if !strings.HasPrefix(kv, "TMPDIR=") {
+			out = append(out, kv)
+		}
+	}
+	return append(out, "TMPDIR="+dir)
 }

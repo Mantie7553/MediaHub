@@ -27,10 +27,16 @@ func (h *Handler) YTSearch(w http.ResponseWriter, r *http.Request) {
 		limit = 15
 	}
 
+	if results, ok := h.musicSearches.get(q, limit); ok {
+		utils.JSON(w, results)
+		return
+	}
+
 	results, err := h.yt.SearchMusic(q, limit)
 	if utils.InternalError(w, err) {
 		return
 	}
+	h.musicSearches.put(q, limit, results)
 
 	utils.JSON(w, results)
 }

@@ -19,8 +19,9 @@ import (
 )
 
 type Handler struct {
-	db *sql.DB
-	yt *ytdlp.YtdlpClient
+	db            *sql.DB
+	yt            *ytdlp.YtdlpClient
+	musicSearches musicSearchCache
 }
 
 func NewHandler(db *sql.DB) *Handler {

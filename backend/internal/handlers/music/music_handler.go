@@ -10,6 +10,7 @@ import (
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/logger"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/utils"
 	"github.com/go-chi/chi/v5"
+	"github.com/lib/pq"
 )
 
 type AlbumSummary struct {
@@ -284,4 +285,50 @@ func (h *Handler) UploadCover(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	utils.JSON(w, map[string]string{"cover_image_url": coverURL})
+}
+
+type ArtistSummary struct {
+	Name   string   `json:"name"`
+	Albums []string `json:"albums"`
+}
+
+/*
+Function:	GetArtists
+Purpose:	every artist in the library with their album titles, for suggestions when naming
+the artist and album of a new download
+Params:
+  - w: http response writer
+  - r: http request
+*/
+func (h *Handler) GetArtists(w http.ResponseWriter, r *http.Request) {
+	rows, err := h.db.Query(`
+		SELECT x.artist,
+			COALESCE(array_agg(DISTINCT a.title) FILTER (WHERE a.title IS NOT NULL), '{}')
+		FROM (
+			SELECT artist FROM music_metadata WHERE artist <> ''
+			UNION
+			SELECT artist FROM albums WHERE artist <> ''
+		) x
+		LEFT JOIN albums a ON a.artist = x.artist
+		GROUP BY x.artist
+		ORDER BY LOWER(x.artist)`)
+	if utils.InternalError(w, err) {
+		return
+	}
+	defer rows.Close()
+
+	artists := []ArtistSummary{}
+	for rows.Next() {
+		var a ArtistSummary
+		if err := rows.Scan(&a.Name, pq.Array(&a.Albums)); err != nil {
+			utils.InternalError(w, err)
+			return
+		}
+		artists = append(artists, a)
+	}
+	if utils.InternalError(w, rows.Err()) {
+		return
+	}
+
+	utils.JSON(w, artists)
 }

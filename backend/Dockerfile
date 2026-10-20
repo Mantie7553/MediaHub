@@ -26,7 +26,9 @@ COPY --from=build /out/mediahub /usr/local/bin/mediahub
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod 0755 /usr/local/bin/docker-entrypoint.sh
 
+# yt-dlp unpacks itself on every run: keep that on the container's disk, not the media disk
 ENV YTDLP_PATH=/usr/local/bin/yt-dlp \
+    YTDLP_TMPDIR=/tmp \
     HOME=/data
 WORKDIR /data
 
