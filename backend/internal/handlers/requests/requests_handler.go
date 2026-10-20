@@ -3,8 +3,10 @@ package requests
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"net/http"
 
+	"github.com/Mantie7553/MediaHub/backend/internal/clients/ytdlp"
 	"github.com/Mantie7553/MediaHub/backend/internal/downloader"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/archive"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/auth"
@@ -46,6 +48,17 @@ func (h *Handler) Add(w http.ResponseWriter, r *http.Request) {
 	if req.MediaItemId == "" && req.TitleOverride == "" {
 		utils.Error(w, http.StatusBadRequest, "media_item_id or title_override is required")
 		return
+	}
+
+	// a source link reaches yt-dlp, so only a YouTube video link is accepted, kept in its
+	// canonical form
+	if req.SourceUrl != "" {
+		canonical, err := ytdlp.CanonicalURL(req.SourceUrl)
+		if err != nil {
+			utils.Error(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		req.SourceUrl = canonical
 	}
 
 	// check if the user has permissions to download
@@ -250,7 +263,11 @@ func (h *Handler) Approve(w http.ResponseWriter, r *http.Request) {
 
 	// start the download
 	_, err = downloader.Dispatch(h.db, requestThingId, mediaItemId.String, sourceURL.String, mediaType, externalID)
-
+	if errors.Is(err, ytdlp.ErrNotYouTubeVideo) {
+		// a request saved before links were checked: nothing is downloaded
+		utils.Error(w, http.StatusBadRequest, "this request's source isn't a YouTube video link, so it can't be downloaded")
+		return
+	}
 	if utils.InternalError(w, err) {
 		return
 	}

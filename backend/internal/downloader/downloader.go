@@ -47,7 +47,21 @@ func Run(db *sql.DB, jobID string, mediaItemID string) {
 		mediaItemID,
 	).Scan(&artist, &album)
 
-	// 3. Build output path - fall back to flat structure if no metadata
+	// the link was checked when the job was made; checking again here covers jobs saved
+	// before that check existed
+	sourceURL, err = ytdlp.CanonicalURL(sourceURL)
+	if err != nil {
+		markFailed(db, jobID, err.Error())
+		return
+	}
+
+	// 3. Build output path - fall back to flat structure if no metadata.
+	// The names become folders: cleaned so they can't climb out of the library or carry a
+	// yt-dlp template field
+	artist, album = musicfiles.CleanName(artist), musicfiles.CleanName(album)
+	if album == "" {
+		album = "Singles"
+	}
 	var outputTemplate string
 	if artist != "" {
 		outputTemplate = destinationPath + "/" + artist + "/" + album + "/%(title)s.%(ext)s"
@@ -69,17 +83,7 @@ func Run(db *sql.DB, jobID string, mediaItemID string) {
 	if ytdlpPath == "" {
 		ytdlpPath = "yt-dlp"
 	}
-	cmd := exec.Command(ytdlpPath,
-		"-x",
-		"--audio-format", "mp3",
-		// the video's thumbnail becomes the track's album art
-		"--embed-thumbnail",
-		"--convert-thumbnails", "jpg",
-		"--newline",
-		"-o", outputTemplate,
-		sourceURL,
-		"--print-to-file", "after_move:filepath", tmpFile.Name(),
-	)
+	cmd := exec.Command(ytdlpPath, ytdlpArgs(outputTemplate, tmpFile.Name(), sourceURL)...)
 	cmd.Env = ytdlp.Env()
 
 	stdout, err := cmd.StdoutPipe()
@@ -157,6 +161,30 @@ func saveCover(db *sql.DB, mediaItemID, filePath string) {
         WHERE id = (SELECT album_id FROM music_metadata WHERE media_item_id = $2)
         AND cover_image_url IS NULL`,
 		musicfiles.CoverURL(mediaItemID), mediaItemID)
+}
+
+/*
+Function: ytdlpArgs
+Purpose: the yt-dlp arguments for downloading one track as mp3 with its thumbnail as album art.
+The source comes last, after --, so yt-dlp reads it as a URL even if it starts with a dash
+Params:
+  - outputTemplate: where to save the file, with yt-dlp's %(title)s and %(ext)s fields
+  - printFile: a file yt-dlp writes the finished file's path to
+  - sourceURL: the canonical YouTube link
+*/
+func ytdlpArgs(outputTemplate, printFile, sourceURL string) []string {
+	return []string{
+		"-x",
+		"--audio-format", "mp3",
+		// the video's thumbnail becomes the track's album art
+		"--embed-thumbnail",
+		"--convert-thumbnails", "jpg",
+		"--newline",
+		"-o", outputTemplate,
+		"--print-to-file", "after_move:filepath", printFile,
+		// everything after -- is a URL, never an option, whatever it starts with
+		"--", sourceURL,
+	}
 }
 
 func markFailed(db *sql.DB, jobID string, message string) {

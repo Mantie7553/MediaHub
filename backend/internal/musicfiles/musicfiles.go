@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
+	"unicode"
 
 	"github.com/dhowden/tag"
 )
@@ -98,4 +100,45 @@ func WriteCover(destPath string, data []byte) error {
 		return err
 	}
 	return nil
+}
+
+// longest artist or album name kept, well past real names but short of file system limits
+const maxNameRunes = 100
+
+// characters that can't be part of a folder name: path separators, and what Windows and SMB
+// shares refuse
+var unsafeNameChars = strings.NewReplacer(
+	"/", "-", "\\", "-", ":", "-", "*", "", "?", "", "\"", "'", "<", "", ">", "", "|", "-",
+	// yt-dlp reads %(...)s in its output path as a field of the video, so a % can't reach it
+	"%", "",
+)
+
+/*
+Function:	CleanName
+Purpose:	an artist or album name made safe to use as one folder under Music: no path
+separators or ".." (which would climb out of the library), no characters file systems refuse,
+no % for yt-dlp to read as a template, no control characters or leading dots. "" when nothing
+usable is left
+Params:
+  - name: the name a user typed
+*/
+func CleanName(name string) string {
+	name = unsafeNameChars.Replace(name)
+	name = strings.Map(func(r rune) rune {
+		switch {
+		case unicode.IsSpace(r):
+			return ' '
+		case unicode.IsControl(r):
+			return -1
+		}
+		return r
+	}, name)
+	name = strings.Join(strings.Fields(name), " ")
+	// a folder can't be "." or "..", and a leading dot hides it
+	name = strings.TrimLeft(name, ". ")
+	name = strings.TrimRight(name, ". ")
+	if r := []rune(name); len(r) > maxNameRunes {
+		name = strings.TrimSpace(string(r[:maxNameRunes]))
+	}
+	return name
 }

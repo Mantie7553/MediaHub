@@ -3,6 +3,7 @@ package musicfiles
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -52,5 +53,45 @@ func TestCoverPathIsBesideTheTrack(t *testing.T) {
 	want := filepath.Join("Music", "Artist", "Album", "cover.jpg")
 	if got := CoverPath(track); got != want {
 		t.Errorf("CoverPath = %q, want %q", got, want)
+	}
+}
+
+func TestCleanName(t *testing.T) {
+	cases := map[string]string{
+		"YOASOBI":                 "YOASOBI",
+		"  Kenshi   Yonezu ":      "Kenshi Yonezu",
+		"AC/DC":                   "AC-DC",
+		"../../../etc":            "-..-..-etc",
+		"..":                      "",
+		".hidden":                 "hidden",
+		"Album.":                  "Album",
+		"%(title)s":               "(title)s",
+		"100% Pure":               "100 Pure",
+		"What? Why: \"Live\" <1>": "What Why- 'Live' 1",
+		"tab\tand\nnewline":       "tab and newline",
+		`C:\Windows`:              "C--Windows",
+		"アイドル":                    "アイドル",
+	}
+	for in, want := range cases {
+		if got := CleanName(in); got != want {
+			t.Errorf("CleanName(%q) = %q, want %q", in, got, want)
+		}
+	}
+	if got := CleanName(strings.Repeat("a", 150)); len([]rune(got)) != maxNameRunes {
+		t.Errorf("long name kept %d characters, want %d", len([]rune(got)), maxNameRunes)
+	}
+}
+
+func TestCleanNameNeverLeavesTheFolder(t *testing.T) {
+	root := filepath.Join("media", "Music")
+	for _, name := range []string{"..", "../..", `..\..`, "/etc", "a/../../b", " . ", "...."} {
+		cleaned := CleanName(name)
+		if cleaned == "" {
+			continue
+		}
+		path := filepath.Join(root, cleaned, cleaned)
+		if !strings.HasPrefix(path, root+string(filepath.Separator)) || strings.Count(path, string(filepath.Separator)) != 3 {
+			t.Errorf("CleanName(%q) = %q gives %s, outside one artist/album folder", name, cleaned, path)
+		}
 	}
 }
