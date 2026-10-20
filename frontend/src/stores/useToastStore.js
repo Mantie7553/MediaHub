@@ -10,9 +10,10 @@ let nextId = 1
 const useToastStore = create((set, get) => ({
     toasts: [],
 
-    show: (type, message) => {
+    // action is an optional { label, onClick } button, such as Undo
+    show: (type, message, action = null) => {
         const id = nextId++
-        set({ toasts: [...get().toasts, { id, type, message }] })
+        set({ toasts: [...get().toasts, { id, type, message, action }] })
         setTimeout(() => get().dismiss(id), DISMISS_MS)
         return id
     },
@@ -24,7 +25,7 @@ const useToastStore = create((set, get) => ({
  * Show a toast from anywhere, including outside components
  */
 export const toast = {
-    success: (message) => useToastStore.getState().show("success", message),
+    success: (message, action) => useToastStore.getState().show("success", message, action),
     error: (err, fallback) => useToastStore.getState().show("error", errorMessage(err, fallback)),
 }
 

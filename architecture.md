@@ -129,8 +129,9 @@ See [`backend/migrations/`](backend/migrations/) for the full schema.
    - movie → Radarr (`Movies`)
    - manga → MangaDex (`Manga`)
    - music and anything else → yt-dlp (`Music` / `Downloads`)
-5. Sonarr and Radarr download on their own schedule. MangaDex and yt-dlp jobs run in a goroutine that updates the job's status and progress as it goes. Manga is fetched straight from the MangaDex API by the title's MangaDex id: every English chapter it hosts (licensed chapters that only link to the publisher are skipped) is saved as `Manga/<title>/[0012] Chapter 12 - <title>.cbz`. Chapters already on disk are kept, so requesting a manga again fills in what is missing.
+5. Sonarr and Radarr download on their own schedule. MangaDex and yt-dlp jobs run in a goroutine that updates the job's status and progress as it goes. Manga is fetched straight from the MangaDex API by the title's MangaDex id: every English chapter it hosts (licensed chapters that only link to the publisher are skipped) is saved as `Manga/<title>/[0012] Chapter 12 - <title>.cbz`. Chapters already on disk are kept, so requesting a manga again fills in what is missing. Because these jobs live inside the backend, a restart ends them: on startup any MangaDex or yt-dlp job still `queued` or `downloading` is marked `failed` ("interrupted by a server restart"), so it can't block deleting its title.
 6. When Sonarr or Radarr finishes, it calls `/api/webhooks/sonarr` or `/api/webhooks/radarr`. The webhook handler writes the file path into `episodes` or `movie_metadata`, which makes the content playable.
+7. On the Downloads page admins can filter requests and jobs by status and title, and archive them (`POST /api/requests/archive`, `POST /api/admin/jobs/archive` with the ids shown). Archiving only sets `archived_at`, hiding the row from the Active lists; the Archived view (`?archived=true`) lists them again to restore. Archiving a whole list needs a status or title filter first, so pending requests and running jobs aren't swept away by accident.
 
 ### Playback
 1. `PlayerPage` calls `GET /api/stream/media/{type}/{id}?start=<resume seconds>[&audio=<stream index>]` with its access token.

@@ -170,3 +170,28 @@ func qualityProfile(client *arr.ArrClient, envKey string) int {
 	}
 	return id
 }
+
+// the message on a job the server was running when it stopped
+const interruptedMessage = "interrupted by a server restart, request it again to finish"
+
+/*
+Function:	FailInterrupted
+Purpose:	at startup, mark yt-dlp and MangaDex jobs still queued or downloading as failed.
+They run inside this server, so nothing can still be working on them, and a job left
+"downloading" would block deleting its title forever. Sonarr and Radarr jobs carry on in
+their own apps and are left alone
+Params:
+  - db: a pointer to our database
+*/
+func FailInterrupted(db *sql.DB) (int64, error) {
+	res, err := db.Exec(
+		`UPDATE download_jobs
+		SET status = 'failed', error_message = $1, completed_at = NOW()
+		WHERE status IN ('queued', 'downloading') AND handler IN ('ytdlp', 'mangadex')`,
+		interruptedMessage,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}

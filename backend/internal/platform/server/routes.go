@@ -20,6 +20,7 @@ import (
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/sync"
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/users"
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/webhooks"
+	"github.com/Mantie7553/MediaHub/backend/internal/platform/archive"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/auth"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
@@ -202,10 +203,13 @@ func (s *Server) routes() {
 			r.Get("/requests/all", requestsHandler.GetAllAdmin)
 			r.Put("/requests/{id}/approve", requestsHandler.Approve)
 			r.Put("/requests/{id}/reject", requestsHandler.Reject)
+			// hide requests and jobs from the Downloads lists, or bring them back
+			r.Post("/requests/archive", archive.Handler(s.db, "download_requests"))
 
 			// Job Handler endpoints
 			r.Get("/admin/jobs", jobsHandler.GetAll)
 			r.Post("/admin/jobs", jobsHandler.Create)
+			r.Post("/admin/jobs/archive", archive.Handler(s.db, "download_jobs"))
 
 			// Sync Handler endpoints
 			r.Post("/admin/sync", syncHandler.StartSync)

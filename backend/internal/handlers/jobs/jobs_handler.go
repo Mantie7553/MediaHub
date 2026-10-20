@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/Mantie7553/MediaHub/backend/internal/downloader"
+	"github.com/Mantie7553/MediaHub/backend/internal/platform/archive"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/auth"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/utils"
 )
@@ -31,9 +32,11 @@ func (h *Handler) GetAll(w http.ResponseWriter, r *http.Request) {
 	queryString := `SELECT j.id, j.request_id, j.status, j.handler,
     j.progress_pct, j.destination_path, j.source_url,
     j.error_message, j.started_at, j.completed_at, j.created_at,
-    mi.title
+    mi.title, j.archived_at
     FROM download_jobs j
-    JOIN media_items mi ON mi.id = j.media_item_id`
+    JOIN media_items mi ON mi.id = j.media_item_id
+    WHERE ` + archive.Filter(r, "j") + `
+    ORDER BY j.created_at DESC`
 
 	rows, err := h.db.Query(queryString)
 
@@ -49,7 +52,7 @@ func (h *Handler) GetAll(w http.ResponseWriter, r *http.Request) {
 			&item.ID, &item.RequestID, &item.Status, &item.Handler,
 			&item.ProgressPct, &item.DestinationPath, &item.SourceURL,
 			&item.ErrorMessage, &item.StartedAt, &item.CompletedAt,
-			&item.CreatedAt, &item.MediaTitle,
+			&item.CreatedAt, &item.MediaTitle, &item.ArchivedAt,
 		)
 
 		if utils.InternalError(w, err) {
