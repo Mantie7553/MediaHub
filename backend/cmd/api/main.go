@@ -10,6 +10,7 @@ import (
 	_ "time/tzdata"
 
 	"github.com/Mantie7553/MediaHub/backend/internal/cleanup"
+	"github.com/Mantie7553/MediaHub/backend/internal/downloader"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/database"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/server"
 	"github.com/joho/godotenv"
@@ -44,6 +45,13 @@ func main() {
 		log.Fatal("Error setting admin password: ", err)
 	} else if changed {
 		fmt.Println("Default admin password replaced with ADMIN_PASSWORD")
+	}
+
+	// runs before the server starts any new download, so it only catches jobs from the last run
+	if n, err := downloader.FailInterrupted(db); err != nil {
+		log.Fatal("Error clearing interrupted downloads: ", err)
+	} else if n > 0 {
+		fmt.Printf("Marked %d download(s) interrupted by the last shutdown as failed\n", n)
 	}
 
 	s := server.New(db)

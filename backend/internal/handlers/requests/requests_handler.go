@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/Mantie7553/MediaHub/backend/internal/downloader"
+	"github.com/Mantie7553/MediaHub/backend/internal/platform/archive"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/auth"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/logger"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/utils"
@@ -164,11 +165,13 @@ Params:
 func (h *Handler) GetAllAdmin(w http.ResponseWriter, r *http.Request) {
 	items := []downloadRequestResponse{}
 
+	// archived requests with ?archived=true, the rest otherwise
 	queryString := `SELECT dr.id, dr.status, dr.auto_approved, dr.requested_at,
-	dr.title_override, mi.title, u.username
+	dr.title_override, mi.title, u.username, dr.archived_at
 	FROM download_requests dr
 	LEFT JOIN media_items mi ON mi.id = dr.media_item_id
-	JOIN users u ON u.id = dr.requested_by`
+	JOIN users u ON u.id = dr.requested_by
+	WHERE ` + archive.Filter(r, "dr")
 
 	// run the query
 	rows, err := h.db.Query(queryString)
@@ -183,7 +186,7 @@ func (h *Handler) GetAllAdmin(w http.ResponseWriter, r *http.Request) {
 		var item downloadRequestResponse
 		err := rows.Scan(
 			&item.ID, &item.Status, &item.AutoApproved, &item.RequestedAt,
-			&item.TitleOverride, &item.MediaTitle, &item.RequestedBy,
+			&item.TitleOverride, &item.MediaTitle, &item.RequestedBy, &item.ArchivedAt,
 		)
 
 		if utils.InternalError(w, err) {

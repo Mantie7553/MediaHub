@@ -1,31 +1,33 @@
 import PageHeader from "../../components/layout/PageHeader"
 import { useRef, forwardRef, useState } from "react";
-import { Check, Download, Inbox, WifiOff, X } from "lucide-react";
+import { Check, Download, Inbox, X } from "lucide-react";
 import useJobs from "../../hooks/useJobs";
 import { useAdminRequests } from "../../hooks"
-import { approveRequest, rejectRequest } from "../../services/requestsService";
+import { approveRequest, rejectRequest, setJobsArchived, setRequestsArchived } from "../../services/requestsService";
 import Format from "../../utils/format";
 import { statusBadge, statusColor } from "../../utils/status";
-import { errorMessage } from "../../utils/errors";
 import { toast } from "../../stores/useToastStore";
-import ErrorState from "../../components/states/ErrorState";
-import EmptyState from "../../components/states/EmptyState";
-import { TableSkeleton } from "../../components/states/Skeletons";
-import DataTable, { Panel } from "../../components/DataTable";
 import StatusPill from "../../components/StatusPill";
+import RecordsPanel from "./RecordsPanel";
 
 // pending requests first, the rest newest first
 const byPendingThenNewest = (a, b) =>
     (b.status === "pending") - (a.status === "pending") || new Date(b.requested_at) - new Date(a.requested_at);
+
+const requestStatuses = ["pending", "approved", "rejected", "queued", "downloading", "complete", "failed"];
+const jobStatuses = ["queued", "downloading", "complete", "failed"];
+
+const requestTitle = item => item.media_title || item.title_override || "Unknown";
 
 /**
  * Downloads and requests page layout
  * @returns
  */
 export default function DownloadsPage() {
-
-    const { requests, loading: rLoading, error: rError, refetch: refetchRequests } = useAdminRequests()
-    const { jobs, loading: jLoading, error: jError, pollError: jPollError, refetch: refetchJobs } = useJobs();
+    const [requestsArchived, setRequestsArchivedView] = useState(false);
+    const [jobsArchived, setJobsArchivedView] = useState(false);
+    const { requests, loading: rLoading, error: rError, refetch: refetchRequests } = useAdminRequests(requestsArchived)
+    const { jobs, loading: jLoading, error: jError, pollError: jPollError, refetch: refetchJobs } = useJobs(jobsArchived);
     const [selectedRequest, setSelectedRequest] = useState(null);
     const [busyId, setBusyId] = useState(null);
     const modalRef = useRef(null);
@@ -46,25 +48,52 @@ export default function DownloadsPage() {
             .finally(() => setBusyId(null))
     }
 
+    /**
+     * Archive or restore records, with an Undo on the toast
+     * @param {function} save setRequestsArchived or setJobsArchived
+     * @param {function} refetch reloads the list in the background
+     * @param {string} noun what one record is called
+     */
+    function archiver(save, refetch, noun) {
+        return function change(ids, archived, undoing = false) {
+            return save(ids, archived)
+                .then(() => {
+                    refetch(false)
+                    if (undoing) return
+                    const what = ids.length === 1 ? `${noun[0].toUpperCase()}${noun.slice(1)}` : `${ids.length} ${noun}s`
+                    toast.success(`${what} ${archived ? "archived" : "restored"}`,
+                        { label: "Undo", onClick: () => change(ids, !archived, true) })
+                })
+                .catch(err => toast.error(err, `Could not ${archived ? "archive" : "restore"} the ${noun}s`))
+        }
+    }
+    const archiveRequests = archiver(setRequestsArchived, refetchRequests, "request");
+    const archiveJobs = archiver(setJobsArchived, refetchJobs, "job");
+
     const pending = requests.filter(r => r.status === "pending").length;
     const sortedRequests = [...requests].sort(byPendingThenNewest);
 
     return <div>
         <PageHeader title="Downloads" subtitle="Approve requests and keep an eye on what's downloading."/>
         <div className="grid gap-6 xl:grid-cols-2 items-start">
-            <Panel
+            <RecordsPanel
                 title="Requests"
                 icon={Inbox}
-                meta={!rLoading && !rError && (pending > 0 ? `${pending} pending` : requests.length || null)}
-            >
-                {rLoading ? <TableSkeleton columns={4}/> :
-                rError ? <ErrorState compact error={rError} onRetry={refetchRequests}/> :
-                requests.length === 0 ? <EmptyState compact title="No requests yet" hint="Requests people make from Discover show up here for approval."/> :
-                <DataTable
-                    items={sortedRequests}
+                noun="request"
+                meta={!rLoading && !rError && !requestsArchived && pending > 0 ? `${pending} pending` : null}
+                items={sortedRequests}
+                loading={rLoading}
+                error={rError}
+                onRetry={refetchRequests}
+                archived={requestsArchived}
+                onArchivedChange={setRequestsArchivedView}
+                statuses={requestStatuses}
+                titleOf={requestTitle}
+                onArchive={archiveRequests}
+                empty={{ icon: Inbox, title: "No requests yet", hint: "Requests people make from Discover show up here for approval." }}
                     columns={[
-                        { key: "media_title", header: "Title", primary: true, render: (val, item) => <div className="min-w-0">
-                            <p className="font-medium truncate max-w-56">{val || item.title_override || "Unknown"}</p>
+                        { key: "media_title", header: "Title", primary: true, render: (_, item) => <div className="min-w-0">
+                            <p className="font-medium truncate max-w-56">{requestTitle(item)}</p>
                             {item.requested_by && <p className="text-xs text-base-content/45">by {item.requested_by}</p>}
                         </div> },
                         { key: "status", header: "Status", render: (val) => <StatusPill label={val} tone={statusBadge(val).replace("badge-", "")}/> },
@@ -90,24 +119,29 @@ export default function DownloadsPage() {
                             </div>
                         )},
                     ]}
-                />}
-            </Panel>
-            <Panel
+            />
+            <RecordsPanel
                 title="Jobs"
                 icon={Download}
-                meta={!jLoading && !jError && jobs.length > 0 ? jobs.length : null}
-            >
-                {jPollError && <p className="flex items-center gap-2 text-xs text-warning mb-3" role="status">
-                    <WifiOff size={14}/> Lost connection, retrying: {errorMessage(jPollError)}
-                </p>}
-                {jLoading ? <TableSkeleton columns={4}/> :
-                jError ? <ErrorState compact error={jError} onRetry={refetchJobs}/> :
-                jobs.length === 0 ? <EmptyState compact icon={Download} title="No downloads running" hint="Approved requests appear here while they download."/> :
-                <DataTable
-                    items={jobs}
-                    rowKey={job => job.id ?? `${job.media_title}-${job.handler}`}
+                noun="job"
+                meta={!jLoading && !jError && !jobsArchived && jobs.length > 0 ? jobs.length : null}
+                items={jobs}
+                loading={jLoading}
+                error={jError}
+                pollError={jPollError}
+                onRetry={refetchJobs}
+                archived={jobsArchived}
+                onArchivedChange={setJobsArchivedView}
+                statuses={jobStatuses}
+                titleOf={job => job.media_title}
+                onArchive={archiveJobs}
+                rowKey={job => job.id ?? `${job.media_title}-${job.handler}`}
+                empty={{ icon: Download, title: "No downloads running", hint: "Approved requests appear here while they download." }}
                     columns={[
-                        { key: "media_title", header: "Title", primary: true, render: (val) => <p className="font-medium truncate max-w-56">{val}</p> },
+                        { key: "media_title", header: "Title", primary: true, render: (val, item) => <div className="min-w-0">
+                            <p className="font-medium truncate max-w-56">{val}</p>
+                            {item.status === "failed" && item.error_message && <p className="text-xs text-error/80 truncate max-w-56" title={item.error_message}>{item.error_message}</p>}
+                        </div> },
                         { key: "handler", header: "Handler", render: (val) => <span className="text-base-content/60 capitalize">{val}</span> },
                         { key: "progress_pct", header: "Progress", render: (val) => (
                             <div className="flex items-center justify-end md:justify-start gap-2.5">
@@ -121,8 +155,7 @@ export default function DownloadsPage() {
                             <StatusPill label={val} tone={statusColor(val).replace("status-", "")} pulse={val === "downloading" || val === "queued"}/>
                         )},
                     ]}
-                />}
-            </Panel>
+            />
         </div>
         <Modal ref={modalRef} request={selectedRequest} onConfirm={(notes) => handleReject(selectedRequest.id, notes)} />
     </div>

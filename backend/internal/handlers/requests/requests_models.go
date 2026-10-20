@@ -20,4 +20,5 @@ type downloadRequestResponse struct {
     TitleOverride *string    `json:"title_override"`
     MediaTitle    *string    `json:"media_title"`
 	RequestedBy	  *string	 `json:"requested_by"`
+	ArchivedAt    *time.Time `json:"archived_at"`
 }

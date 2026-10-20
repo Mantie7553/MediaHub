@@ -15,6 +15,7 @@ type JobResponse struct {
 	StartedAt       *time.Time `json:"started_at"`
 	CompletedAt     *time.Time `json:"completed_at"`
 	CreatedAt       time.Time  `json:"created_at"`
+	ArchivedAt      *time.Time `json:"archived_at"`
 }
 
 type JobRequest struct {

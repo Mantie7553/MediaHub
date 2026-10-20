@@ -18,6 +18,9 @@ export default function Toaster() {
                 <span className={`absolute left-0 inset-y-3 w-[3px] rounded-r-full ${error ? "bg-error" : "bg-success"}`}></span>
                 <Icon size={18} className={`mt-0.5 shrink-0 ${error ? "text-error" : "text-success"}`}/>
                 <span className="flex-1 text-sm whitespace-normal leading-snug">{t.message}</span>
+                {t.action && <button className="btn btn-ghost btn-xs text-primary -my-0.5" onClick={() => { dismiss(t.id); t.action.onClick() }}>
+                    {t.action.label}
+                </button>}
                 <button className="btn btn-ghost btn-xs btn-square text-base-content/50" onClick={() => dismiss(t.id)} aria-label="Dismiss">
                     <X size={14}/>
                 </button>
