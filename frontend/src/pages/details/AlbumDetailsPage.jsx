@@ -1,6 +1,6 @@
-import { useRef } from "react"
+import { useRef, useState } from "react"
 import { useParams } from "react-router-dom"
-import { Play, Clock, BookmarkPlus, Check } from "lucide-react"
+import { Play, Clock, BookmarkPlus, Check, ImagePlus } from "lucide-react"
 import api from "../../services/api"
 import useApi from "../../hooks/useApi"
 import ErrorState from "../../components/states/ErrorState"
@@ -13,12 +13,16 @@ import useAudioStore from "../../stores/useAudioStore"
 import { useUserContent, useRemoveFromList } from "../../hooks"
 import AddToListModal from "../../components/modals/AddToListModal"
 import DetailsHero from "../../components/details/DetailsHero"
-import { ActionMenu } from "../../components/details/Menus"
+import { ActionMenu, ActionMenuItem } from "../../components/details/Menus"
 import { getRole } from "../../utils/auth"
 import Format from "../../utils/format"
 
 export default function AlbumDetailsPage() {
     const dialogRef = useRef(null);
+    const coverInputRef = useRef(null);
+    // a cover just uploaded, with a version so the browser doesn't show the one it cached
+    const [uploadedCover, setUploadedCover] = useState(null);
+    const [uploadingCover, setUploadingCover] = useState(false);
     const { id } = useParams();
     const { userContentMap, refresh } = useUserContent();
     const userContent = userContentMap[id];
@@ -44,24 +48,41 @@ export default function AlbumDetailsPage() {
            .catch(err => toast.error(err, "Could not update your list"))
    }
 
+    function handleCoverPicked(e) {
+        const file = e.target.files?.[0]
+        e.target.value = ""
+        if (!file) return
+        const form = new FormData()
+        form.append("file", file)
+        setUploadingCover(true)
+        api.post(`/admin/albums/${id}/cover`, form)
+            .then(res => {
+                setUploadedCover(`${res.data.cover_image_url}&v=${Date.now()}`)
+                toast.success("Cover updated")
+            })
+            .catch(err => toast.error(err, "Could not upload the cover"))
+            .finally(() => setUploadingCover(false))
+    }
+
     if (loading) return <DetailsSkeleton square />
     if (notFound) return <NotFound title="Album not found" hint="This album isn't in the library any more. It may have been removed." />
     if (error) return <ErrorState error={error} title="Couldn't load this album" onRetry={reload} showBack />
     if (!album) return null
 
     const tracks = album.tracks ?? []
+    const cover = uploadedCover ?? album.cover_image_url
     const queueTracks = tracks.map(t => ({
         id: t.media_item_id,
         title: t.title,
         artist: album.artist,
-        thumbnail: album.cover_image_url,
+        thumbnail: cover,
     }))
     const totalSecs = tracks.reduce((sum, t) => sum + (t.duration_secs ?? 0), 0)
 
     return (
         <div className="flex flex-col gap-8">
             <DetailsHero
-                cover={{ src: album.cover_image_url }}
+                cover={{ src: cover }}
                 square
                 eyebrow="Album"
                 title={album.title}
@@ -79,6 +100,9 @@ export default function AlbumDetailsPage() {
                         {userContent ? Format.statusLabel(userContent.status, "music_album") : "Add to list"}
                     </button>
                     {getRole() === "admin" && <ActionMenu>
+                        {tracks.some(t => t.file_path) && <ActionMenuItem icon={ImagePlus}
+                            label={uploadingCover ? "Uploading cover…" : "Change cover…"}
+                            onClick={() => { if (!uploadingCover) coverInputRef.current.click() }}/>}
                         <DeleteFromServerButton asMenuItem item={{ id, title: album.title, type: "music_album" }} />
                     </ActionMenu>}
                 </>}
@@ -120,6 +144,10 @@ export default function AlbumDetailsPage() {
                     </ol>
                 </section>
             )}
+
+            {/* outside the menu: a closed dropdown hides what's inside it */}
+            <input ref={coverInputRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif"
+                className="hidden" onChange={handleCoverPicked}/>
 
             <AddToListModal
                 dialogRef={dialogRef}

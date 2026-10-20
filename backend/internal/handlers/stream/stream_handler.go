@@ -2,6 +2,7 @@ package stream
 
 import (
 	"database/sql"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/Mantie7553/MediaHub/backend/internal/musicfiles"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/auth"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/logger"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/utils"
@@ -341,12 +343,33 @@ func (h *Handler) ServeCover(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	coverPath := filepath.Join(filepath.Dir(filePath), "cover.jpg")
-	if _, err := os.Stat(coverPath); os.IsNotExist(err) {
+	f, err := os.Open(musicfiles.CoverPath(filePath))
+	if os.IsNotExist(err) {
 		utils.Error(w, http.StatusNotFound, "cover not found")
 		return
 	}
+	if utils.InternalError(w, err) {
+		return
+	}
+	defer f.Close()
+	info, err := f.Stat()
+	if utils.InternalError(w, err) {
+		return
+	}
 
-	w.Header().Set("Content-Type", "image/jpeg")
-	http.ServeFile(w, r, coverPath)
+	// an uploaded cover can be a PNG or WebP under the cover.jpg name
+	head := make([]byte, 512)
+	n, _ := io.ReadFull(f, head)
+	contentType := musicfiles.ImageType(head[:n])
+	if contentType == "" {
+		contentType = "image/jpeg"
+	}
+	if _, err := f.Seek(0, io.SeekStart); utils.InternalError(w, err) {
+		return
+	}
+
+	// an admin can replace the cover behind the same URL, so check it's unchanged before reuse
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Cache-Control", "no-cache")
+	http.ServeContent(w, r, "", info.ModTime(), f)
 }

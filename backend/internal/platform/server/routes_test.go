@@ -83,6 +83,8 @@ func TestInviteRoutes(t *testing.T) {
 		{"chapter upload needs auth", http.MethodPost, "/api/admin/manga/1/chapters", "", "", http.StatusUnauthorized},
 		{"chapter upload needs admin", http.MethodPost, "/api/admin/manga/1/chapters", "", userToken, http.StatusForbidden},
 		{"chapter check needs admin", http.MethodPost, "/api/admin/manga/1/check", "", userToken, http.StatusForbidden},
+		{"album cover upload needs auth", http.MethodPost, "/api/admin/albums/1/cover", "", "", http.StatusUnauthorized},
+		{"album cover upload needs admin", http.MethodPost, "/api/admin/albums/1/cover", "", userToken, http.StatusForbidden},
 	}
 
 	for _, tt := range tests {

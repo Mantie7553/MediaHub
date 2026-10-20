@@ -194,6 +194,7 @@ func (s *Server) routes() {
 			// permanent deletion: files, Sonarr/Radarr entry and every user's lists and progress
 			r.Delete("/media/{id}", deletionHandler.DeleteMedia)
 			r.Delete("/albums/{id}", deletionHandler.DeleteAlbum)
+			r.Post("/admin/albums/{id}/cover", musicHandler.UploadCover)
 			// manga chapters: upload a file, or fetch what MangaDex has that the library doesn't
 			r.Post("/admin/manga/{id}/chapters", mangaHandler.UploadChapter)
 			r.Post("/admin/manga/{id}/check", mangaHandler.CheckForChapters)

@@ -17,9 +17,9 @@ import (
 	"github.com/Mantie7553/MediaHub/backend/internal/clients/arr"
 	"github.com/Mantie7553/MediaHub/backend/internal/clients/mangadex"
 	"github.com/Mantie7553/MediaHub/backend/internal/mangafiles"
+	"github.com/Mantie7553/MediaHub/backend/internal/musicfiles"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/logger"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/utils"
-	"github.com/dhowden/tag"
 	"github.com/lib/pq"
 )
 
@@ -822,23 +822,20 @@ func (h *Handler) syncMusic() (int, error) {
 
 		synced++
 
-		coverPath := filepath.Join(filepath.Dir(path), "cover.jpg")
-		if _, coverErr := os.Stat(coverPath); os.IsNotExist(coverErr) {
-			extractCoverArt(path, coverPath)
+		coverPath := musicfiles.CoverPath(path)
+		_, coverErr := os.Stat(coverPath)
+		if os.IsNotExist(coverErr) && musicfiles.ExtractCover(path, coverPath) {
+			coverErr = nil
 		}
 
-		// Set cover_image_url if cover exists
-		if _, coverErr := os.Stat(coverPath); coverErr == nil {
-			coverURL := fmt.Sprintf("/api/stream/music/%s/cover", mediaItemID)
+		// tracks and albums keep a cover they already have, such as an uploaded one
+		if coverErr == nil {
+			coverURL := musicfiles.CoverURL(mediaItemID)
 			h.db.Exec(
 				`UPDATE media_items SET cover_image_url = $1 WHERE id = $2 AND cover_image_url IS NULL`,
 				coverURL, mediaItemID,
 			)
-		}
-
-		if albumID != nil {
-			if _, coverErr := os.Stat(coverPath); coverErr == nil {
-				coverURL := fmt.Sprintf("/api/stream/music/%s/cover", mediaItemID)
+			if albumID != nil {
 				h.db.Exec(
 					`UPDATE albums SET cover_image_url = $1 WHERE id = $2 AND cover_image_url IS NULL`,
 					coverURL, *albumID,
@@ -855,24 +852,4 @@ func (h *Handler) syncMusic() (int, error) {
 
 	logger.Info("Music sync complete: %d tracks synced", synced)
 	return synced, nil
-}
-
-func extractCoverArt(mp3Path string, destPath string) {
-	f, err := os.Open(mp3Path)
-	if err != nil {
-		return
-	}
-	defer f.Close()
-
-	meta, err := tag.ReadFrom(f)
-	if err != nil {
-		return
-	}
-
-	pic := meta.Picture()
-	if pic == nil || len(pic.Data) == 0 {
-		return
-	}
-
-	os.WriteFile(destPath, pic.Data, 0644)
 }

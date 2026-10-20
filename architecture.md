@@ -40,6 +40,7 @@ backend/
                            yt-dlp and MangaDex jobs
     mangafiles/            Manga chapter files: reading chapter numbers from file
                            names, naming chapter files, the page images in a CBZ
+    musicfiles/            Album covers: the cover.jpg in each album folder
     cleanup/               Background job that clears old HLS transcodes
   migrations/              Goose migrations for database structure
 frontend/
@@ -83,7 +84,7 @@ Every domain package exposes a `Handler` struct built by `NewHandler(db *sql.DB)
 - Authenticated endpoints (`GET /stream/media/{type}/{id}`, `GET /stream/music/{id}/url`, light novel `content`) mint a media token and return URLs with `?media_token=...` appended.
 - Media tokens are JWTs signed with `MEDIA_SIGNING_SECRET` (never `JWT_SECRET`) with `typ: "media"`. Access tokens carry `typ: "access"`. Each validator rejects the other type, so neither token works in place of the other.
 - A media token is scoped to one resource (`media_type`, `media_id`, and `volume_id` for light novels). `auth.RequireMediaToken` requires the route params to equal the scope exactly, so a token for episode `1` does not work for episode `12`.
-- Music sync stores covers as `/api/stream/music/{id}/cover`. Handlers that return `cover_image_url` call `auth.SignCoverURL` so `<img>` tags get a signed URL.
+- Music covers live as `cover.jpg` in each album folder (taken from a track's embedded art by the music sync or after a yt-dlp download, which embeds the video thumbnail, or uploaded by an admin from the album page through `POST /api/admin/albums/{id}/cover`). They are stored as `/api/stream/music/{id}/cover` and served with their real image type and `Cache-Control: no-cache`, so a replaced cover shows up. An album without its own cover shows one of its tracks' covers, in every view. Handlers that return `cover_image_url` call `auth.SignCoverURL` so `<img>` tags get a signed URL.
 - Tokens are issued on the hour, so repeat requests get the same URL and the browser can cache covers. They last 1 to 2 hours. `PlayerPage` and `AudioPlayer` fetch a new one and resume at the current position when a load fails with 401.
 - When serving `playlist.m3u8`, the stream handler appends the request's token to each segment URI so HLS.js's relative segment fetches stay authorized.
 - Tokens in query strings show up in reverse proxy access logs and browser history. That's acceptable for 2-hour, single-resource, read-only tokens, but don't put longer lived secrets in URLs.
