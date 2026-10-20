@@ -2,9 +2,12 @@ package music
 
 import (
 	"database/sql"
+	"io"
 	"net/http"
 
+	"github.com/Mantie7553/MediaHub/backend/internal/musicfiles"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/auth"
+	"github.com/Mantie7553/MediaHub/backend/internal/platform/logger"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/utils"
 	"github.com/go-chi/chi/v5"
 )
@@ -34,6 +37,17 @@ type AlbumTrack struct {
 	FilePath     *string `json:"file_path"`
 }
 
+// an album's cover, or when it has none a cover from one of its tracks (a track saved from
+// YouTube carries its thumbnail), preferring covers from the album's own folder.
+// Used as a column wherever albums are listed or shown, so every view agrees
+const albumCover = `COALESCE(a.cover_image_url, (
+	SELECT mi.cover_image_url FROM music_metadata mm2
+	JOIN media_items mi ON mi.id = mm2.media_item_id
+	WHERE mm2.album_id = a.id AND mi.cover_image_url IS NOT NULL
+	ORDER BY mi.cover_image_url LIKE '/api/%' DESC, mm2.track_number NULLS LAST
+	LIMIT 1
+))`
+
 type Handler struct {
 	db *sql.DB
 }
@@ -52,12 +66,7 @@ Params:
 func (h *Handler) GetAlbums(w http.ResponseWriter, r *http.Request) {
 	rows, err := h.db.Query(`
 		SELECT a.id, a.title, a.artist,
-			COALESCE(a.cover_image_url, (
-				SELECT mi.cover_image_url FROM music_metadata mm2
-				JOIN media_items mi ON mi.id = mm2.media_item_id
-				WHERE mm2.album_id = a.id AND mi.cover_image_url IS NOT NULL
-				LIMIT 1
-			)) as cover_image_url,
+			`+albumCover+` AS cover_image_url,
 			COUNT(mm.media_item_id) as track_count
 		FROM albums a
 		JOIN music_metadata mm ON mm.album_id = a.id AND mm.file_path IS NOT NULL
@@ -100,7 +109,7 @@ func (h *Handler) GetAlbum(w http.ResponseWriter, r *http.Request) {
 
 	var album AlbumDetail
 	err := h.db.QueryRow(
-		`SELECT id, title, artist, cover_image_url, release_date FROM albums WHERE id = $1`,
+		`SELECT a.id, a.title, a.artist, `+albumCover+`, a.release_date FROM albums a WHERE a.id = $1`,
 		albumID,
 	).Scan(&album.ID, &album.Title, &album.Artist, &album.CoverURL, &album.ReleaseDate)
 
@@ -157,12 +166,7 @@ func (h *Handler) GetRecommended(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := h.db.Query(`
 		SELECT a.id, a.title, a.artist,
-			COALESCE(a.cover_image_url, (
-				SELECT mi.cover_image_url FROM music_metadata mm2
-				JOIN media_items mi ON mi.id = mm2.media_item_id
-				WHERE mm2.album_id = a.id AND mi.cover_image_url IS NOT NULL
-				LIMIT 1
-			)) as cover_image_url,
+			`+albumCover+` AS cover_image_url,
 			COUNT(mm.media_item_id) as track_count
 		FROM albums a
 		JOIN music_metadata mm ON mm.album_id = a.id AND mm.file_path IS NOT NULL
@@ -203,4 +207,81 @@ func (h *Handler) GetRecommended(w http.ResponseWriter, r *http.Request) {
 	}
 
 	utils.JSON(w, albums)
+}
+
+// largest cover image accepted, well above a high resolution album scan
+const maxCoverBytes = 10 << 20
+
+/*
+Function:	UploadCover
+Purpose:	Admin: replace an album's cover. The image is saved as cover.jpg in the folder of the
+album's first downloaded track, the cover every track in that folder serves, and becomes
+the album's cover
+
+Params:
+  - w: http response writer
+  - r: multipart form with "file", a JPEG, PNG, WebP or GIF image
+*/
+func (h *Handler) UploadCover(w http.ResponseWriter, r *http.Request) {
+	albumID := chi.URLParam(r, "id")
+
+	var trackID, trackPath string
+	err := h.db.QueryRow(
+		`SELECT mm.media_item_id, mm.file_path FROM music_metadata mm
+		WHERE mm.album_id = $1 AND mm.file_path IS NOT NULL
+		ORDER BY mm.track_number NULLS LAST
+		LIMIT 1`,
+		albumID,
+	).Scan(&trackID, &trackPath)
+	if err == sql.ErrNoRows {
+		utils.Error(w, http.StatusNotFound, "album not found or none of its tracks are downloaded")
+		return
+	}
+	if utils.InternalError(w, err) {
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxCoverBytes+(1<<20))
+	if err := r.ParseMultipartForm(maxCoverBytes); err != nil {
+		utils.Error(w, http.StatusRequestEntityTooLarge, "the image is too large or the upload was cut off")
+		return
+	}
+	defer r.MultipartForm.RemoveAll()
+
+	file, _, err := r.FormFile("file")
+	if err != nil {
+		utils.Error(w, http.StatusBadRequest, "no image in the upload")
+		return
+	}
+	defer file.Close()
+
+	data, err := io.ReadAll(io.LimitReader(file, maxCoverBytes+1))
+	if utils.InternalError(w, err) {
+		return
+	}
+	if len(data) > maxCoverBytes {
+		utils.Error(w, http.StatusRequestEntityTooLarge, "the image is too large")
+		return
+	}
+	if musicfiles.ImageType(data) == "" {
+		utils.Error(w, http.StatusBadRequest, "covers must be JPEG, PNG, WebP or GIF images")
+		return
+	}
+
+	if err := musicfiles.WriteCover(musicfiles.CoverPath(trackPath), data); err != nil {
+		logger.Error("saving the cover for album %s: %s", albumID, err.Error())
+		utils.Error(w, http.StatusInternalServerError, "internal server error")
+		return
+	}
+
+	coverURL := musicfiles.CoverURL(trackID)
+	_, err = h.db.Exec(`UPDATE albums SET cover_image_url = $1 WHERE id = $2`, coverURL, albumID)
+	if utils.InternalError(w, err) {
+		return
+	}
+
+	if utils.InternalError(w, auth.SignCoverURL(&coverURL, auth.GetUser(r).UserID)) {
+		return
+	}
+	utils.JSON(w, map[string]string{"cover_image_url": coverURL})
 }

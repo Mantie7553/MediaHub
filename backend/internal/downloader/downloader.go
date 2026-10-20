@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/Mantie7553/MediaHub/backend/internal/musicfiles"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/logger"
 )
 
@@ -70,6 +71,9 @@ func Run(db *sql.DB, jobID string, mediaItemID string) {
 	cmd := exec.Command(ytdlpPath,
 		"-x",
 		"--audio-format", "mp3",
+		// the video's thumbnail becomes the track's album art
+		"--embed-thumbnail",
+		"--convert-thumbnails", "jpg",
 		"--newline",
 		"-o", outputTemplate,
 		sourceURL,
@@ -120,6 +124,7 @@ func Run(db *sql.DB, jobID string, mediaItemID string) {
 		if filePath != "" {
 			db.Exec(`UPDATE music_metadata SET file_path = $1 WHERE media_item_id = $2`,
 				filePath, mediaItemID)
+			saveCover(db, mediaItemID, filePath)
 		}
 	}
 
@@ -127,6 +132,29 @@ func Run(db *sql.DB, jobID string, mediaItemID string) {
 	db.Exec(`UPDATE download_jobs 
         SET status = 'complete', progress_pct = 100, completed_at = NOW()
         WHERE id = $1`, jobID)
+}
+
+/*
+Function: saveCover
+Purpose: give a downloaded track's album folder a cover from the track's embedded art when it
+has none yet, and make it the album's cover if the album has none
+Params:
+  - db: a pointer to our database
+  - mediaItemID: the track's media item id
+  - filePath: the downloaded track
+*/
+func saveCover(db *sql.DB, mediaItemID, filePath string) {
+	coverPath := musicfiles.CoverPath(filePath)
+	if _, err := os.Stat(coverPath); err != nil {
+		if !os.IsNotExist(err) || !musicfiles.ExtractCover(filePath, coverPath) {
+			return
+		}
+	}
+	db.Exec(`
+        UPDATE albums SET cover_image_url = $1
+        WHERE id = (SELECT album_id FROM music_metadata WHERE media_item_id = $2)
+        AND cover_image_url IS NULL`,
+		musicfiles.CoverURL(mediaItemID), mediaItemID)
 }
 
 func markFailed(db *sql.DB, jobID string, message string) {
