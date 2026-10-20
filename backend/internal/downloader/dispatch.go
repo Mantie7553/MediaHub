@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	"github.com/Mantie7553/MediaHub/backend/internal/clients/arr"
+	"github.com/Mantie7553/MediaHub/backend/internal/clients/ytdlp"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/logger"
 )
 
@@ -45,6 +46,17 @@ func Dispatch(db *sql.DB, requestID string, mediaItemID string,
 	default:
 		dest = filepath.Join(mediaRoot, "Downloads")
 		handler = "ytdlp"
+	}
+
+	// yt-dlp only ever gets a link rebuilt from a YouTube video id: whatever reached here (a
+	// request saved before this check, an admin creating a job) can't pass it options or
+	// point it at another site
+	if handler == "ytdlp" {
+		canonical, err := ytdlp.CanonicalURL(sourceURL)
+		if err != nil {
+			return "", err
+		}
+		sourceURL = canonical
 	}
 
 	// add a new download job to the database

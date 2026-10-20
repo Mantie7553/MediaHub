@@ -11,6 +11,7 @@ import (
 	"github.com/Mantie7553/MediaHub/backend/internal/clients/mangadex"
 	"github.com/Mantie7553/MediaHub/backend/internal/clients/ytdlp"
 	"github.com/Mantie7553/MediaHub/backend/internal/downloader"
+	"github.com/Mantie7553/MediaHub/backend/internal/musicfiles"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/auth"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/cache"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/logger"
@@ -90,6 +91,28 @@ func (h *Handler) Save(w http.ResponseWriter, r *http.Request) {
 	if req.Action != "list" && req.Action != "download" && req.Action != "both" {
 		utils.Error(w, http.StatusBadRequest, "action must be list, download, or both")
 		return
+	}
+
+	// anything downloaded by yt-dlp (music, and types without a handler of their own) needs a
+	// YouTube video link; any link sent is checked, and kept only in its canonical form
+	download := req.Action == "download" || req.Action == "both"
+	usesYtdlp := req.Type != "anime" && req.Type != "movie" && req.Type != "manga"
+	if req.SourceURL != "" || (download && usesYtdlp) {
+		canonical, err := ytdlp.CanonicalURL(req.SourceURL)
+		if err != nil {
+			utils.Error(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		req.SourceURL = canonical
+	}
+
+	// a track's artist and album become its folders under Music
+	if req.Type == "music_track" {
+		req.Artist, req.Album = musicfiles.CleanName(req.Artist), musicfiles.CleanName(req.Album)
+		if req.Artist == "" {
+			utils.Error(w, http.StatusBadRequest, "artist is required")
+			return
+		}
 	}
 
 	// insert the media item if it doesn't exist, otherwise return the existing id
