@@ -66,14 +66,17 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	req.Email = auth.NormalizeEmail(req.Email)
 	if req.Username == "" || req.Email == "" || req.Password == "" || req.Role == "" || req.DownloadPermission == "" {
 		utils.Error(w, http.StatusBadRequest, "username, email, password, role, and download_permission are required")
 		return
 	}
 
-	if err := auth.ValidatePassword(req.Password); err != nil {
-		utils.Error(w, http.StatusBadRequest, err.Error())
-		return
+	for _, err := range []error{auth.ValidateUsername(req.Username), auth.ValidateEmail(req.Email), auth.ValidatePassword(req.Password)} {
+		if err != nil {
+			utils.Error(w, http.StatusBadRequest, err.Error())
+			return
+		}
 	}
 
 	hash, err := auth.HashPassword(req.Password)
@@ -117,6 +120,15 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// an admin changing their own role could leave nobody able to manage the server
+	if req.Role != "" && targetID == auth.GetUser(r).UserID {
+		utils.Error(w, http.StatusForbidden, "you can't change your own role")
+		return
+	}
+	// signing out on a new password or role means the change takes effect within minutes;
+	// the user's own password change keeps their current session (see /me/password)
+	revoke := req.Password != ""
+
 	if req.Password != "" {
 		if err := auth.ValidatePassword(req.Password); err != nil {
 			utils.Error(w, http.StatusBadRequest, err.Error())
@@ -137,6 +149,10 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.Role != "" || req.DownloadPermission != "" {
+		var oldRole string
+		if err := h.db.QueryRow(`SELECT role FROM users WHERE id = $1`, targetID).Scan(&oldRole); err == nil {
+			revoke = revoke || (req.Role != "" && req.Role != oldRole)
+		}
 		_, err := h.db.Exec(
 			`UPDATE users SET
 			role = CASE WHEN $1 != '' THEN $1::user_role ELSE role END,
@@ -148,6 +164,10 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		if utils.InternalError(w, err) {
 			return
 		}
+	}
+
+	if revoke && utils.InternalError(w, auth.RevokeSessions(h.db, targetID, "")) {
+		return
 	}
 
 	var u userResponse

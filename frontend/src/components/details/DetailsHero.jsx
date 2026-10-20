@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom"
 import { ArrowLeft } from "lucide-react"
 import Cover from "../Cover"
 import { goBack } from "../../utils/navigation"
+import { sanitizeHtml } from "../../utils/sanitize"
 
 // descriptions longer than this get a Read more toggle
 const LONG_DESCRIPTION = 320
@@ -82,7 +83,7 @@ function Description({ text, html }) {
     const long = plainLength > LONG_DESCRIPTION
 
     const body = html
-        ? <div dangerouslySetInnerHTML={{ __html: text }}/>
+        ? <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(text) }}/>
         : <div>{text}</div>
 
     return <div className="max-w-2xl text-sm leading-relaxed text-base-content/75 text-left">

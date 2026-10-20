@@ -46,6 +46,10 @@ func main() {
 	} else if changed {
 		fmt.Println("Default admin password replaced with ADMIN_PASSWORD")
 	}
+	if inUse, err := database.DefaultAdminPasswordInUse(db); err == nil && inUse {
+		fmt.Println("WARNING: the admin account still has the default password from the repository. " +
+			"Set ADMIN_PASSWORD in .env and restart, or change it in Settings > Account")
+	}
 
 	// runs before the server starts any new download, so it only catches jobs from the last run
 	if n, err := downloader.FailInterrupted(db); err != nil {

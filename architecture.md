@@ -63,7 +63,7 @@ All routes are registered in `internal/platform/server/routes.go`. Every handler
 - **Public:** auth refresh and logout, the MangaDex cover proxy
 - **Webhook secret:** Sonarr/Radarr webhooks, which must send `X-MediaHub-Secret` matching `WEBHOOK_SECRET`. If `WEBHOOK_SECRET` is unset, every webhook is rejected
 - **Media token:** byte-serving routes loaded by `<video>`, `<audio>` and `<img>` (HLS segments, music tracks and covers, light novel images). These can't send a Bearer header, so they require a `media_token` query param instead (see [Media tokens](#media-tokens))
-- **Rate limited:** register and login, behind a per-IP token bucket. Register also requires a valid invite code
+- **Rate limited:** register, login and account changes, behind a per-IP token bucket (session refresh and logout have a looser one). Register also requires a valid invite code
 - **Authenticated:** anything a normal user does (browsing, lists, progress, requests, search)
 - **Admin:** request approval, job management, library syncs, user management
 
@@ -74,12 +74,16 @@ Every domain package exposes a `Handler` struct built by `NewHandler(db *sql.DB)
 
 ### Auth and Permissions
 - **Sign up is invite only.** Admins create single use codes (`POST /api/admin/invites`) on the User Management page and share the code or a `/login?invite=CODE` link. Codes expire after 1 to 30 days (7 by default). Only a SHA-256 hash of each code is stored, in `invite_codes`, so a code is shown once when it is created. `Register` checks the code before hashing the password, then claims it and creates the user in one transaction: a code can't be used twice, and a failed sign up (for example a taken email) frees it again. Unused invites can be revoked; used ones are kept as a record of who invited whom.
-- **Login** checks the password with bcrypt and returns two tokens: a JWT access token (24 hours) and a random refresh token (30 days). Only a SHA-256 hash of the refresh token is stored, in `refresh_tokens`.
+- **Login** looks the email up in lower case and checks the password with bcrypt (an unknown email takes as long as a wrong password, so timing doesn't reveal who has an account). It answers with a JWT access token (15 minutes) and sets the session, a random refresh token, as an `HttpOnly`, `SameSite=Strict` cookie on `/api/auth` (`Secure` when the request came over HTTPS), so page scripts can never read it. Only a SHA-256 hash of the refresh token is stored, in `refresh_tokens`. `POST /api/auth/refresh` exchanges the cookie for a new access token and extends the session to 30 days from then; the token isn't replaced, so tabs refreshing at the same moment don't sign each other out.
+- **Guessing limits:** besides the per-IP limit, each account allows 5 wrong passwords and then one a minute, from any IP, for login and for account changes. Caddy sets `X-Real-IP` from Cloudflare's `Cf-Connecting-Ip` (or the connection), and the backend limits by that rather than the client-controlled `X-Forwarded-For`.
+- **Sessions end** on logout (this browser), "Log out everywhere" (`POST /api/auth/logout-all`), a password change (every other session), and an admin resetting a password or changing a role (every session of that user). Access tokens can't be revoked, which is why they last only 15 minutes.
+- **Account changes** (`PUT /api/me` for username and email, `PUT /api/me/password`) need the current password. Emails are stored trimmed and lower case and must be plain addresses; usernames are 3 to 32 characters. Admins can't change their own role.
 - **Requests** send the access token as `Authorization: Bearer <token>`. `auth.Middleware` validates it and puts the user's ID and role into the request context.
 - **User identity** is always read from context with `auth.GetUser(r)`, never from the request body.
 - **Roles:** `user` or `admin`. `auth.RequireAdmin` blocks non-admins from the admin route group.
 - **Download permission** is separate from role. `vetted` users' requests wait for admin approval, `auto_approved` users' requests are dispatched immediately.
-- Passwords must be at least 12 characters with upper, lower, number, and special characters.
+- Passwords must be 12 characters to 72 bytes (bcrypt's limit) with upper, lower, number, and special characters.
+- **Headers and limits:** Caddy sends a Content-Security-Policy that only runs the app's own scripts, plus `nosniff`, `DENY` framing, `same-origin` referrers (media tokens are in URLs) and HSTS. HTML from outside (EPUB text, AniList descriptions) goes through DOMPurify before it is shown. JSON request bodies are capped at 1 MB, and the server times out clients that send headers slowly. The startup log warns when the admin still has the default password or a signing secret is short.
 
 ### Media tokens
 - Authenticated endpoints (`GET /stream/media/{type}/{id}`, `GET /stream/music/{id}/url`, light novel `content`) mint a media token and return URLs with `?media_token=...` appended.
@@ -98,7 +102,7 @@ Routes are defined in `App.jsx` with React Router. `/login` is public. Everythin
 ### State
 - **Global:** only audio playback (`useAudioStore`). The current track and queue need to survive page changes, so `AudioPlayer` is rendered outside the routes and reads from the store.
 - **Server data:** fetched per page through the hooks in `src/hooks`. `useApi` remembers each path's last answer in memory (`services/apiCache.js`, 100 paths), so a page seen before shows its data straight away while it reloads in the background. Signing out clears it.
-- **Auth:** the access and refresh tokens live in `localStorage`. The Axios client in `services/api.js` attaches the access token to every request. On a 401 it tries one refresh, retries the original request, and sends the user to `/login` if the refresh fails.
+- **Auth:** the access token lives only in memory (`services/session.js`); the session is the HttpOnly cookie. After a reload `ProtectedRoute` exchanges the cookie for a token before showing the page. The Axios client in `services/api.js` attaches the token to every request; on a 401 it refreshes once (requests failing together share the refresh), retries, and sends the user to `/login` if that fails. Signing out tells other tabs through a `BroadcastChannel`. Browsers signed in before the cookie existed send their stored refresh token once, and it is moved into the cookie and deleted from `localStorage`.
 
 ## Data Model
 

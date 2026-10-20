@@ -2,33 +2,17 @@ package auth
 
 import (
 	"context"
-	"net"
 	"net/http"
 	"strings"
-	"sync"
-	"time"
 )
 
 type contextKey string
 
 const UserContextKey contextKey = "user"
 
-const (
-	maxTokens  = 10
-	refillRate = 1.0 / 10.0
-)
-
-var rateLimitMap sync.Map
-
 type UserContext struct {
 	UserID string
 	Role   string
-}
-
-type RateLimitEntry struct {
-	tokens   float64
-	lastSeen time.Time
-	mu       sync.Mutex
 }
 
 /*
@@ -96,42 +80,4 @@ Params:
 func GetUser(r *http.Request) *UserContext {
 	user, _ := r.Context().Value(UserContextKey).(*UserContext)
 	return user
-}
-
-func getClientIP(r *http.Request) string {
-	var addr string
-	xff := r.Header.Get("X-Forwarded-For")
-	if xff != "" {
-		addr = strings.TrimSpace(strings.Split(xff, ",")[0])
-	} else {
-		addr = r.RemoteAddr
-	}
-
-	host, _, err := net.SplitHostPort(addr)
-	if err != nil {
-		return addr
-	}
-
-	return host
-}
-
-func RateLimit(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ip := getClientIP(r)
-
-		actual, _ := rateLimitMap.LoadOrStore(ip, &RateLimitEntry{tokens: maxTokens, lastSeen: time.Now()})
-		entry := actual.(*RateLimitEntry)
-		entry.mu.Lock()
-		defer entry.mu.Unlock()
-		elapsed := time.Since(entry.lastSeen).Seconds()
-		entry.tokens = min(entry.tokens+elapsed*refillRate, maxTokens)
-		entry.lastSeen = time.Now()
-		entry.tokens--
-		if entry.tokens < 0 {
-			entry.tokens = 0
-			http.Error(w, "too many requests", http.StatusTooManyRequests)
-		} else {
-			next.ServeHTTP(w, r)
-		}
-	})
 }

@@ -1,33 +1,20 @@
-import api from "../services/api";
-import { clearCached } from "../services/apiCache";
-
+import { endSession, getRole as sessionRole } from "../services/session";
 
 /**
  * Role of the logged in user, read from the access token
  * @returns "admin", "user", or null when not logged in
  */
 export function getRole() {
-    const token = localStorage.getItem("token");
-    if (!token) return null;
-    try {
-        return JSON.parse(atob(token.split(".")[1])).role;
-    } catch {
-        return null;
-    }
+    return sessionRole();
 }
 
 /**
- * Sign out: revoke the refresh token on the server (best effort), forget both tokens and go to
- * the login page
+ * Sign out: end the session on the server, forget it here and in other tabs, and go to the
+ * login page
  * @param {function} navigate from useNavigate
+ * @param {boolean} everywhere sign out on every device too
  */
-export function logout(navigate) {
-    api.delete("/auth/logout", {
-        data: {refresh_token: localStorage.getItem("refresh_token")}
-    });
-    localStorage.removeItem("token");
-    localStorage.removeItem("refresh_token");
-    // the next person to sign in here mustn't see this one's lists
-    clearCached();
+export function logout(navigate, everywhere = false) {
+    endSession(everywhere);
     navigate("/login");
 }

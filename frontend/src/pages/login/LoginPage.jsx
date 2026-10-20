@@ -1,6 +1,8 @@
 import { useState } from "react"
 import { useNavigate, useSearchParams } from "react-router-dom"
 import api from "../../services/api"
+import { setAccessToken } from "../../services/session";
+import { errorMessage } from "../../utils/errors";
 import { validatePassword } from "../../utils/validate";
 import { AlertCircle, KeyRound, Mail, Ticket, User } from "lucide-react";
 import Logo from "../../components/layout/Logo";
@@ -26,8 +28,8 @@ export default function Login() {
 
     /**
      * Login a user
-     *      - make the request for the tokens
-     *      - set token and refresh_token in localstorage for later use
+     *      - make the request for the tokens: the access token comes back, the session is
+     *        an HttpOnly cookie the browser keeps
      *      - send user to dashboard
      * @param {any} e the onClick event
      */
@@ -39,12 +41,11 @@ export default function Login() {
         setSubmitting(true);
         api.post("/auth/login", {email, password})
         .then(res => {
-            localStorage.setItem("token", res.data.token);
-            localStorage.setItem("refresh_token", res.data.refresh_token);
+            setAccessToken(res.data.token);
             navigate("/");
         })
         .catch(err => {
-            setError(err.response?.data?.error ?? "Invalid email or password");
+            setError(err.response?.status === 401 ? "Invalid email or password" : errorMessage(err, "Couldn't sign in"));
         })
         .finally(() => setSubmitting(false))
     }
@@ -73,14 +74,11 @@ export default function Login() {
         setSubmitting(true);
         api.post("/auth/register", {username, email, password, invite_code: inviteCode})
         .then(res => {
-            localStorage.setItem("token", res.data.token);
-            localStorage.setItem("refresh_token", res.data.refresh_token);
+            setAccessToken(res.data.token);
             navigate("/");
         })
         .catch(err => {
-            // the API returns plain text errors, e.g. "invalid or expired invite code"
-            const data = err.response?.data;
-            setError(typeof data === "string" && data.trim() ? data.trim() : "Something went wrong");
+            setError(errorMessage(err, "Couldn't create the account"));
         })
         .finally(() => setSubmitting(false))
     }
