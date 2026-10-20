@@ -8,6 +8,7 @@ import (
 	"github.com/Mantie7553/MediaHub/backend/internal/musicfiles"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/auth"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/logger"
+	"github.com/Mantie7553/MediaHub/backend/internal/platform/cache"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/utils"
 	"github.com/go-chi/chi/v5"
 	"github.com/lib/pq"
@@ -269,11 +270,14 @@ func (h *Handler) UploadCover(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := musicfiles.WriteCover(musicfiles.CoverPath(trackPath), data); err != nil {
+	coverPath := musicfiles.CoverPath(trackPath)
+	if err := musicfiles.WriteCover(coverPath, data); err != nil {
 		logger.Error("saving the cover for album %s: %s", albumID, err.Error())
 		utils.Error(w, http.StatusInternalServerError, "internal server error")
 		return
 	}
+	// the cached copy of the old cover is never served again
+	cache.Disk().Forget(coverPath)
 
 	coverURL := musicfiles.CoverURL(trackID)
 	_, err = h.db.Exec(`UPDATE albums SET cover_image_url = $1 WHERE id = $2`, coverURL, albumID)

@@ -1,4 +1,5 @@
 import api from "../services/api";
+import { clearCached } from "../services/apiCache";
 
 
 /**
@@ -26,5 +27,7 @@ export function logout(navigate) {
     });
     localStorage.removeItem("token");
     localStorage.removeItem("refresh_token");
+    // the next person to sign in here mustn't see this one's lists
+    clearCached();
     navigate("/login");
 }

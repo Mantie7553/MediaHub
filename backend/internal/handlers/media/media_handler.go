@@ -18,6 +18,7 @@ import (
 	"github.com/Mantie7553/MediaHub/backend/internal/mangafiles"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/auth"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/logger"
+	"github.com/Mantie7553/MediaHub/backend/internal/platform/cache"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/utils"
 	"github.com/go-chi/chi/v5"
 	"github.com/lib/pq"
@@ -510,8 +511,8 @@ func (h *Handler) ServePage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// open the file for reading
-	reader, err := zip.OpenReader(fPath)
+	// open the file for reading, from the local copy once there is one
+	reader, err := zip.OpenReader(cache.Disk().Local(fPath))
 	if utils.InternalError(w, err) {
 		return
 	}
@@ -537,6 +538,8 @@ func (h *Handler) ServePage(w http.ResponseWriter, r *http.Request) {
 	defer f.Close()
 
 	w.Header().Set("Content-Type", ct)
+	// a chapter's pages don't change, so turning back to one doesn't fetch it again
+	w.Header().Set("Cache-Control", "private, max-age=86400")
 	io.Copy(w, f)
 }
 
@@ -558,7 +561,7 @@ func (h *Handler) ServeVolume(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	zr, err := zip.OpenReader(filePath)
+	zr, err := zip.OpenReader(cache.Disk().Local(filePath))
 	if utils.InternalError(w, err) {
 		return
 	}
@@ -731,7 +734,7 @@ func (h *Handler) ServeVolumeImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	zr, err := zip.OpenReader(filePath)
+	zr, err := zip.OpenReader(cache.Disk().Local(filePath))
 	if utils.InternalError(w, err) {
 		return
 	}
@@ -761,6 +764,7 @@ func (h *Handler) ServeVolumeImage(w http.ResponseWriter, r *http.Request) {
 		}
 
 		w.Header().Set("Content-Type", ct)
+		w.Header().Set("Cache-Control", "private, max-age=86400")
 		io.Copy(w, rc)
 		return
 	}
@@ -983,22 +987,44 @@ func (h *Handler) ProxyCover(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp, err := coverClient.Get(coverURL.String())
+	// kept on disk after the first fetch: Discover shows the same covers to everyone
+	data, err := cache.Disk().Remote(coverURL.String(), func() ([]byte, error) {
+		return fetchCover(coverURL.String())
+	})
 	if err != nil {
 		utils.Error(w, http.StatusBadGateway, "failed to fetch image")
 		return
 	}
+
+	w.Header().Set("Content-Type", http.DetectContentType(data))
+	w.Header().Set("Cache-Control", "public, max-age=604800")
+	w.Write(data)
+}
+
+/*
+Function:	fetchCover
+Purpose:	download a cover image, refusing anything that isn't an image or is too large
+Params:
+  - coverURL: an allowed MangaDex uploads URL
+*/
+func fetchCover(coverURL string) ([]byte, error) {
+	resp, err := coverClient.Get(coverURL)
+	if err != nil {
+		return nil, err
+	}
 	defer resp.Body.Close()
 
-	contentType := resp.Header.Get("Content-Type")
-	if resp.StatusCode != http.StatusOK || !strings.HasPrefix(contentType, "image/") {
-		utils.Error(w, http.StatusBadGateway, "failed to fetch image")
-		return
+	if resp.StatusCode != http.StatusOK || !strings.HasPrefix(resp.Header.Get("Content-Type"), "image/") {
+		return nil, fmt.Errorf("cover fetch returned %d %s", resp.StatusCode, resp.Header.Get("Content-Type"))
 	}
-
-	w.Header().Set("Content-Type", contentType)
-	w.Header().Set("Cache-Control", "public, max-age=86400")
-	io.Copy(w, io.LimitReader(resp.Body, maxCoverBytes))
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxCoverBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(data) > maxCoverBytes || !strings.HasPrefix(http.DetectContentType(data), "image/") {
+		return nil, fmt.Errorf("cover is too large or not an image")
+	}
+	return data, nil
 }
 
 const (

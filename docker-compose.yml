@@ -59,6 +59,8 @@ services:
       RADARR_QUALITY_PROFILE: ${RADARR_QUALITY_PROFILE:-Anime}
       # hour (0-23, TZ) of the nightly library sync, "off" to disable
       LIBRARY_SYNC_HOUR: ${LIBRARY_SYNC_HOUR:-4}
+      # local copies of recently read media files, kept in backend-data (see .env.example)
+      CACHE_MAX_GB: ${CACHE_MAX_GB:-5}
       TRANSCODE_ENCODER: ${TRANSCODE_ENCODER:-libx264}
       TRANSCODE_HWACCEL: ${TRANSCODE_HWACCEL:-none}
     volumes:
