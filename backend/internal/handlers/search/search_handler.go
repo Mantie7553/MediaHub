@@ -11,6 +11,7 @@ import (
 	"github.com/Mantie7553/MediaHub/backend/internal/clients/mangadex"
 	"github.com/Mantie7553/MediaHub/backend/internal/clients/ytdlp"
 	"github.com/Mantie7553/MediaHub/backend/internal/downloader"
+	"github.com/Mantie7553/MediaHub/backend/internal/locks"
 	"github.com/Mantie7553/MediaHub/backend/internal/musicfiles"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/auth"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/cache"
@@ -188,9 +189,9 @@ func (h *Handler) Save(w http.ResponseWriter, r *http.Request) {
 			`INSERT INTO anime_metadata (media_item_id, studio, status, genres)
 			VALUES ($1, $2, $3, $4)
 			ON CONFLICT (media_item_id) DO UPDATE SET
-			studio = EXCLUDED.studio,
-			genres = EXCLUDED.genres,
-			status = EXCLUDED.status`,
+			`+locks.KeepMeta(locks.Studio, "anime_metadata", "studio", "EXCLUDED.studio")+`,
+			`+locks.KeepMeta(locks.Genres, "anime_metadata", "genres", "EXCLUDED.genres")+`,
+			`+locks.KeepMeta(locks.Status, "anime_metadata", "status", "EXCLUDED.status"),
 			mediaItemID,
 			utils.NullString(studio),
 			utils.NullString(status),
@@ -225,9 +226,9 @@ func (h *Handler) Save(w http.ResponseWriter, r *http.Request) {
 			`INSERT INTO movie_metadata (media_item_id, runtime_mins, director, genres)
 			VALUES ($1, $2, $3, $4)
 			ON CONFLICT (media_item_id) DO UPDATE SET
-			runtime_mins = EXCLUDED.runtime_mins,
-			director = EXCLUDED.director,
-			genres = EXCLUDED.genres`,
+			`+locks.KeepMeta(locks.RuntimeMins, "movie_metadata", "runtime_mins", "EXCLUDED.runtime_mins")+`,
+			`+locks.KeepMeta(locks.Director, "movie_metadata", "director", "EXCLUDED.director")+`,
+			`+locks.KeepMeta(locks.Genres, "movie_metadata", "genres", "EXCLUDED.genres"),
 			mediaItemID,
 			utils.NullInt(&runtime_mins),
 			utils.NullString(director),
@@ -265,9 +266,9 @@ func (h *Handler) Save(w http.ResponseWriter, r *http.Request) {
 			`INSERT INTO manga_metadata (media_item_id, total_chapters, genres, status)
 			VALUES ($1, $2, $3, $4)
 			ON CONFLICT (media_item_id) DO UPDATE SET
-			total_chapters = EXCLUDED.total_chapters,
-			genres = EXCLUDED.genres,
-			status = EXCLUDED.status`,
+			`+locks.KeepMeta(locks.TotalChapters, "manga_metadata", "total_chapters", "EXCLUDED.total_chapters")+`,
+			`+locks.KeepMeta(locks.Genres, "manga_metadata", "genres", "EXCLUDED.genres")+`,
+			`+locks.KeepMeta(locks.Status, "manga_metadata", "status", "EXCLUDED.status"),
 			mediaItemID,
 			utils.NullInt(&totalChapters),
 			pq.Array(genres),

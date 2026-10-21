@@ -19,8 +19,9 @@ export default function Cover({ src, source, alt = "", className = "" }) {
         </div>
     }
 
-    // MangaDex blocks hotlinking, so its covers are fetched by the backend
-    const url = source === "mangadex"
+    // MangaDex blocks hotlinking, so its covers are fetched by the backend. A manga from
+    // MangaDex can have a cover an admin uploaded, which is served by the backend already
+    const url = source === "mangadex" && src.startsWith("https://uploads.mangadex.org/")
         ? `/api/proxy/cover?url=${encodeURIComponent(src)}`
         : src
 

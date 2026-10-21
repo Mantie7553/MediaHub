@@ -374,6 +374,85 @@ func (c *ArrClient) DeleteMovie(movieID int) error {
 }
 
 /*
+Function:	UnmonitorEpisode
+Purpose:	tell Sonarr to stop watching for an episode, so removing its file doesn't make Sonarr
+            download it again
+Params:
+  - episodeID: the Sonarr episode id
+*/
+func (c *ArrClient) UnmonitorEpisode(episodeID int) error {
+	body, err := json.Marshal(map[string]any{"episodeIds": []int{episodeID}, "monitored": false})
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequest("PUT", c.config.BaseURL+"/api/v3/episode/monitor", bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("X-Api-Key", c.config.APIKey)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode/100 != 2 {
+		msg, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("returned %d: %s", resp.StatusCode, strings.TrimSpace(string(msg)))
+	}
+	return nil
+}
+
+/*
+Function:	EpisodeFileID
+Purpose:	the id of the file Sonarr has for an episode, 0 when it has none (or no longer knows
+            the episode)
+Params:
+  - episodeID: the Sonarr episode id
+*/
+func (c *ArrClient) EpisodeFileID(episodeID int) (int, error) {
+	req, err := http.NewRequest("GET", c.config.BaseURL+"/api/v3/episode/"+strconv.Itoa(episodeID), nil)
+	if err != nil {
+		return 0, err
+	}
+	req.Header.Set("X-Api-Key", c.config.APIKey)
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return 0, nil
+	}
+	if resp.StatusCode != http.StatusOK {
+		return 0, fmt.Errorf("Sonarr returned %d", resp.StatusCode)
+	}
+	var ep SonarrEpisode
+	if err := json.NewDecoder(resp.Body).Decode(&ep); err != nil {
+		return 0, err
+	}
+	if !ep.HasFile {
+		return 0, nil
+	}
+	return ep.EpisodeFileID, nil
+}
+
+/*
+Function:	DeleteEpisodeFile
+Purpose:	have Sonarr delete one episode's file from disk. A file that is already gone counts
+            as deleted
+Params:
+  - episodeFileID: the Sonarr episode file id
+*/
+func (c *ArrClient) DeleteEpisodeFile(episodeFileID int) error {
+	return c.delete(fmt.Sprintf("/api/v3/episodefile/%d", episodeFileID))
+}
+
+/*
 Function:	delete
 Purpose:	send a DELETE to Sonarr / Radarr, treating 404 (already removed) as success
 Params:

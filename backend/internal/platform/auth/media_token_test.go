@@ -209,12 +209,15 @@ func TestSignCoverURL(t *testing.T) {
 		name   string
 		cover  *string
 		signed bool
+		scope  MediaScope
 	}{
-		{"nil", nil, false},
-		{"music cover", ptr("/api/stream/music/abc-123/cover"), true},
-		{"anilist", ptr("https://s4.anilist.co/file/cover.jpg"), false},
-		{"mangadex proxy", ptr("/api/proxy/cover?url=x"), false},
-		{"nested path", ptr("/api/stream/music/a/b/cover"), false},
+		{"nil", nil, false, MediaScope{}},
+		{"music cover", ptr("/api/stream/music/abc-123/cover"), true, MediaScope{MediaType: "music", MediaID: "abc-123"}},
+		{"uploaded cover", ptr("/api/media/abc-123/cover"), true, MediaScope{MediaType: "cover", MediaID: "abc-123"}},
+		{"anilist", ptr("https://s4.anilist.co/file/cover.jpg"), false, MediaScope{}},
+		{"mangadex proxy", ptr("/api/proxy/cover?url=x"), false, MediaScope{}},
+		{"nested path", ptr("/api/stream/music/a/b/cover"), false, MediaScope{}},
+		{"nested uploaded path", ptr("/api/media/a/b/cover"), false, MediaScope{}},
 	}
 
 	for _, tt := range tests {
@@ -242,8 +245,7 @@ func TestSignCoverURL(t *testing.T) {
 			if u.Path != before {
 				t.Fatalf("path = %q, want %q", u.Path, before)
 			}
-			scope := MediaScope{MediaType: "music", MediaID: "abc-123"}
-			if _, err := ValidateMediaToken(u.Query().Get(MediaTokenParam), scope); err != nil {
+			if _, err := ValidateMediaToken(u.Query().Get(MediaTokenParam), tt.scope); err != nil {
 				t.Fatalf("cover token invalid: %v", err)
 			}
 		})

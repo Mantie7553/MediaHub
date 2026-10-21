@@ -29,6 +29,14 @@ func TestLimitBodyRefusesHugeJSON(t *testing.T) {
 	if readErr != nil {
 		t.Errorf("uploads set their own limit, got %v", readErr)
 	}
+
+	big = strings.NewReader(strings.Repeat("x", maxJSONBody+1))
+	r = httptest.NewRequest(http.MethodPut, "/api/admin/uploads/1", big)
+	r.Header.Set("Content-Type", "application/octet-stream")
+	h.ServeHTTP(httptest.NewRecorder(), r)
+	if readErr != nil {
+		t.Errorf("upload chunks set their own limit, got %v", readErr)
+	}
 }
 
 func TestSecureHeaders(t *testing.T) {

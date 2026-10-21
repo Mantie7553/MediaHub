@@ -54,3 +54,9 @@ func TestIsWithin(t *testing.T) {
 		}
 	}
 }
+
+func TestLikePrefixEscapesWildcards(t *testing.T) {
+	if got := LikePrefix(`/m/100%_done\`); got != `/m/100\%\_done\\%` {
+		t.Errorf("LikePrefix = %q", got)
+	}
+}

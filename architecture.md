@@ -34,7 +34,8 @@ backend/
       server/              Chi router and all route registration (routes.go)
       utils/               JSON and error response helpers
     handlers/              One folder per domain (media, lists, requests, jobs,
-                           search, stream, sync, users, webhooks, music, manga)
+                           search, stream, sync, users, webhooks, music, manga,
+                           curation, deletion)
     clients/               Wrappers for external APIs (anilist, arr, mangadex,
                            musicbrainz, ytdlp)
     downloader/            Routes approved requests to a download tool and runs
@@ -42,6 +43,11 @@ backend/
     mangafiles/            Manga chapter files: reading chapter numbers from file
                            names, naming chapter files, the page images in a CBZ
     musicfiles/            Album covers: the cover.jpg in each album folder
+    novelfiles/            Light novel EPUBs: volume numbers in file names, checking
+                           an EPUB opens, finding its cover
+    covers/                Covers admins upload for a title, in MEDIA_ROOT/Covers
+    locks/                 Fields an admin edited, which syncs leave alone
+    uploads/               Large uploads received in chunks
     cleanup/               Background job that clears old HLS transcodes
   migrations/              Goose migrations for database structure
 frontend/
@@ -65,7 +71,7 @@ All routes are registered in `internal/platform/server/routes.go`. Every handler
 - **Media token:** byte-serving routes loaded by `<video>`, `<audio>` and `<img>` (HLS segments, music tracks and covers, light novel images). These can't send a Bearer header, so they require a `media_token` query param instead (see [Media tokens](#media-tokens))
 - **Rate limited:** register, login and account changes, behind a per-IP token bucket (session refresh and logout have a looser one). Register also requires a valid invite code
 - **Authenticated:** anything a normal user does (browsing, lists, progress, requests, search)
-- **Admin:** request approval, job management, library syncs, user management
+- **Admin:** request approval, job management, library syncs, user management, editing the library by hand (`/api/admin/media`, `/admin/episodes`, `/admin/uploads`, ...)
 
 A `/health` route outside `/api` returns `ok`.
 
@@ -110,10 +116,10 @@ Routes are defined in `App.jsx` with React Router. `/login` is public. Everythin
 |-------|-------|
 | `users`, `refresh_tokens` | Accounts, role, download permission, hashed refresh tokens |
 | `invite_codes` | Hashed single use sign up codes, who created them, expiry, and which user used them |
-| `media_items` | One row per title of any type. Unique on `(external_id, external_source)` |
+| `media_items` | One row per title of any type. Unique on `(external_id, external_source)`. `locked_fields` names the fields an admin set by hand |
 | `anime_metadata`, `movie_metadata`, `manga_metadata`, `light_novel_metadata`, `music_metadata` | Type-specific details, one-to-one with `media_items` |
-| `albums` | Music albums. Tracks link to them through `music_metadata.album_id` |
-| `episodes` | Anime episodes with file paths, filled in by Sonarr webhooks |
+| `albums` | Music albums with an optional description. Tracks link to them through `music_metadata.album_id` |
+| `episodes` | Anime episodes with file paths, filled in by Sonarr webhooks. `title_locked` keeps an admin's title through Sonarr syncs |
 | `manga_chapters`, `light_novel_volumes` | Readable units with file paths, filled in by library syncs |
 | `sonarr_items`, `radarr_items` | Map a media item to its Sonarr series or Radarr movie ID |
 | `download_requests` | A user asking for something to be downloaded, plus approval state |
@@ -162,7 +168,8 @@ See [`backend/migrations/`](backend/migrations/) for the full schema.
 ### Library Sync
 Admins can trigger syncs from the backend for each media type (`/api/admin/sync/*`):
 - **Sonarr / Radarr:** pull the library from the *arr API, map TVDB or TMDB IDs to AniList IDs using the Fribb anime-lists mapping, and fetch metadata from AniList by ID.
-- **Manga, light novels, music:** scan the matching folder under `MEDIA_ROOT` and create or update rows for what's on disk.
+- **Manga, light novels, music:** scan the matching folder under `MEDIA_ROOT` and create or update rows for what's on disk. Files are matched by path first, so a renamed or renumbered title, album, track, chapter or volume keeps its edits: a chapter or volume file already in the library is skipped, a known track is left alone, a light novel folder belongs to whichever title has volumes in it, and an album folder to the album its other tracks are on.
+- **Locked fields:** every sync and the Discover save write metadata through `locks.Keep` / `locks.KeepMeta`, which keep a field's current value while it is in `locked_fields`.
 
 ### Adding Manga Chapters
 A manga's chapters can come from three places, and all of them skip chapter numbers the library already has:
@@ -172,12 +179,20 @@ A manga's chapters can come from three places, and all of them skip chapter numb
 
 `mangafiles.ParseChapter` reads the chapter number from a file name for uploads and the sync: `[0098] Chapter 98 - Title`, `c098`, `Ch. 98`, `Chapter 98`, `#98`, or the last number once the series title is removed. Whole volumes (`v12` with no chapter) are skipped, since chapters are numbered. The reader only counts the image files in an archive as pages, sorted naturally (`2.jpg` before `10.jpg`), so `ComicInfo.xml`, folders and unpadded names in imported archives don't break it. CBR (RAR) archives aren't supported.
 
+### Curating the Library
+Admins can fix what the metadata sources get wrong from each details page (*Edit details…* and the ⋯ menu on each row). The `curation` package handles it:
+- **Details:** `PUT /api/admin/media/{id}` changes the title, description, release date, genres and the type's own fields (studio and status, director and runtime, author, totals, a track's artist and number). Fields left out are untouched and `null` clears one. Every field changed is added to `locked_fields`; `unlock: [...]` hands fields back to the syncs. Handing back the cover clears it and deletes the uploaded file, and the next sync fills in the source's cover. `PUT /api/admin/albums/{id}` renames an album or changes its artist (its tracks credited to the old artist follow), release date or description; two albums can't share a title and artist.
+- **Covers:** `POST /api/admin/media/{id}/cover` (multipart image, up to 10 MB) is saved as `MEDIA_ROOT/Covers/<id>` and served at `/api/media/{id}/cover` with a `cover`-scoped media token, `no-cache`, so a replacement shows up. Albums keep using `cover.jpg` in their folder.
+- **Pieces:** `PUT /api/admin/episodes|chapters|volumes/{id}` renames an episode (empty goes back to Sonarr's title) or renames and renumbers a chapter or volume. A renumbered chapter or volume file is renamed to match (`[0099] Chapter 99.cbz`, `X Volume 4.epub`), never over another file, so its old number is free and the sync reads the new one. Renumbering is refused while the title is downloading. Tracks are edited as titles (`PUT /api/admin/media/{trackId}`).
+- **Adding files:** large files go up in pieces, since Cloudflare refuses requests over 100 MB. `POST /api/admin/uploads` (`name`, `size`, `kind`: `video`, `audio` or `epub`, checked against extension and size limits) starts one; `PUT /api/admin/uploads/{id}` sends chunks of up to 64 MB with an `Upload-Offset` header, answering 409 with what it has when a retry overlaps. Uploads live in `MEDIA_ROOT/temp/upload-<id>/` and in memory, so a restart forgets them and the temp cleanup deletes their files. The finished upload is then named in `POST /api/admin/anime/{id}/episodes` (`TV Shows/<Series>/Season 01/<Series> - S01E05 - Title.mkv`), `/admin/movies/{id}/file` (only for a movie with no file, `Movies/<Title (Year)>/`), `/admin/light-novels/{id}/volumes` (`<Series> Volume 3.epub`; volume 1 gives a coverless title the EPUB's cover) or `/admin/albums/{id}/tracks` (`<Title>.mp3` beside the album's tracks). Files are checked first (ffprobe finds video, or an mp3 and its length; EPUBs must open) and never replace a file. If adding is refused, the upload is handed back so the details can be fixed without sending the file again.
+
 ### Removing Content
 - **From a list** (any user): `DELETE /api/me/media/{entryId}` deletes only the caller's own list entry; the title stays in the library.
+- **One episode, chapter or volume** (admins): `DELETE /api/admin/episodes|chapters|volumes/{id}` removes its file and row, and everyone's progress for it. Refused while the title downloads. For an episode Sonarr knows, Sonarr first stops monitoring it (so it isn't downloaded again) and deletes the file itself; a Sonarr failure stops with 502. Tracks are removed with `DELETE /api/media/{id}`.
 - **From the server** (admins, `deletion` package): `DELETE /api/media/{id}` (anime, movie, manga, light novel, track) and `DELETE /api/albums/{id}`. The order makes a failed deletion safe to retry:
   1. Refused with 409 while a download for it is queued or running.
   2. Sonarr/Radarr delete the series or movie with its files (skipped if another item shares the same series). A failure there returns 502 and stops.
-  3. Files: a title folder (`TV Shows/<Series>`, `Movies/<Movie>`, `Manga/<Series>`, `Light Novels/<Series>`, `Music/<Artist>/<Album>`) that no other item has files in is removed whole, so leftover covers or metadata can't be re-imported by the next sync. Otherwise files are removed one by one and emptied folders pruned, never the type folder itself. Every path must be inside `MEDIA_ROOT`; any failure stops before the database. Old transcodes in `temp/` go too.
+  3. Files (and an uploaded cover in `Covers/`): a title folder (`TV Shows/<Series>`, `Movies/<Movie>`, `Manga/<Series>`, `Light Novels/<Series>`, `Music/<Artist>/<Album>`) that no other item has files in is removed whole, so leftover covers or metadata can't be re-imported by the next sync. Otherwise files are removed one by one and emptied folders pruned, never the type folder itself. Every path must be inside `MEDIA_ROOT`; any failure stops before the database. Old transcodes in `temp/` go too.
   4. One transaction deletes the item's `download_jobs` (no `ON DELETE` rule) and the item; lists, progress, episodes, chapters and volumes cascade. `download_requests` keep their history.
 
 ## External Integrations

@@ -1,14 +1,11 @@
 package sync
 
 import (
-	"archive/zip"
 	"database/sql"
 	"fmt"
-	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -16,8 +13,10 @@ import (
 	"github.com/Mantie7553/MediaHub/backend/internal/clients/anilist"
 	"github.com/Mantie7553/MediaHub/backend/internal/clients/arr"
 	"github.com/Mantie7553/MediaHub/backend/internal/clients/mangadex"
+	"github.com/Mantie7553/MediaHub/backend/internal/locks"
 	"github.com/Mantie7553/MediaHub/backend/internal/mangafiles"
 	"github.com/Mantie7553/MediaHub/backend/internal/musicfiles"
+	"github.com/Mantie7553/MediaHub/backend/internal/novelfiles"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/logger"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/utils"
 	"github.com/lib/pq"
@@ -89,10 +88,10 @@ func (h *Handler) syncSonarr() error {
 			}
 			h.db.Exec(
 				`UPDATE media_items SET
-				title = $1,
-				cover_image_url = $2,
-				description = COALESCE(description, $3),
-				release_date = COALESCE(release_date, $4)
+				`+locks.Keep(locks.Title, "title", "$1")+`,
+				`+locks.Keep(locks.Cover, "cover_image_url", "$2")+`,
+				`+locks.Keep(locks.Description, "description", "COALESCE(description, $3)")+`,
+				`+locks.Keep(locks.ReleaseDate, "release_date", "COALESCE(release_date, $4)")+`
 				WHERE id = $5`,
 				s.Title, utils.NullString(s.PosterURL()), utils.NullString(s.Overview), releaseDate, mediaItemID,
 			)
@@ -131,7 +130,7 @@ func (h *Handler) syncSonarr() error {
 					utils.SafeDay(aniResult.StartDate.Day),
 				)
 				h.db.Exec(
-					`UPDATE media_items SET release_date = $1 WHERE id = $2`,
+					`UPDATE media_items SET `+locks.Keep(locks.ReleaseDate, "release_date", "$1")+` WHERE id = $2`,
 					date, mediaItemID,
 				)
 			}
@@ -155,9 +154,9 @@ func (h *Handler) syncSonarr() error {
 				`INSERT INTO anime_metadata (media_item_id, studio, status, genres)
 				VALUES ($1, $2, $3, $4)
 				ON CONFLICT (media_item_id) DO UPDATE SET
-				studio = EXCLUDED.studio,
-				status = EXCLUDED.status,
-				genres = EXCLUDED.genres`,
+				`+locks.KeepMeta(locks.Studio, "anime_metadata", "studio", "EXCLUDED.studio")+`,
+				`+locks.KeepMeta(locks.Status, "anime_metadata", "status", "EXCLUDED.status")+`,
+				`+locks.KeepMeta(locks.Genres, "anime_metadata", "genres", "EXCLUDED.genres"),
 				mediaItemID, utils.NullString(studio), utils.NullString(status), pq.Array(aniResult.Genres),
 			)
 			if err != nil {
@@ -169,7 +168,7 @@ func (h *Handler) syncSonarr() error {
 				`INSERT INTO anime_metadata (media_item_id, genres)
 				VALUES ($1, $2)
 				ON CONFLICT (media_item_id) DO UPDATE SET
-				genres = EXCLUDED.genres`,
+				`+locks.KeepMeta(locks.Genres, "anime_metadata", "genres", "EXCLUDED.genres"),
 				mediaItemID, pq.Array(s.Genres),
 			)
 			if err != nil {
@@ -212,7 +211,8 @@ func (h *Handler) syncSonarr() error {
 				VALUES ($1, $2, $3, $4, $5, $6)
 				ON CONFLICT (media_item_id, season_number, episode_number) DO UPDATE SET
 				file_path = EXCLUDED.file_path,
-				title = EXCLUDED.title,
+				title = CASE WHEN episodes.title_locked THEN episodes.title ELSE EXCLUDED.title END,
+				sonarr_id = EXCLUDED.sonarr_id,
 				updated_at = NOW()`,
 				mediaItemID, ep.SeasonNumber, ep.EpisodeNumber, ep.Title, filePath, ep.ID,
 			)
@@ -260,10 +260,10 @@ func (h *Handler) syncRadarr() error {
 			// Existing - update native fields
 			h.db.Exec(
 				`UPDATE media_items SET
-				title = $1,
-				cover_image_url = $2,
-				description = COALESCE(description, $3),
-				release_date = COALESCE(release_date, $4)
+				`+locks.Keep(locks.Title, "title", "$1")+`,
+				`+locks.Keep(locks.Cover, "cover_image_url", "$2")+`,
+				`+locks.Keep(locks.Description, "description", "COALESCE(description, $3)")+`,
+				`+locks.Keep(locks.ReleaseDate, "release_date", "COALESCE(release_date, $4)")+`
 				WHERE id = $5`,
 				m.Title, utils.NullString(m.PosterURL()), utils.NullString(m.Overview), utils.NullString(m.ReleaseDate()), mediaItemID,
 			)
@@ -277,7 +277,7 @@ func (h *Handler) syncRadarr() error {
 			`INSERT INTO movie_metadata (media_item_id, genres)
 			VALUES ($1, $2)
 			ON CONFLICT (media_item_id) DO UPDATE SET
-			genres = EXCLUDED.genres`,
+			`+locks.KeepMeta(locks.Genres, "movie_metadata", "genres", "EXCLUDED.genres"),
 			mediaItemID, pq.Array(m.Genres),
 		)
 		if err != nil {
@@ -304,7 +304,7 @@ func (h *Handler) syncRadarr() error {
 						`INSERT INTO movie_metadata (media_item_id, genres)
 						VALUES ($1, $2)
 						ON CONFLICT (media_item_id) DO UPDATE SET
-						genres = EXCLUDED.genres`,
+						`+locks.KeepMeta(locks.Genres, "movie_metadata", "genres", "EXCLUDED.genres"),
 						mediaItemID, pq.Array(full.Genres),
 					)
 					if err != nil {
@@ -427,9 +427,13 @@ func (h *Handler) syncManga() error {
 				continue
 			}
 
+			// a cover an admin handed back to the sync is NULL, and filled in again here
 			_, err = h.db.Exec(
-				`UPDATE media_items SET description = COALESCE(description, $1) WHERE id = $2`,
-				description, mediaItemID,
+				`UPDATE media_items SET
+				`+locks.Keep(locks.Description, "description", "COALESCE(description, $1)")+`,
+				`+locks.Keep(locks.Cover, "cover_image_url", "COALESCE(cover_image_url, $3)")+`
+				WHERE id = $2`,
+				description, mediaItemID, utils.NullString(coverURL),
 			)
 			if err != nil {
 				logger.Error("unable to add description for %s: %s", title, err.Error())
@@ -465,6 +469,13 @@ func (h *Handler) syncManga() error {
 				return nil
 			}
 
+			// a file already in the library keeps the number it has there, which an admin may
+			// have corrected
+			var known bool
+			h.db.QueryRow(`SELECT EXISTS (SELECT 1 FROM manga_chapters WHERE file_path = $1)`, path).Scan(&known)
+			if known {
+				return nil
+			}
 			h.db.Exec(
 				`INSERT INTO manga_chapters (media_item_id, chapter_number, title, file_path, page_count, created_at)
 				VALUES ($1, $2, NULLIF($3, ''), $4, $5, NOW())
@@ -480,7 +491,6 @@ func (h *Handler) syncManga() error {
 
 func (h *Handler) syncLightNovels() error {
 	mediaRoot := os.Getenv("MEDIA_ROOT")
-	regex := regexp.MustCompile(`(?i)volume[_\s](\d+)`)
 	dirListing, err := os.ReadDir(filepath.Join(mediaRoot, "Light Novels"))
 	if err != nil {
 		return err
@@ -520,11 +530,20 @@ func (h *Handler) syncLightNovels() error {
 			continue
 		}
 
+		// the title that owns volumes in this folder, which may have been renamed since, or one
+		// named after the folder
+		folder := filepath.Join(mediaRoot, "Light Novels", entry.Name())
 		var mediaItemID string
 		err = h.db.QueryRow(
-			`SELECT id FROM media_items WHERE type = 'light_novel' AND title = $1`,
-			entry.Name(),
+			`SELECT media_item_id FROM light_novel_volumes WHERE file_path LIKE $1 ESCAPE '\' LIMIT 1`,
+			utils.LikePrefix(folder+string(filepath.Separator)),
 		).Scan(&mediaItemID)
+		if err == sql.ErrNoRows {
+			err = h.db.QueryRow(
+				`SELECT id FROM media_items WHERE type = 'light_novel' AND title = $1`,
+				entry.Name(),
+			).Scan(&mediaItemID)
+		}
 
 		if err == sql.ErrNoRows {
 			var startDate *string
@@ -562,9 +581,9 @@ func (h *Handler) syncLightNovels() error {
 				`UPDATE media_items SET
 				external_id = COALESCE(external_id, $1),
 				external_source = COALESCE(external_source, $2),
-				description = COALESCE(description, $3),
-				cover_image_url = COALESCE(cover_image_url, $4),
-				release_date = COALESCE(release_date, $5)
+				`+locks.Keep(locks.Description, "description", "COALESCE(description, $3)")+`,
+				`+locks.Keep(locks.Cover, "cover_image_url", "COALESCE(cover_image_url, $4)")+`,
+				`+locks.Keep(locks.ReleaseDate, "release_date", "COALESCE(release_date, $5)")+`
 				WHERE id = $6`,
 				id, "anilist", lightNovel.Description, lightNovel.CoverImage.Large, releaseDate, mediaItemID,
 			)
@@ -588,15 +607,20 @@ func (h *Handler) syncLightNovels() error {
 			if filepath.Ext(file.Name()) != ".epub" {
 				continue
 			}
-			match := regex.FindStringSubmatch(file.Name())
-			if match == nil {
+			volumeNum, ok := novelfiles.VolumeNumber(file.Name())
+			if !ok {
 				logger.Warn("File %s does not include volume number in the name", file.Name())
 				continue
 			}
 
-			volumeNum, _ := strconv.Atoi(match[1])
-
-			filePath := filepath.Join(mediaRoot, "Light Novels", entry.Name(), file.Name())
+			filePath := filepath.Join(folder, file.Name())
+			// a file already in the library keeps the number it has there, which an admin may
+			// have corrected
+			var known bool
+			h.db.QueryRow(`SELECT EXISTS (SELECT 1 FROM light_novel_volumes WHERE file_path = $1)`, filePath).Scan(&known)
+			if known {
+				continue
+			}
 			var volumeID string
 			err = h.db.QueryRow(
 				`INSERT INTO light_novel_volumes (media_item_id, volume_number, title, file_path)
@@ -611,7 +635,7 @@ func (h *Handler) syncLightNovels() error {
 			}
 
 			if volumeNum == 1 {
-				coverFile, err := extractCoverHref(filePath)
+				coverFile, err := novelfiles.CoverHref(filePath)
 				if err != nil {
 					logger.Warn("failed to extract cover for %s: %v", file.Name(), err)
 				} else if coverFile != "" {
@@ -629,95 +653,6 @@ func (h *Handler) syncLightNovels() error {
 	}
 
 	return nil
-}
-
-func extractCoverHref(filePath string) (string, error) {
-	zr, err := zip.OpenReader(filePath)
-	if err != nil {
-		return "", err
-	}
-	defer zr.Close()
-
-	// step 1: find OPF path from container.xml
-	opfPath := ""
-	for _, f := range zr.File {
-		if f.Name != "META-INF/container.xml" {
-			continue
-		}
-		rc, err := f.Open()
-		if err != nil {
-			return "", err
-		}
-		content, err := io.ReadAll(rc)
-		rc.Close()
-		if err != nil {
-			return "", err
-		}
-		pathRe := regexp.MustCompile(`full-path="([^"]+)"`)
-		m := pathRe.FindSubmatch(content)
-		if m != nil {
-			opfPath = string(m[1])
-		}
-		break
-	}
-	if opfPath == "" {
-		return "", nil
-	}
-
-	// step 2: read the OPF
-	for _, f := range zr.File {
-		if f.Name != opfPath {
-			continue
-		}
-		rc, err := f.Open()
-		if err != nil {
-			return "", err
-		}
-		content, err := io.ReadAll(rc)
-		rc.Close()
-		if err != nil {
-			return "", err
-		}
-
-		opf := string(content)
-
-		// try properties="cover-image" first (EPUB3 standard)
-		coverImageRe := regexp.MustCompile(`<item[^>]+properties="cover-image"[^>]+href="([^"]+)"`)
-		if m := coverImageRe.FindStringSubmatch(opf); m != nil {
-			return filepath.Base(m[1]), nil
-		}
-		// also try href before properties
-		coverImageRe2 := regexp.MustCompile(`<item[^>]+href="([^"]+)"[^>]+properties="cover-image"`)
-		if m := coverImageRe2.FindStringSubmatch(opf); m != nil {
-			return filepath.Base(m[1]), nil
-		}
-
-		// try name first then content
-		metaRe2 := regexp.MustCompile(`(?i)<meta\s+name="cover"\s+content="([^"]+)"`)
-		metaRe3 := regexp.MustCompile(`(?i)<meta\s+content="([^"]+)"\s+name="cover"`)
-
-		var coverID string
-		if m := metaRe2.FindStringSubmatch(opf); m != nil {
-			coverID = m[1]
-		} else if m := metaRe3.FindStringSubmatch(opf); m != nil {
-			coverID = m[1]
-		}
-
-		if coverID != "" {
-			itemRe := regexp.MustCompile(`<item\s+[^>]*id="` + regexp.QuoteMeta(coverID) + `"[^>]+href="([^"]+)"`)
-			itemRe2 := regexp.MustCompile(`<item\s+[^>]*href="([^"]+)"[^>]+id="` + regexp.QuoteMeta(coverID) + `"`)
-			if m := itemRe.FindStringSubmatch(opf); m != nil {
-				return filepath.Base(m[1]), nil
-			}
-			if m := itemRe2.FindStringSubmatch(opf); m != nil {
-				return filepath.Base(m[1]), nil
-			}
-		}
-
-		return "", nil
-	}
-
-	return "", nil
 }
 
 func (h *Handler) syncMusic() (int, error) {
@@ -755,8 +690,20 @@ func (h *Handler) syncMusic() (int, error) {
 		albumName := parts[1]
 		fileName := strings.TrimSuffix(parts[len(parts)-1], filepath.Ext(parts[len(parts)-1]))
 
-		// upsert media_item
+		// a track already in the library by this file keeps its title, artist and album, which
+		// an admin may have changed: only its cover is looked at below
 		var mediaItemID string
+		var knownAlbum *string
+		err = h.db.QueryRow(
+			`SELECT media_item_id, album_id FROM music_metadata WHERE file_path = $1`, path,
+		).Scan(&mediaItemID, &knownAlbum)
+		if err == nil {
+			synced++
+			h.syncTrackCover(mediaItemID, path, knownAlbum)
+			return nil
+		}
+
+		// upsert media_item
 		err = h.db.QueryRow(
 			`SELECT id FROM media_items WHERE title = $1 AND type = 'music_track'`,
 			fileName,
@@ -781,11 +728,19 @@ func (h *Handler) syncMusic() (int, error) {
 		// upsert album if not "Singles"
 		var albumID *string
 		if albumName != "Singles" {
+			// the album the folder's other tracks are on, which may have been renamed since, or
+			// one named after the folder
 			var id string
 			err = h.db.QueryRow(
-				`SELECT id FROM albums WHERE title = $1 AND artist = $2`,
-				albumName, artist,
+				`SELECT album_id FROM music_metadata WHERE album_id IS NOT NULL AND file_path LIKE $1 ESCAPE '\' LIMIT 1`,
+				utils.LikePrefix(filepath.Join(musicRoot, artist, albumName)+string(filepath.Separator)),
 			).Scan(&id)
+			if err == sql.ErrNoRows {
+				err = h.db.QueryRow(
+					`SELECT id FROM albums WHERE title = $1 AND artist = $2`,
+					albumName, artist,
+				).Scan(&id)
+			}
 
 			if err == sql.ErrNoRows {
 				err = h.db.QueryRow(
@@ -821,28 +776,7 @@ func (h *Handler) syncMusic() (int, error) {
 		}
 
 		synced++
-
-		coverPath := musicfiles.CoverPath(path)
-		_, coverErr := os.Stat(coverPath)
-		if os.IsNotExist(coverErr) && musicfiles.ExtractCover(path, coverPath) {
-			coverErr = nil
-		}
-
-		// tracks and albums keep a cover they already have, such as an uploaded one
-		if coverErr == nil {
-			coverURL := musicfiles.CoverURL(mediaItemID)
-			h.db.Exec(
-				`UPDATE media_items SET cover_image_url = $1 WHERE id = $2 AND cover_image_url IS NULL`,
-				coverURL, mediaItemID,
-			)
-			if albumID != nil {
-				h.db.Exec(
-					`UPDATE albums SET cover_image_url = $1 WHERE id = $2 AND cover_image_url IS NULL`,
-					coverURL, *albumID,
-				)
-			}
-		}
-
+		h.syncTrackCover(mediaItemID, path, albumID)
 		return nil
 	})
 
@@ -852,4 +786,37 @@ func (h *Handler) syncMusic() (int, error) {
 
 	logger.Info("Music sync complete: %d tracks synced", synced)
 	return synced, nil
+}
+
+/*
+Function:	syncTrackCover
+Purpose:	give a track, and its album, the cover.jpg in the track's folder when they have no
+cover yet, taking it from the track's embedded art if the folder has none
+Params:
+  - mediaItemID: the track
+  - path: its file
+  - albumID: its album, nil for a single
+*/
+func (h *Handler) syncTrackCover(mediaItemID, path string, albumID *string) {
+	coverPath := musicfiles.CoverPath(path)
+	_, coverErr := os.Stat(coverPath)
+	if os.IsNotExist(coverErr) && musicfiles.ExtractCover(path, coverPath) {
+		coverErr = nil
+	}
+	if coverErr != nil {
+		return
+	}
+
+	// tracks and albums keep a cover they already have, such as an uploaded one
+	coverURL := musicfiles.CoverURL(mediaItemID)
+	h.db.Exec(
+		`UPDATE media_items SET cover_image_url = $1 WHERE id = $2 AND cover_image_url IS NULL`,
+		coverURL, mediaItemID,
+	)
+	if albumID != nil {
+		h.db.Exec(
+			`UPDATE albums SET cover_image_url = $1 WHERE id = $2 AND cover_image_url IS NULL`,
+			coverURL, *albumID,
+		)
+	}
 }

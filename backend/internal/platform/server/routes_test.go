@@ -110,3 +110,92 @@ func TestInviteRoutes(t *testing.T) {
 		})
 	}
 }
+
+// Exercises routing and auth only; the admin requests stop before the database.
+func TestCurationRoutes(t *testing.T) {
+	t.Setenv("CORS_ORIGIN", "http://localhost")
+	t.Setenv("JWT_SECRET", "access-secret-for-tests")
+	t.Setenv("MEDIA_SIGNING_SECRET", "media-secret-for-tests")
+	t.Setenv("MEDIA_ROOT", t.TempDir())
+
+	s := New(nil)
+	userToken, err := auth.GenerateToken("user-1", "user")
+	if err != nil {
+		t.Fatal(err)
+	}
+	adminToken, err := auth.GenerateToken("admin-1", "admin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	const id = "6f1c2b9e-1d2a-4b3c-8d4e-5f6a7b8c9d0e"
+	coverToken, err := auth.GenerateMediaToken("user-1", auth.MediaScope{MediaType: "cover", MediaID: id})
+	if err != nil {
+		t.Fatal(err)
+	}
+	musicToken, err := auth.GenerateMediaToken("user-1", auth.MediaScope{MediaType: "music", MediaID: id})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	adminOnly := []struct{ method, path string }{
+		{http.MethodPut, "/api/admin/media/" + id},
+		{http.MethodPost, "/api/admin/media/" + id + "/cover"},
+		{http.MethodPut, "/api/admin/albums/" + id},
+		{http.MethodPut, "/api/admin/episodes/" + id},
+		{http.MethodPut, "/api/admin/chapters/" + id},
+		{http.MethodPut, "/api/admin/volumes/" + id},
+		{http.MethodDelete, "/api/admin/episodes/" + id},
+		{http.MethodDelete, "/api/admin/chapters/" + id},
+		{http.MethodDelete, "/api/admin/volumes/" + id},
+		{http.MethodPost, "/api/admin/uploads"},
+		{http.MethodPut, "/api/admin/uploads/abc"},
+		{http.MethodDelete, "/api/admin/uploads/abc"},
+		{http.MethodPost, "/api/admin/anime/" + id + "/episodes"},
+		{http.MethodPost, "/api/admin/movies/" + id + "/file"},
+		{http.MethodPost, "/api/admin/light-novels/" + id + "/volumes"},
+		{http.MethodPost, "/api/admin/albums/" + id + "/tracks"},
+	}
+	for _, rt := range adminOnly {
+		for _, c := range []struct {
+			bearer string
+			status int
+		}{{"", http.StatusUnauthorized}, {userToken, http.StatusForbidden}} {
+			req := httptest.NewRequest(rt.method, rt.path, strings.NewReader("{}"))
+			if c.bearer != "" {
+				req.Header.Set("Authorization", "Bearer "+c.bearer)
+			}
+			rec := httptest.NewRecorder()
+			s.router.ServeHTTP(rec, req)
+			if rec.Code != c.status {
+				t.Errorf("%s %s with bearer=%t: status = %d, want %d", rt.method, rt.path, c.bearer != "", rec.Code, c.status)
+			}
+		}
+	}
+
+	covers := []struct {
+		name   string
+		query  string
+		status int
+	}{
+		{"cover without token", "", http.StatusUnauthorized},
+		{"cover with a music token", "?" + auth.MediaTokenParam + "=" + url.QueryEscape(musicToken), http.StatusUnauthorized},
+		// no file was uploaded for it
+		{"cover with its token", "?" + auth.MediaTokenParam + "=" + url.QueryEscape(coverToken), http.StatusNotFound},
+	}
+	for _, c := range covers {
+		rec := httptest.NewRecorder()
+		s.router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/media/"+id+"/cover"+c.query, nil))
+		if rec.Code != c.status {
+			t.Errorf("%s: status = %d, want %d", c.name, rec.Code, c.status)
+		}
+	}
+
+	// an admin can start an upload; nothing here needs the database
+	req := httptest.NewRequest(http.MethodPost, "/api/admin/uploads", strings.NewReader(`{"name":"a.mkv","size":4,"kind":"video"}`))
+	req.Header.Set("Authorization", "Bearer "+adminToken)
+	rec := httptest.NewRecorder()
+	s.router.ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Errorf("admin upload start: status = %d (%s)", rec.Code, rec.Body.String())
+	}
+}

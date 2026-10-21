@@ -1,6 +1,6 @@
 import { useRef, useState } from "react"
 import { useParams } from "react-router-dom"
-import { Play, Clock, BookmarkPlus, Check, ImagePlus } from "lucide-react"
+import { Play, Clock, BookmarkPlus, Check, PencilLine, Upload } from "lucide-react"
 import api from "../../services/api"
 import useApi from "../../hooks/useApi"
 import ErrorState from "../../components/states/ErrorState"
@@ -16,13 +16,17 @@ import DetailsHero from "../../components/details/DetailsHero"
 import { ActionMenu, ActionMenuItem } from "../../components/details/Menus"
 import { getRole } from "../../utils/auth"
 import Format from "../../utils/format"
+import EditDetailsModal from "../../components/modals/EditDetailsModal"
+import UploadFilesModal from "../../components/modals/UploadFilesModal"
+import useAdminPieces from "../../hooks/useAdminPieces"
 
 export default function AlbumDetailsPage() {
     const dialogRef = useRef(null);
-    const coverInputRef = useRef(null);
+    const editRef = useRef(null);
+    const uploadRef = useRef(null);
     // a cover just uploaded, with a version so the browser doesn't show the one it cached
     const [uploadedCover, setUploadedCover] = useState(null);
-    const [uploadingCover, setUploadingCover] = useState(false);
+    const isAdmin = getRole() === "admin";
     const { id } = useParams();
     const { userContentMap, refresh } = useUserContent();
     const userContent = userContentMap[id];
@@ -31,6 +35,7 @@ export default function AlbumDetailsPage() {
     const playAlbum = useAudioStore(state => state.playAlbum);
     const currentTrack = useAudioStore(state => state.currentTrack);
     const isPlaying = useAudioStore(state => state.isPlaying);
+    const pieces = useAdminPieces(() => reload(true));
 
     function formatDuration(secs) {
         if (!secs) return "--:--"
@@ -47,22 +52,6 @@ export default function AlbumDetailsPage() {
            .then(() => { toast.success(userContent ? "List updated" : "Added to your list"); refresh() })
            .catch(err => toast.error(err, "Could not update your list"))
    }
-
-    function handleCoverPicked(e) {
-        const file = e.target.files?.[0]
-        e.target.value = ""
-        if (!file) return
-        const form = new FormData()
-        form.append("file", file)
-        setUploadingCover(true)
-        api.post(`/admin/albums/${id}/cover`, form)
-            .then(res => {
-                setUploadedCover(`${res.data.cover_image_url}&v=${Date.now()}`)
-                toast.success("Cover updated")
-            })
-            .catch(err => toast.error(err, "Could not upload the cover"))
-            .finally(() => setUploadingCover(false))
-    }
 
     if (loading) return <DetailsSkeleton square />
     if (notFound) return <NotFound title="Album not found" hint="This album isn't in the library any more. It may have been removed." />
@@ -91,6 +80,7 @@ export default function AlbumDetailsPage() {
                     `${tracks.length} ${tracks.length === 1 ? "track" : "tracks"}`,
                     totalSecs > 0 && `${Math.round(totalSecs / 60)} min`,
                 ]}
+                description={album.description}
                 primary={<button className="btn btn-primary btn-lg shadow-glow px-6" onClick={() => playAlbum(queueTracks, 0)} disabled={tracks.length === 0}>
                     <Play size={18} fill="currentColor"/> Play
                 </button>}
@@ -99,10 +89,9 @@ export default function AlbumDetailsPage() {
                         {userContent ? <Check size={16} className="text-primary"/> : <BookmarkPlus size={16}/>}
                         {userContent ? Format.statusLabel(userContent.status, "music_album") : "Add to list"}
                     </button>
-                    {getRole() === "admin" && <ActionMenu>
-                        {tracks.some(t => t.file_path) && <ActionMenuItem icon={ImagePlus}
-                            label={uploadingCover ? "Uploading cover…" : "Change cover…"}
-                            onClick={() => { if (!uploadingCover) coverInputRef.current.click() }}/>}
+                    {isAdmin && <ActionMenu>
+                        <ActionMenuItem icon={PencilLine} label="Edit album…" onClick={() => editRef.current.showModal()}/>
+                        <ActionMenuItem icon={Upload} label="Add tracks…" onClick={() => uploadRef.current.showModal()}/>
                         <DeleteFromServerButton asMenuItem item={{ id, title: album.title, type: "music_album" }} />
                     </ActionMenu>}
                 </>}
@@ -110,7 +99,8 @@ export default function AlbumDetailsPage() {
 
             {/* Track List */}
             {tracks.length === 0 ? (
-                <EmptyState compact title="No tracks yet" hint="Tracks show up here once they've downloaded." />
+                <EmptyState compact title="No tracks yet" hint="Tracks show up here once they've downloaded."
+                    action={isAdmin ? { label: "Add tracks", onClick: () => uploadRef.current.showModal() } : undefined} />
             ) : (
                 <section className="surface p-1.5 sm:p-2 animate-fade-up">
                     <div className="flex items-center gap-4 px-3 py-2 text-xs uppercase tracking-wider text-base-content/40 border-b border-white/5 mb-1">
@@ -121,9 +111,9 @@ export default function AlbumDetailsPage() {
                     <ol className="flex flex-col gap-0.5">
                         {tracks.map((track, i) => {
                             const playing = currentTrack?.id === track.media_item_id
-                            return <li key={track.media_item_id}>
+                            return <li key={track.media_item_id} className="flex items-center gap-1">
                                 <button
-                                    className={`group w-full flex items-center gap-4 px-3 py-2.5 rounded-field text-left transition-colors hover:bg-white/5
+                                    className={`group flex-1 min-w-0 flex items-center gap-4 px-3 py-2.5 rounded-field text-left transition-colors hover:bg-white/5
                                         ${playing ? "bg-primary/8" : ""}`}
                                     onClick={() => playAlbum(queueTracks, i)}
                                     aria-label={`Play ${track.title}`}
@@ -139,15 +129,31 @@ export default function AlbumDetailsPage() {
                                     <span className={`flex-1 min-w-0 truncate text-sm font-medium ${playing ? "text-primary" : ""}`}>{track.title}</span>
                                     <span className="text-xs tabular-nums text-base-content/45">{formatDuration(track.duration_secs)}</span>
                                 </button>
+                                {pieces.menu({
+                                    kind: "track", id: track.media_item_id, label: track.title,
+                                    title: track.title, artist: track.artist || album.artist, track_number: track.track_number,
+                                })}
                             </li>
                         })}
                     </ol>
                 </section>
             )}
 
-            {/* outside the menu: a closed dropdown hides what's inside it */}
-            <input ref={coverInputRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif"
-                className="hidden" onChange={handleCoverPicked}/>
+            {isAdmin && <>
+                <EditDetailsModal
+                    dialogRef={editRef}
+                    item={{ ...album, type: "music_album", cover_image_url: cover }}
+                    onSaved={({ cover }) => { if (cover) setUploadedCover(cover); reload(true); }}
+                />
+                <UploadFilesModal
+                    dialogRef={uploadRef}
+                    kind="tracks"
+                    target={{ id, title: album.title }}
+                    have={tracks.map(t => t.title.trim().toLowerCase())}
+                    onAdded={() => reload(true)}
+                />
+            </>}
+            {pieces.modals}
 
             <AddToListModal
                 dialogRef={dialogRef}

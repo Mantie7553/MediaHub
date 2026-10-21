@@ -8,6 +8,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/Mantie7553/MediaHub/backend/internal/handlers/curation"
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/deletion"
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/invites"
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/jobs"
@@ -24,6 +25,7 @@ import (
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/archive"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/auth"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/logger"
+	"github.com/Mantie7553/MediaHub/backend/internal/uploads"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
 )
@@ -84,6 +86,8 @@ func (s *Server) routes() {
 		}
 	}
 	authHandler := auth.NewHandler(s.db)
+	curationHandler := curation.NewHandler(s.db)
+	uploadsStore := uploads.Default()
 	invitesHandler := invites.NewHandler(s.db)
 	jobsHandler := jobs.NewHandler(s.db)
 	listsHandler := lists.NewHandler(s.db)
@@ -143,6 +147,11 @@ func (s *Server) routes() {
 			r.Get("/stream/music/{id}", streamHandler.ServeTrack)
 			r.Get("/stream/music/{id}/cover", streamHandler.ServeCover)
 		})
+
+		// covers admins uploaded for a title
+		r.With(auth.RequireMediaToken(func(r *http.Request) auth.MediaScope {
+			return auth.MediaScope{MediaType: "cover", MediaID: chi.URLParam(r, "id")}
+		})).Get("/media/{id}/cover", curationHandler.ServeCover)
 
 		r.With(auth.RequireMediaToken(func(r *http.Request) auth.MediaScope {
 			return auth.MediaScope{
@@ -231,6 +240,27 @@ func (s *Server) routes() {
 			// manga chapters: upload a file, or fetch what MangaDex has that the library doesn't
 			r.Post("/admin/manga/{id}/chapters", mangaHandler.UploadChapter)
 			r.Post("/admin/manga/{id}/check", mangaHandler.CheckForChapters)
+
+			// curating the library by hand: details, covers, and the pieces of each title.
+			// Edited fields are locked so the library syncs keep them
+			r.Put("/admin/media/{id}", curationHandler.EditMedia)
+			r.Post("/admin/media/{id}/cover", curationHandler.UploadCover)
+			r.Put("/admin/albums/{id}", curationHandler.EditAlbum)
+			r.Put("/admin/episodes/{id}", curationHandler.EditEpisode)
+			r.Put("/admin/chapters/{id}", curationHandler.EditChapter)
+			r.Put("/admin/volumes/{id}", curationHandler.EditVolume)
+			r.Delete("/admin/episodes/{id}", deletionHandler.DeleteEpisode)
+			r.Delete("/admin/chapters/{id}", deletionHandler.DeleteChapter)
+			r.Delete("/admin/volumes/{id}", deletionHandler.DeleteVolume)
+			// large files arrive in chunks (Cloudflare allows 100 MB a request), then are
+			// added to a title by naming the finished upload
+			r.Post("/admin/uploads", uploadsStore.Start)
+			r.Put("/admin/uploads/{id}", uploadsStore.Chunk)
+			r.Delete("/admin/uploads/{id}", uploadsStore.Cancel)
+			r.Post("/admin/anime/{id}/episodes", curationHandler.AddEpisode)
+			r.Post("/admin/movies/{id}/file", curationHandler.AddMovieFile)
+			r.Post("/admin/light-novels/{id}/volumes", curationHandler.AddVolume)
+			r.Post("/admin/albums/{id}/tracks", curationHandler.AddTrack)
 			// Request Handler endpoints
 			r.Get("/requests/all", requestsHandler.GetAllAdmin)
 			r.Put("/requests/{id}/approve", requestsHandler.Approve)

@@ -152,12 +152,6 @@ func TestRemoveTranscodes(t *testing.T) {
 	}
 }
 
-func TestLikePrefixEscapesWildcards(t *testing.T) {
-	if got := likePrefix(`/m/100%_done\`); got != `/m/100\%\_done\\%` {
-		t.Errorf("likePrefix = %q", got)
-	}
-}
-
 func TestRespondError(t *testing.T) {
 	h := &Handler{}
 	rec := httptest.NewRecorder()
