@@ -122,7 +122,7 @@ function PasswordForm({ onDone }) {
         if (problem) { setError(problem); return; }
         setSaving(true);
         setError(null);
-        api.put("/me/password", { current_password: currentPassword, new_password: newPassword })
+        api.put("/auth/password", { current_password: currentPassword, new_password: newPassword })
             .then(() => { toast.success("Password changed. Other devices have been signed out"); onDone(); })
             .catch(err => setError(errorMessage(err, "Couldn't change your password")))
             .finally(() => setSaving(false));

@@ -77,7 +77,8 @@ services:
     depends_on:
       - backend
     ports:
-      - "${HTTP_PORT:-80}:80"
+      # the LAN listener; the tunnel uses :80 inside the Docker network (see deploy/Caddyfile)
+      - "${HTTP_PORT:-80}:8081"
     labels: *autoupdate
 
   cloudflared:

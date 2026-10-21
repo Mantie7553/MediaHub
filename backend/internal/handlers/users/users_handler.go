@@ -126,7 +126,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// signing out on a new password or role means the change takes effect within minutes;
-	// the user's own password change keeps their current session (see /me/password)
+	// the user's own password change keeps their current session (see /auth/password)
 	revoke := req.Password != ""
 
 	if req.Password != "" {

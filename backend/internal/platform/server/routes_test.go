@@ -90,6 +90,7 @@ func TestInviteRoutes(t *testing.T) {
 		{"job archive needs admin", http.MethodPost, "/api/admin/jobs/archive", `{"ids":[]}`, userToken, http.StatusForbidden},
 		{"account change needs auth", http.MethodPut, "/api/me", `{}`, "", http.StatusUnauthorized},
 		{"password change needs auth", http.MethodPut, "/api/me/password", `{}`, "", http.StatusUnauthorized},
+		{"password change under /auth needs auth", http.MethodPut, "/api/auth/password", `{}`, "", http.StatusUnauthorized},
 		{"sign out everywhere needs auth", http.MethodPost, "/api/auth/logout-all", "", "", http.StatusUnauthorized},
 		{"refresh without a session", http.MethodPost, "/api/auth/refresh", "", "", http.StatusUnauthorized},
 		{"logout without a session", http.MethodDelete, "/api/auth/logout", "", "", http.StatusNoContent},

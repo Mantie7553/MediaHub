@@ -175,6 +175,10 @@ func (s *Server) routes() {
 			r.Get("/me", authHandler.Me)
 			// account changes check the current password, so they are rate limited too
 			r.With(auth.RateLimit).Put("/me", authHandler.UpdateAccount)
+			// under /auth so the browser sends the session cookie (Path=/api/auth) and the session
+			// making the change stays signed in. /me/password is the old address, for tabs
+			// opened before an update; without the cookie it signs out every session
+			r.With(auth.RateLimit).Put("/auth/password", authHandler.ChangePassword)
 			r.With(auth.RateLimit).Put("/me/password", authHandler.ChangePassword)
 			r.Post("/auth/logout-all", authHandler.LogoutAll)
 			r.Get("/me/preferences", usersHandler.GetPreferences)
