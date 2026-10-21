@@ -3,6 +3,7 @@ package search
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"strconv"
@@ -116,40 +117,38 @@ func (h *Handler) Save(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// insert the media item if it doesn't exist, otherwise return the existing id
-	var mediaItemID string
-	err := h.db.QueryRow(
-		`SELECT id FROM media_items WHERE title = $1 AND type = $2`,
-		req.Title, req.Type,
-	).Scan(&mediaItemID)
-
-	if err == sql.ErrNoRows {
-		if req.ExternalID == "" || req.ExternalSource == "" {
-			utils.Error(w, http.StatusBadRequest, "external id and external source are required")
-			return
+	// insert the media item if it doesn't exist, otherwise use the existing one. Any user can
+	// save, and a title in the library is shared by everyone, so saving never changes one that
+	// is already there (only an admin can fill in what it is missing)
+	mediaItemID, created, err := h.findOrCreate(req)
+	var bad badRequest
+	if errors.As(err, &bad) {
+		utils.Error(w, http.StatusBadRequest, string(bad))
+		return
+	}
+	if utils.InternalError(w, err) {
+		return
+	}
+	if !created {
+		if user.Role == "admin" {
+			h.db.Exec(
+				`UPDATE media_items SET
+				external_id = COALESCE(external_id, $1),
+				external_source = COALESCE(external_source, $2),
+				cover_image_url = COALESCE(cover_image_url, $3)
+				WHERE id = $4`,
+				utils.NullString(req.ExternalID), utils.NullString(req.ExternalSource), utils.NullString(req.CoverImageURL), mediaItemID,
+			)
 		}
-		err := h.db.QueryRow(
-			`INSERT INTO media_items (type, title, cover_image_url, external_id, external_source)
-			VALUES ($1, $2, $3, $4, $5)
-			ON CONFLICT (external_id, external_source) DO UPDATE SET title = EXCLUDED.title
-			RETURNING id`,
-			req.Type, req.Title, utils.NullString(req.CoverImageURL), req.ExternalID, req.ExternalSource,
-		).Scan(&mediaItemID)
+		// metadata is fetched, and downloads dispatched, by the ids the library has for the
+		// title, never ones from the request
+		var externalID, externalSource sql.NullString
+		err := h.db.QueryRow(`SELECT external_id, external_source FROM media_items WHERE id = $1`, mediaItemID).
+			Scan(&externalID, &externalSource)
 		if utils.InternalError(w, err) {
 			return
 		}
-	} else if err != nil {
-		utils.InternalError(w, err)
-		return
-	} else {
-		h.db.Exec(
-			`UPDATE media_items SET 
-			external_id = COALESCE(external_id, $1),
-			external_source = COALESCE(external_source, $2),
-			cover_image_url = COALESCE(cover_image_url, $3)
-			WHERE id = $4`,
-			req.ExternalID, req.ExternalSource, utils.NullString(req.CoverImageURL), mediaItemID,
-		)
+		req.ExternalID, req.ExternalSource = externalID.String, externalSource.String
 	}
 
 	if req.Type == "anime" && req.ExternalSource == "anilist" && req.ExternalID != "" {
@@ -279,7 +278,8 @@ func (h *Handler) Save(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if req.Type == "music_track" && req.ExternalSource == "ytdlp" && req.ExternalID != "" {
+	// a track already in the library keeps its artist and album
+	if created && req.Type == "music_track" && req.ExternalSource == "ytdlp" && req.ExternalID != "" {
 		var albumID *string
 		if req.Album != "" {
 			var id string
@@ -307,10 +307,7 @@ func (h *Handler) Save(w http.ResponseWriter, r *http.Request) {
 		_, err = h.db.Exec(
 			`INSERT INTO music_metadata (media_item_id, artist, duration_secs, album_id)
 			VALUES ($1, $2, $3, $4)
-			ON CONFLICT (media_item_id) DO UPDATE SET
-			artist = EXCLUDED.artist,
-			duration_secs = EXCLUDED.duration_secs,
-			album_id = EXCLUDED.album_id`,
+			ON CONFLICT (media_item_id) DO NOTHING`,
 			mediaItemID,
 			req.Artist,
 			req.DurationSecs,
@@ -395,4 +392,46 @@ func (h *Handler) Save(w http.ResponseWriter, r *http.Request) {
 	}
 
 	utils.JSON(w, map[string]string{"id": mediaItemID}, http.StatusCreated)
+}
+
+// badRequest is a problem with what was sent, answered with a 400
+type badRequest string
+
+func (b badRequest) Error() string { return string(b) }
+
+/*
+Function:	findOrCreate
+Purpose:	the media item a save is for: the one with this title and type, or the one with this
+external id, or a new one. Never changes an item that exists
+Returns:	its id, and whether it was just created
+*/
+func (h *Handler) findOrCreate(req saveRequest) (string, bool, error) {
+	var id string
+	err := h.db.QueryRow(`SELECT id FROM media_items WHERE title = $1 AND type = $2`, req.Title, req.Type).Scan(&id)
+	if err != sql.ErrNoRows {
+		return id, false, err
+	}
+	if req.ExternalID == "" || req.ExternalSource == "" {
+		return "", false, badRequest("external id and external source are required")
+	}
+
+	err = h.db.QueryRow(
+		`INSERT INTO media_items (type, title, cover_image_url, external_id, external_source)
+		VALUES ($1, $2, $3, $4, $5)
+		ON CONFLICT (external_id, external_source) DO NOTHING
+		RETURNING id`,
+		req.Type, req.Title, utils.NullString(req.CoverImageURL), req.ExternalID, req.ExternalSource,
+	).Scan(&id)
+	if err == nil {
+		return id, true, nil
+	}
+	if err != sql.ErrNoRows {
+		return "", false, err
+	}
+	// already in the library under another title
+	err = h.db.QueryRow(
+		`SELECT id FROM media_items WHERE external_id = $1 AND external_source = $2`,
+		req.ExternalID, req.ExternalSource,
+	).Scan(&id)
+	return id, false, err
 }

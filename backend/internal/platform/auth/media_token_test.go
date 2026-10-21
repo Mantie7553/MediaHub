@@ -218,6 +218,8 @@ func TestSignCoverURL(t *testing.T) {
 		{"mangadex proxy", ptr("/api/proxy/cover?url=x"), false, MediaScope{}},
 		{"nested path", ptr("/api/stream/music/a/b/cover"), false, MediaScope{}},
 		{"nested uploaded path", ptr("/api/media/a/b/cover"), false, MediaScope{}},
+		{"light novel cover", ptr("/api/light-novels/ln-1/volumes/vol-1/images/cover.jpg"), true, MediaScope{MediaType: "light_novel", MediaID: "ln-1", VolumeID: "vol-1"}},
+		{"light novel image in a folder", ptr("/api/light-novels/ln-1/volumes/vol-1/images/a/cover.jpg"), false, MediaScope{}},
 	}
 
 	for _, tt := range tests {

@@ -127,12 +127,15 @@ func SignMediaPath(path, userID string, scope MediaScope) (string, error) {
 var (
 	musicCoverPath    = regexp.MustCompile(`^/api/stream/music/([^/?]+)/cover$`)
 	uploadedCoverPath = regexp.MustCompile(`^/api/media/([^/?]+)/cover$`)
+	// a light novel's cover is an image inside its first volume's EPUB
+	volumeImagePath = regexp.MustCompile(`^/api/light-novels/([^/?]+)/volumes/([^/?]+)/images/[^/?]+$`)
 )
 
 /*
 Function:	SignCoverURL
-Purpose:	Sign a stored music cover or admin uploaded cover URL in place so <img> tags can load
-            it. Any other cover URL (external hosts, the MangaDex proxy) is left unchanged
+Purpose:	Sign a stored music cover, admin uploaded cover or light novel volume image URL in place
+            so <img> tags can load it. Any other cover URL (external hosts, the MangaDex proxy) is
+            left unchanged
 Params:
   - cover: the cover_image_url read from the database
   - userID: the id of the user the token is minted for
@@ -146,6 +149,8 @@ func SignCoverURL(cover *string, userID string) error {
 		scope = MediaScope{MediaType: "music", MediaID: m[1]}
 	} else if m := uploadedCoverPath.FindStringSubmatch(*cover); m != nil {
 		scope = MediaScope{MediaType: "cover", MediaID: m[1]}
+	} else if m := volumeImagePath.FindStringSubmatch(*cover); m != nil {
+		scope = MediaScope{MediaType: "light_novel", MediaID: m[1], VolumeID: m[2]}
 	} else {
 		return nil
 	}
