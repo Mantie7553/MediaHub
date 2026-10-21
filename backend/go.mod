@@ -1,6 +1,6 @@
 module github.com/Mantie7553/MediaHub/backend
 
-go 1.26.2
+go 1.26.10
 
 require (
 	github.com/dhowden/tag v0.0.0-20240417053706-3d75831295e8
