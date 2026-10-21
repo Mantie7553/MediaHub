@@ -130,6 +130,8 @@ func TestTranscodeArgs(t *testing.T) {
 	for _, want := range []string{
 		"-map 0:v:0", "-map 0:2", "-b:v 6M", "-maxrate 8M", "-forced_idr 1",
 		"-hls_time 4", "-hls_playlist_type event", "-ac 2",
+		// the input may only be read as a local file
+		"-protocol_whitelist file -i in.mkv",
 	} {
 		if !strings.Contains(args, want) {
 			t.Errorf("args missing %q: %s", want, args)

@@ -33,6 +33,11 @@ var (
 	lessUsefulRe = regexp.MustCompile(`(?i)\bsdh\b|dubtitle|\bcc\b`)
 )
 
+// inputOnlyLocal goes before every input ffmpeg and ffprobe open: a media file can only read
+// local files, so a file that is really a playlist or a reference to somewhere else (a
+// torrented "episode", say) can't make the server send requests
+var inputOnlyLocal = []string{"-protocol_whitelist", "file"}
+
 /*
 Function:	probeStreams
 Purpose:	list the streams in a media file with ffprobe
@@ -40,12 +45,12 @@ Params:
   - filePath: the file to inspect
 */
 func probeStreams(filePath string) ([]probeStream, error) {
-	out, err := exec.Command("ffprobe",
-		"-v", "error",
+	args := append([]string{"-v", "error"}, inputOnlyLocal...)
+	out, err := exec.Command("ffprobe", append(args,
 		"-show_entries", "stream=index,codec_type,codec_name:stream_tags=language,title:stream_disposition=default,forced",
 		"-of", "json",
 		filePath,
-	).Output()
+	)...).Output()
 	if err != nil {
 		return nil, fmt.Errorf("ffprobe: %w", err)
 	}

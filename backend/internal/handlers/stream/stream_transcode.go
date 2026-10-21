@@ -129,6 +129,7 @@ func transcodeArgs(filePath, dir string, manifest streamManifest) []string {
 	if accel := hwaccelFor(manifest.VideoCodec); accel != "" {
 		args = append(args, "-hwaccel", accel)
 	}
+	args = append(args, inputOnlyLocal...)
 	args = append(args, "-i", filePath, "-map", "0:v:0")
 	if manifest.AudioIndex >= 0 {
 		args = append(args, "-map", fmt.Sprintf("0:%d", manifest.AudioIndex))
@@ -328,7 +329,8 @@ func extractSubtitles(filePath, dir string, subs []subtitleTrack) {
 	}
 
 	run := func(tracks []subtitleTrack) error {
-		args := []string{"-v", "error", "-y", "-i", filePath}
+		args := append([]string{"-v", "error", "-y"}, inputOnlyLocal...)
+		args = append(args, "-i", filePath)
 		for _, s := range tracks {
 			args = append(args, "-map", fmt.Sprintf("0:%d", s.Index), "-c:s", "webvtt", "-f", "webvtt",
 				filepath.Join(dir, s.File+".tmp"))

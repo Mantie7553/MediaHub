@@ -583,6 +583,9 @@ func respondFileError(w http.ResponseWriter, err error) bool {
 	return true
 }
 
+// the formats ffprobe may read an upload as: what the allowed video extensions and mp3 are
+const uploadFormats = "matroska,mov,avi,mpegts,mp3"
+
 type probeResult struct {
 	Streams []struct {
 		CodecType string `json:"codec_type"`
@@ -597,6 +600,9 @@ type probeResult struct {
 func probe(path string) (probeResult, error) {
 	var res probeResult
 	out, err := exec.Command("ffprobe", "-v", "error",
+		// an upload is read as a local file in one of the formats allowed for it and nothing
+		// else, so a playlist or reference posing as a video can't reach other files or hosts
+		"-protocol_whitelist", "file", "-format_whitelist", uploadFormats,
 		"-show_entries", "stream=codec_type:format=format_name,duration", "-of", "json", path).Output()
 	if err != nil {
 		var exitErr *exec.ExitError
