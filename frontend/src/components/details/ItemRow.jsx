@@ -14,8 +14,9 @@ import { Check, Play } from "lucide-react"
  * @param {function} onOpen plays or reads it
  * @param {string} openLabel e.g. "Watch episode 3"
  * @param {any} openIcon a lucide icon, Play by default
+ * @param {any} menu an ActionMenu after the open button, for admin actions on the row
  */
-export default function ItemRow({ checked, onToggle, toggleLabel, number, title, progress = null, progressLabel, current = false, onOpen, openLabel, openIcon: OpenIcon = Play }) {
+export default function ItemRow({ checked, onToggle, toggleLabel, number, title, progress = null, progressLabel, current = false, onOpen, openLabel, openIcon: OpenIcon = Play, menu }) {
     return <li className={`group relative flex items-center gap-3 sm:gap-4 pl-2 pr-2 sm:pl-3 py-2 rounded-field transition-colors hover:bg-white/5
         ${current ? "bg-primary/8 ring-1 ring-inset ring-primary/25" : ""}`}>
         <CheckToggle checked={checked} onClick={onToggle} label={toggleLabel}/>
@@ -37,6 +38,7 @@ export default function ItemRow({ checked, onToggle, toggleLabel, number, title,
                 <OpenIcon size={16} fill={OpenIcon === Play ? "currentColor" : "none"} className={OpenIcon === Play ? "ml-0.5" : ""}/>
             </span>
         </button>
+        {menu && <div className="shrink-0">{menu}</div>}
     </li>
 }
 

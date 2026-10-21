@@ -56,7 +56,9 @@ type MediaItem struct {
 
 type MediaItemDetail struct {
 	MediaItem
-	Metadata any `json:"metadata"`
+	// the fields an admin set by hand, which library syncs leave alone
+	LockedFields []string `json:"locked_fields"`
+	Metadata     any      `json:"metadata"`
 }
 
 // ANIME
@@ -71,6 +73,7 @@ type Episode struct {
     SeasonNumber  int      `json:"season_number"`
     EpisodeNumber int      `json:"episode_number"`
     Title         *string  `json:"title"`
+    TitleLocked   bool     `json:"title_locked"`
     Watched       bool     `json:"watched"`
     PositionSecs  float64  `json:"position_secs"`
     DurationSecs  float64  `json:"duration_secs"`

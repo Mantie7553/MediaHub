@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import api from "../../services/api";
 import ErrorState from "../../components/states/ErrorState";
@@ -11,12 +11,16 @@ import { useMediaItem, useUserContent, useRemoveFromList } from "../../hooks";
 import DeleteFromServerButton from "../../components/DeleteFromServerButton";
 import { animeBadge } from "../../utils/status";
 import Format from "../../utils/format";
-import { CheckCheck, Play, RotateCcw, Undo2 } from "lucide-react";
+import { CheckCheck, PencilLine, Play, RotateCcw, Undo2, Upload } from "lucide-react";
 import DetailsHero from "../../components/details/DetailsHero";
 import StatusPill from "../../components/StatusPill";
 import { ActionMenu, ActionMenuItem, ListStatusMenu } from "../../components/details/Menus";
 import ItemRow, { ItemList } from "../../components/details/ItemRow";
 import SegmentedTabs from "../../components/SegmentedTabs";
+import EditDetailsModal from "../../components/modals/EditDetailsModal";
+import UploadFilesModal from "../../components/modals/UploadFilesModal";
+import useAdminPieces from "../../hooks/useAdminPieces";
+import { getRole } from "../../utils/auth";
 
 export default function AnimeDetailsPage() {
     const { id } = useParams();
@@ -33,6 +37,13 @@ export default function AnimeDetailsPage() {
     const [episodesAttempt, setEpisodesAttempt] = useState(0);
     // the season tab picked, null until the user picks one (then the next episode's season shows)
     const [pickedSeason, setPickedSeason] = useState(null);
+    const editRef = useRef(null);
+    const uploadRef = useRef(null);
+    // a cover just uploaded, with a version so the browser doesn't show the one it cached
+    const [newCover, setNewCover] = useState(null);
+    const isAdmin = getRole() === "admin";
+    const reloadEpisodes = () => setEpisodesAttempt(a => a + 1);
+    const pieces = useAdminPieces(reloadEpisodes);
 
     useEffect(() => {
         // background: the refresh when the tab regains focus, which fails quietly
@@ -138,7 +149,7 @@ export default function AnimeDetailsPage() {
     return (
         <div className="flex flex-col gap-8">
             <DetailsHero
-                cover={{ src: anime.cover_image_url }}
+                cover={{ src: newCover ?? anime.cover_image_url }}
                 eyebrow="Anime"
                 title={anime.title}
                 badges={anime.metadata.status && <StatusPill label={anime.metadata.status} tone={animeBadge(anime.metadata.status)?.replace("badge-", "")}/>}
@@ -164,6 +175,10 @@ export default function AnimeDetailsPage() {
                     <ActionMenu>
                         <ActionMenuItem icon={CheckCheck} label="Mark all watched" onClick={() => markShow(true)}/>
                         <ActionMenuItem icon={Undo2} label="Mark all unwatched" onClick={() => markShow(false)}/>
+                        {isAdmin && <>
+                            <ActionMenuItem icon={PencilLine} label="Edit details…" onClick={() => editRef.current.showModal()}/>
+                            <ActionMenuItem icon={Upload} label="Add episode files…" onClick={() => uploadRef.current.showModal()}/>
+                        </>}
                         <DeleteFromServerButton asMenuItem item={{ id, title: anime.title, type: anime.type }} />
                     </ActionMenu>
                 </>}
@@ -174,7 +189,8 @@ export default function AnimeDetailsPage() {
             ) : !episodesLoaded ? (
                 <ListSkeleton />
             ) : episodes.length === 0 ? (
-                <EmptyState compact title="No episodes yet" hint="Episodes show up here once they've downloaded." />
+                <EmptyState compact title="No episodes yet" hint="Episodes show up here once they've downloaded."
+                    action={isAdmin ? { label: "Add episode files", onClick: () => uploadRef.current.showModal() } : undefined} />
             ) : (
                 <ItemList
                     title={multiSeason
@@ -210,10 +226,24 @@ export default function AnimeDetailsPage() {
                             current={nextEpisode?.id === ep.id}
                             onOpen={() => watch(ep, position)}
                             openLabel={`Watch episode ${ep.episode_number}`}
+                            menu={pieces.menu({ kind: "episode", id: ep.id, label: ep.title ?? episodeLabel(ep), title: ep.title })}
                         />
                     })}
                 </ItemList>
             )}
+
+            {isAdmin && <>
+                <EditDetailsModal dialogRef={editRef} item={anime} html onSaved={({ cover }) => { setNewCover(cover ?? null); refetch(false); }}/>
+                <UploadFilesModal
+                    dialogRef={uploadRef}
+                    kind="episodes"
+                    target={{ id, title: anime.title }}
+                    have={episodes.map(ep => `${ep.season_number}x${ep.episode_number}`)}
+                    defaultSeason={season === "undefined" ? "1" : season}
+                    onAdded={reloadEpisodes}
+                />
+            </>}
+            {pieces.modals}
         </div>
     )
 }

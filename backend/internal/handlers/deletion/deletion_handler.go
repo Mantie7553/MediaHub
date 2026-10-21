@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/Mantie7553/MediaHub/backend/internal/clients/arr"
+	"github.com/Mantie7553/MediaHub/backend/internal/covers"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/auth"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/logger"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/utils"
@@ -34,16 +35,19 @@ type movieDeleter interface {
 }
 
 type Handler struct {
-	db     *sql.DB
-	sonarr seriesDeleter
-	radarr movieDeleter
+	db       *sql.DB
+	sonarr   seriesDeleter
+	episodes episodeRemover
+	radarr   movieDeleter
 }
 
 func NewHandler(db *sql.DB) *Handler {
+	sonarr := arr.NewArrClient("SONARR_URL", "SONARR_API_KEY")
 	return &Handler{
-		db:     db,
-		sonarr: arr.NewArrClient("SONARR_URL", "SONARR_API_KEY"),
-		radarr: arr.NewArrClient("RADARR_URL", "RADARR_API_KEY"),
+		db:       db,
+		sonarr:   sonarr,
+		episodes: sonarr,
+		radarr:   arr.NewArrClient("RADARR_URL", "RADARR_API_KEY"),
 	}
 }
 
@@ -190,6 +194,11 @@ func (h *Handler) remove(w http.ResponseWriter, r *http.Request, t target) {
 		return
 	}
 	removeTranscodes(mediaRoot, t.transcodes)
+	for _, id := range t.ids {
+		if err := covers.Remove(id); err != nil {
+			logger.Warn("removing the uploaded cover of %s: %v", id, err)
+		}
+	}
 
 	tx, err := h.db.Begin()
 	if utils.InternalError(w, err) {
@@ -319,7 +328,7 @@ func (h *Handler) otherFilesIn(folder string, ids []string) (bool, error) {
 	err := h.db.QueryRow(
 		`SELECT EXISTS (SELECT 1 FROM (`+filesUnion+`) f
 		WHERE NOT (media_item_id = ANY($2::uuid[])) AND file_path LIKE $1 ESCAPE '\')`,
-		likePrefix(folder+string(filepath.Separator)), pq.Array(ids),
+		utils.LikePrefix(folder+string(filepath.Separator)), pq.Array(ids),
 	).Scan(&found)
 	return found, err
 }

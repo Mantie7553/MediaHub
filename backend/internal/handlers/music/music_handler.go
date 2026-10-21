@@ -28,12 +28,14 @@ type AlbumDetail struct {
 	Artist      string       `json:"artist"`
 	CoverURL    *string      `json:"cover_image_url"`
 	ReleaseDate *string      `json:"release_date"`
+	Description *string      `json:"description"`
 	Tracks      []AlbumTrack `json:"tracks"`
 }
 
 type AlbumTrack struct {
 	MediaItemID  string  `json:"media_item_id"`
 	Title        string  `json:"title"`
+	Artist       string  `json:"artist"`
 	TrackNumber  *int    `json:"track_number"`
 	DurationSecs *int    `json:"duration_secs"`
 	FilePath     *string `json:"file_path"`
@@ -111,9 +113,9 @@ func (h *Handler) GetAlbum(w http.ResponseWriter, r *http.Request) {
 
 	var album AlbumDetail
 	err := h.db.QueryRow(
-		`SELECT a.id, a.title, a.artist, `+albumCover+`, a.release_date FROM albums a WHERE a.id = $1`,
+		`SELECT a.id, a.title, a.artist, `+albumCover+`, a.release_date, a.description FROM albums a WHERE a.id = $1`,
 		albumID,
-	).Scan(&album.ID, &album.Title, &album.Artist, &album.CoverURL, &album.ReleaseDate)
+	).Scan(&album.ID, &album.Title, &album.Artist, &album.CoverURL, &album.ReleaseDate, &album.Description)
 
 	if err == sql.ErrNoRows {
 		utils.Error(w, http.StatusNotFound, "album not found")
@@ -127,7 +129,7 @@ func (h *Handler) GetAlbum(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rows, err := h.db.Query(`
-		SELECT mm.media_item_id, mi.title, mm.track_number, mm.duration_secs, mm.file_path
+		SELECT mm.media_item_id, mi.title, mm.artist, mm.track_number, mm.duration_secs, mm.file_path
 		FROM music_metadata mm
 		JOIN media_items mi ON mi.id = mm.media_item_id
 		WHERE mm.album_id = $1
@@ -142,7 +144,7 @@ func (h *Handler) GetAlbum(w http.ResponseWriter, r *http.Request) {
 	album.Tracks = []AlbumTrack{}
 	for rows.Next() {
 		var t AlbumTrack
-		if err := rows.Scan(&t.MediaItemID, &t.Title, &t.TrackNumber, &t.DurationSecs, &t.FilePath); err != nil {
+		if err := rows.Scan(&t.MediaItemID, &t.Title, &t.Artist, &t.TrackNumber, &t.DurationSecs, &t.FilePath); err != nil {
 			utils.InternalError(w, err)
 			return
 		}

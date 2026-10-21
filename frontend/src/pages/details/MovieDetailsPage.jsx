@@ -1,3 +1,4 @@
+import { useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import ErrorState from "../../components/states/ErrorState";
 import NotFound from "../../components/states/NotFound";
@@ -8,9 +9,11 @@ import { useMediaItem, useUserContent, useRemoveFromList } from "../../hooks";
 import DeleteFromServerButton from "../../components/DeleteFromServerButton";
 import Format from "../../utils/format";
 import api from "../../services/api";
-import { Play, RotateCcw } from "lucide-react";
+import { PencilLine, Play, RotateCcw, Upload } from "lucide-react";
 import DetailsHero from "../../components/details/DetailsHero";
-import { ActionMenu, ListStatusMenu } from "../../components/details/Menus";
+import { ActionMenu, ActionMenuItem, ListStatusMenu } from "../../components/details/Menus";
+import EditDetailsModal from "../../components/modals/EditDetailsModal";
+import UploadFilesModal from "../../components/modals/UploadFilesModal";
 import { getRole } from "../../utils/auth";
 
 export default function MovieDetailsPage() {
@@ -20,6 +23,11 @@ export default function MovieDetailsPage() {
     const { item: movie, loading, error, notFound, refetch } = useMediaItem(id);
     const userEntry = userContentMap[id];
     const removeEntry = useRemoveFromList(userEntry, refresh);
+    const editRef = useRef(null);
+    const uploadRef = useRef(null);
+    // a cover just uploaded, with a version so the browser doesn't show the one it cached
+    const [newCover, setNewCover] = useState(null);
+    const isAdmin = getRole() === "admin";
 
     function updateStatus(status) {
         const request = userEntry
@@ -46,7 +54,7 @@ export default function MovieDetailsPage() {
     return (
         <div className="flex flex-col gap-8">
             <DetailsHero
-                cover={{ src: movie.cover_image_url }}
+                cover={{ src: newCover ?? movie.cover_image_url }}
                 eyebrow="Movie"
                 title={movie.title}
                 meta={[
@@ -82,7 +90,9 @@ export default function MovieDetailsPage() {
                         onSelect={updateStatus}
                         onRemove={removeEntry}
                     />
-                    {getRole() === "admin" && <ActionMenu>
+                    {isAdmin && <ActionMenu>
+                        <ActionMenuItem icon={PencilLine} label="Edit details…" onClick={() => editRef.current.showModal()}/>
+                        {!movie.metadata.file_path && <ActionMenuItem icon={Upload} label="Add the movie file…" onClick={() => uploadRef.current.showModal()}/>}
                         <DeleteFromServerButton asMenuItem item={{ id, title: movie.title, type: movie.type }} />
                     </ActionMenu>}
                 </>}
@@ -98,6 +108,11 @@ export default function MovieDetailsPage() {
                     <span className="text-sm text-base-content/50 tabular-nums">{Math.max(1, Math.ceil((duration - position) / 60))} min left</span>
                 </div>
             )}
+
+            {isAdmin && <>
+                <EditDetailsModal dialogRef={editRef} item={movie} html onSaved={({ cover }) => { setNewCover(cover ?? null); refetch(false); }}/>
+                <UploadFilesModal dialogRef={uploadRef} kind="movie" target={{ id, title: movie.title }} onAdded={() => refetch(false)}/>
+            </>}
         </div>
     )
 }

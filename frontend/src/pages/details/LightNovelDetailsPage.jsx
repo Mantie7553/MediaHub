@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import ErrorState from "../../components/states/ErrorState";
 import NotFound from "../../components/states/NotFound";
@@ -9,11 +9,15 @@ import { openViewer } from "../../utils/navigation";
 import { useMediaItem, useUserContent, useRemoveFromList } from "../../hooks";
 import DeleteFromServerButton from "../../components/DeleteFromServerButton";
 import api from "../../services/api";
-import { BookOpen, CheckCheck, Undo2 } from "lucide-react";
+import { BookOpen, CheckCheck, PencilLine, Undo2, Upload } from "lucide-react";
 import Format from "../../utils/format";
 import DetailsHero from "../../components/details/DetailsHero";
 import { ActionMenu, ActionMenuItem, ListStatusMenu } from "../../components/details/Menus";
 import ItemRow, { ItemList } from "../../components/details/ItemRow";
+import EditDetailsModal from "../../components/modals/EditDetailsModal";
+import UploadFilesModal from "../../components/modals/UploadFilesModal";
+import useAdminPieces from "../../hooks/useAdminPieces";
+import { getRole } from "../../utils/auth";
 
 export default function LightNovelDetailsPage() {
     const navigate = useNavigate();
@@ -24,6 +28,12 @@ export default function LightNovelDetailsPage() {
     const removeEntry = useRemoveFromList(userEntry, refresh);
     const [readVolumes, setReadVolumes] = useState(new Set());
     const [scrollPosition, setScrollPosition] = useState({});
+    const editRef = useRef(null);
+    const uploadRef = useRef(null);
+    // a cover just uploaded, with a version so the browser doesn't show the one it cached
+    const [newCover, setNewCover] = useState(null);
+    const isAdmin = getRole() === "admin";
+    const pieces = useAdminPieces(() => refetch(false));
 
     useEffect(() => {
         if (ln?.metadata?.volumes) {
@@ -90,7 +100,7 @@ export default function LightNovelDetailsPage() {
     return (
         <div className="flex flex-col gap-8">
             <DetailsHero
-                cover={{ src: ln.cover_image_url }}
+                cover={{ src: newCover ?? ln.cover_image_url }}
                 eyebrow="Light Novel"
                 title={ln.title}
                 meta={[
@@ -118,13 +128,18 @@ export default function LightNovelDetailsPage() {
                     <ActionMenu>
                         <ActionMenuItem icon={CheckCheck} label="Mark all read" onClick={() => markAll(true)}/>
                         <ActionMenuItem icon={Undo2} label="Mark all unread" onClick={() => markAll(false)}/>
+                        {isAdmin && <>
+                            <ActionMenuItem icon={PencilLine} label="Edit details…" onClick={() => editRef.current.showModal()}/>
+                            <ActionMenuItem icon={Upload} label="Add volume files…" onClick={() => uploadRef.current.showModal()}/>
+                        </>}
                         <DeleteFromServerButton asMenuItem item={{ id, title: ln.title, type: ln.type }} />
                     </ActionMenu>
                 </>}
             />
 
             {volumes.length === 0 ? (
-                <EmptyState compact title="No volumes yet" hint="Volumes show up here once they've downloaded." />
+                <EmptyState compact title="No volumes yet" hint="Volumes show up here once they've downloaded."
+                    action={isAdmin ? { label: "Add volume files", onClick: () => uploadRef.current.showModal() } : undefined} />
             ) : (
                 <ItemList title="Volumes">
                     {volumes.map(volume => {
@@ -144,10 +159,23 @@ export default function LightNovelDetailsPage() {
                             onOpen={() => read(volume)}
                             openLabel={`Read ${volumeName(volume)}`}
                             openIcon={BookOpen}
+                            menu={pieces.menu({ kind: "volume", id: volume.id, label: volumeName(volume), volume_number: volume.volume_number, title: volume.title })}
                         />
                     })}
                 </ItemList>
             )}
+
+            {isAdmin && <>
+                <EditDetailsModal dialogRef={editRef} item={ln} html onSaved={({ cover }) => { setNewCover(cover ?? null); refetch(false); }}/>
+                <UploadFilesModal
+                    dialogRef={uploadRef}
+                    kind="volumes"
+                    target={{ id, title: ln.title }}
+                    have={volumes.map(v => String(v.volume_number))}
+                    onAdded={() => refetch(false)}
+                />
+            </>}
+            {pieces.modals}
         </div>
     )
 }

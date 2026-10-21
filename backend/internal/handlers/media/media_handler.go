@@ -261,17 +261,18 @@ func (h *Handler) GetSpecific(w http.ResponseWriter, r *http.Request) {
 	// get the id from the URL
 	mediaId := chi.URLParam(r, "id")
 	item := MediaItem{}
+	lockedFields := []string{}
 
 	queryString := `SELECT id, type, title, description, 
 		cover_image_url, release_date, external_id, 
-		external_source, created_at 
+		external_source, created_at, locked_fields
 		FROM media_items WHERE id = $1`
 
 	// look for the meida item
 	err := h.db.QueryRow(queryString, mediaId).Scan(
 		&item.ID, &item.Type, &item.Title, &item.Description,
 		&item.CoverImageURL, &item.ReleaseDate, &item.ExternalID,
-		&item.ExternalSource, &item.CreatedAt,
+		&item.ExternalSource, &item.CreatedAt, pq.Array(&lockedFields),
 	)
 
 	if err == sql.ErrNoRows {
@@ -411,7 +412,7 @@ func (h *Handler) GetSpecific(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// return the item and its metadata
-	utils.JSON(w, MediaItemDetail{MediaItem: item, Metadata: metadata})
+	utils.JSON(w, MediaItemDetail{MediaItem: item, LockedFields: lockedFields, Metadata: metadata})
 }
 
 /*
@@ -778,7 +779,7 @@ func (h *Handler) GetEpisodes(w http.ResponseWriter, r *http.Request) {
 	episodes := []Episode{}
 
 	rows, err := h.db.Query(
-		`SELECT e.id, e.season_number, e.episode_number, e.title,
+		`SELECT e.id, e.season_number, e.episode_number, e.title, e.title_locked,
 		COALESCE(uap.watched, false),
 		COALESCE(uep.position_secs, 0),
 		COALESCE(uep.duration_secs, 0)
@@ -796,7 +797,7 @@ func (h *Handler) GetEpisodes(w http.ResponseWriter, r *http.Request) {
 
 	for rows.Next() {
 		var ep Episode
-		if err := rows.Scan(&ep.ID, &ep.SeasonNumber, &ep.EpisodeNumber, &ep.Title, &ep.Watched, &ep.PositionSecs, &ep.DurationSecs); err != nil {
+		if err := rows.Scan(&ep.ID, &ep.SeasonNumber, &ep.EpisodeNumber, &ep.Title, &ep.TitleLocked, &ep.Watched, &ep.PositionSecs, &ep.DurationSecs); err != nil {
 			utils.InternalError(w, err)
 			return
 		}

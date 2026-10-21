@@ -10,12 +10,14 @@ import { openViewer } from "../../utils/navigation";
 import { useMediaItem, useUserContent, useRemoveFromList } from "../../hooks";
 import DeleteFromServerButton from "../../components/DeleteFromServerButton";
 import api from "../../services/api";
-import { BookOpen, CheckCheck, RefreshCw, Undo2, Upload } from "lucide-react";
+import { BookOpen, CheckCheck, PencilLine, RefreshCw, Undo2, Upload } from "lucide-react";
 import DetailsHero from "../../components/details/DetailsHero";
 import StatusPill from "../../components/StatusPill";
 import { ActionMenu, ActionMenuItem, ListStatusMenu } from "../../components/details/Menus";
 import ItemRow, { ItemList } from "../../components/details/ItemRow";
 import UploadChaptersModal from "../../components/modals/UploadChaptersModal";
+import EditDetailsModal from "../../components/modals/EditDetailsModal";
+import useAdminPieces from "../../hooks/useAdminPieces";
 import { checkForChapters } from "../../services/mediaService";
 import { getRole } from "../../utils/auth";
 
@@ -29,7 +31,11 @@ export default function MangaDetailsPage() {
     const [readChapters, setReadChapters] = useState(new Set());
     const [pageProgress, setPageProgress] = useState({});
     const uploadRef = useRef(null);
+    const editRef = useRef(null);
+    // a cover just uploaded, with a version so the browser doesn't show the one it cached
+    const [newCover, setNewCover] = useState(null);
     const isAdmin = getRole() === "admin";
+    const pieces = useAdminPieces(() => refetch(false));
 
 
     useEffect(() => {
@@ -104,7 +110,7 @@ export default function MangaDetailsPage() {
     return (
         <div className="flex flex-col gap-8">
             <DetailsHero
-                cover={{ src: manga.cover_image_url, source: manga.external_source }}
+                cover={{ src: newCover ?? manga.cover_image_url, source: manga.external_source }}
                 eyebrow="Manga"
                 title={manga.title}
                 badges={manga.metadata.status && <StatusPill label={manga.metadata.status} tone={mangaBadge(manga.metadata.status)?.replace("badge-", "")}/>}
@@ -132,6 +138,7 @@ export default function MangaDetailsPage() {
                         <ActionMenuItem icon={CheckCheck} label="Mark all read" onClick={() => markAll(true)}/>
                         <ActionMenuItem icon={Undo2} label="Mark all unread" onClick={() => markAll(false)}/>
                         {isAdmin && <>
+                            <ActionMenuItem icon={PencilLine} label="Edit details…" onClick={() => editRef.current.showModal()}/>
                             {manga.external_source === "mangadex" && <ActionMenuItem icon={RefreshCw} label="Check MangaDex for new chapters" onClick={handleCheck}/>}
                             <ActionMenuItem icon={Upload} label="Add chapter files…" onClick={() => uploadRef.current.showModal()}/>
                         </>}
@@ -161,11 +168,14 @@ export default function MangaDetailsPage() {
                             onOpen={() => read(chapter)}
                             openLabel={`Read ${chapterName(chapter)}`}
                             openIcon={BookOpen}
+                            menu={pieces.menu({ kind: "chapter", id: chapter.id, label: chapterName(chapter), chapter_number: chapter.chapter_number, title: chapter.title })}
                         />
                     })}
                 </ItemList>
             )}
 
+            {isAdmin && <EditDetailsModal dialogRef={editRef} item={manga} onSaved={({ cover }) => { setNewCover(cover ?? null); refetch(false); }}/>}
+            {pieces.modals}
             {isAdmin && <UploadChaptersModal
                 dialogRef={uploadRef}
                 manga={{ id, title: manga.title }}

@@ -124,12 +124,15 @@ func SignMediaPath(path, userID string, scope MediaScope) (string, error) {
 	return path + "?" + MediaTokenParam + "=" + url.QueryEscape(token), nil
 }
 
-var musicCoverPath = regexp.MustCompile(`^/api/stream/music/([^/?]+)/cover$`)
+var (
+	musicCoverPath    = regexp.MustCompile(`^/api/stream/music/([^/?]+)/cover$`)
+	uploadedCoverPath = regexp.MustCompile(`^/api/media/([^/?]+)/cover$`)
+)
 
 /*
 Function:	SignCoverURL
-Purpose:	Sign a stored music cover URL in place so <img> tags can load it.
-            Any other cover URL (external hosts, the MangaDex proxy) is left unchanged
+Purpose:	Sign a stored music cover or admin uploaded cover URL in place so <img> tags can load
+            it. Any other cover URL (external hosts, the MangaDex proxy) is left unchanged
 Params:
   - cover: the cover_image_url read from the database
   - userID: the id of the user the token is minted for
@@ -138,11 +141,15 @@ func SignCoverURL(cover *string, userID string) error {
 	if cover == nil {
 		return nil
 	}
-	m := musicCoverPath.FindStringSubmatch(*cover)
-	if m == nil {
+	var scope MediaScope
+	if m := musicCoverPath.FindStringSubmatch(*cover); m != nil {
+		scope = MediaScope{MediaType: "music", MediaID: m[1]}
+	} else if m := uploadedCoverPath.FindStringSubmatch(*cover); m != nil {
+		scope = MediaScope{MediaType: "cover", MediaID: m[1]}
+	} else {
 		return nil
 	}
-	signed, err := SignMediaPath(*cover, userID, MediaScope{MediaType: "music", MediaID: m[1]})
+	signed, err := SignMediaPath(*cover, userID, scope)
 	if err != nil {
 		return err
 	}

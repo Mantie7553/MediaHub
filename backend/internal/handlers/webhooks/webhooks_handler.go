@@ -73,7 +73,8 @@ func (h *Handler) SonarrWebhook(w http.ResponseWriter, r *http.Request) {
 			VALUES ($1, $2, $3, $4, $5, $6)
 			ON CONFLICT (media_item_id, season_number, episode_number) DO UPDATE SET
 			file_path = EXCLUDED.file_path,
-			title = EXCLUDED.title,
+			title = CASE WHEN episodes.title_locked THEN episodes.title ELSE EXCLUDED.title END,
+			sonarr_id = EXCLUDED.sonarr_id,
 			updated_at = NOW()`,
 			mediaItemID, ep.SeasonNumber, ep.EpisodeNumber, ep.Title, filePath, ep.ID,
 		)

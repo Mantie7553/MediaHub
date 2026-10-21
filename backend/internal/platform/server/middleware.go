@@ -11,11 +11,13 @@ const maxJSONBody = 1 << 20
 /*
 Function:	limitBody
 Purpose:	cap request bodies, so a huge JSON body can't use up memory. Multipart uploads
-(chapters, covers) are left to their handlers, which allow more
+(chapters, covers) and the raw chunks of large uploads are left to their handlers, which
+allow more and stream them to disk
 */
 func limitBody(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Body != nil && !strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data") {
+		ct := r.Header.Get("Content-Type")
+		if r.Body != nil && !strings.HasPrefix(ct, "multipart/form-data") && ct != "application/octet-stream" {
 			r.Body = http.MaxBytesReader(w, r.Body, maxJSONBody)
 		}
 		next.ServeHTTP(w, r)

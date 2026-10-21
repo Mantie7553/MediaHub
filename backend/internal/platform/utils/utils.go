@@ -126,3 +126,15 @@ func IsWithin(dir, path string) bool {
 	}
 	return rel != "." && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && !filepath.IsAbs(rel)
 }
+
+/*
+Function:	LikePrefix
+Purpose:	a LIKE pattern (used with ESCAPE '\') matching everything that starts with path, with
+the wildcards in path escaped
+Params:
+  - path: the prefix, usually a folder ending in a separator
+*/
+func LikePrefix(path string) string {
+	r := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+	return r.Replace(path) + "%"
+}
