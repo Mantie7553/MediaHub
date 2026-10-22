@@ -16,7 +16,7 @@ import useAudioStore from "../../stores/useAudioStore"
  * A poster card for a title, linking to its details page (tracks play instead)
  * @param {boolean} fluid fills its grid cell instead of the fixed width used in rows
  */
-export default function Card({item, showActions=false, userContentMap={}, onListChange, fluid=false}) {
+export default function Card({item, userContentMap={}, onListChange, fluid=false}) {
     let {meta, progressPct, path} = mediaInfo(item);
     const userEntry = userContentMap[String(item.external_id ?? item.media_item_id ?? item.id)];
     const play = useAudioStore(state => state.play);
@@ -117,6 +117,9 @@ function mediaInfo(item) {
 
         default: break
     }
+    // Continue cards come with where the user is up to
+    if (item.progress_label != null) meta = item.progress_label
+    if (item.progress_pct != null) progressPct = item.progress_pct
 
     return {meta, progressPct, path}
 }

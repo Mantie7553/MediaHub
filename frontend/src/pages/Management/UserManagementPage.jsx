@@ -1,6 +1,6 @@
 import PageHeader from "../../components/layout/PageHeader";
 import { KeyRound, Mail, Pencil, Trash2, User, UserPlus, Users } from "lucide-react";
-import { forwardRef, useRef, useState, useEffect } from "react";
+import { forwardRef, useRef, useState } from "react";
 import api from "../../services/api";
 import useApi from "../../hooks/useApi";
 import Format from "../../utils/format";
@@ -117,14 +117,17 @@ const UserModal = forwardRef(function UserModal({ user, onSave }, ref) {
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
 
-    useEffect(() => {
+    // the form starts over for each user opened, and for a new one
+    const [shownUser, setShownUser] = useState(user);
+    if (user !== shownUser) {
+        setShownUser(user);
         setUsername(user?.username ?? "");
         setEmail(user?.email ?? "");
         setPassword("");
         setRole(user?.role ?? "user");
         setDownloadPermission(user?.download_permission ?? "vetted");
         setError("");
-    }, [user]);
+    }
 
     function handleConfirm() {
         setError("");

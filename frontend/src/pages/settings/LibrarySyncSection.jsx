@@ -53,6 +53,7 @@ export default function LibrarySyncSection() {
     useEffect(() => {
         poll();
         return () => clearTimeout(pollRef.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only the first status check starts polling, poll schedules itself after that
     }, []);
 
     function handleStart() {

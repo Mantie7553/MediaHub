@@ -212,6 +212,7 @@ func (s *Server) routes() {
 			r.Get("/light-novels/{id}/volumes/{volumeId}/content", mediaHandler.ServeVolume)
 			r.Post("/me/media", listsHandler.Add)
 			r.Get("/me/media", listsHandler.GetAll)
+			r.Get("/me/continue", listsHandler.GetContinue)
 			r.Put("/me/media/{id}", listsHandler.Update)
 			r.Delete("/me/media/{id}", listsHandler.Delete)
 			r.Put("/episodes/{id}/watched", listsHandler.UpdateProgress)

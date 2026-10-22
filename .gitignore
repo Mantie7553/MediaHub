@@ -168,4 +168,7 @@ mediahub
 *.ntvs*
 *.njsproj
 *.sln
-*.sw?.bootstrap.log
+*.sw?
+.bootstrap.log
+
+__pycache__/

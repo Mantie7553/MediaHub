@@ -1,4 +1,4 @@
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useCallback } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { useMediaItem, usePages } from "../../hooks";
@@ -40,11 +40,7 @@ function MangaReaderInner({ id, chapterId, chapter, chapters, title }) {
         currentPageRef.current = currentPage;
     }, [currentPage]);
 
-    useEffect(() => {
-        return () => saveProgress(currentPageRef.current);
-    }, [chapterId]);
-
-    function saveProgress(page) {
+    const saveProgress = useCallback(page => {
         const completed = page >= totalPages - 1;
         api.put(`/manga/${id}/chapters/${chapterId}/progress`, {
             last_page_read: page,
@@ -55,7 +51,16 @@ function MangaReaderInner({ id, chapterId, chapter, chapters, title }) {
             // best effort like the progress save above, reading carries on either way
             api.put(`/manga/chapters/${chapterId}/read`, { read: true }).catch(() => {});
         }
-    }
+    }, [id, chapterId, totalPages]);
+
+    // saves once on leaving the chapter, with the page count known by then
+    const saveProgressRef = useRef(saveProgress);
+    useEffect(() => {
+        saveProgressRef.current = saveProgress;
+    }, [saveProgress]);
+    useEffect(() => {
+        return () => saveProgressRef.current(currentPageRef.current);
+    }, []);
 
     function changePage(newPage) {
         setCurrentPage(newPage);
@@ -83,6 +88,7 @@ function MangaReaderInner({ id, chapterId, chapter, chapters, title }) {
         }
     }
 
+    // bound again on every render, so the keys always turn from the page on screen
     useEffect(() => {
         function handleKeyDown(e) {
             if (e.key === "ArrowRight") handlePageUp();
@@ -90,7 +96,7 @@ function MangaReaderInner({ id, chapterId, chapter, chapters, title }) {
         }
         window.addEventListener("keydown", handleKeyDown);
         return () => window.removeEventListener("keydown", handleKeyDown);
-    }, [totalPages, currentPage]);
+    });
 
     const progressPct = totalPages ? Math.round(((currentPage + 1) / totalPages) * 100) : 0;
 

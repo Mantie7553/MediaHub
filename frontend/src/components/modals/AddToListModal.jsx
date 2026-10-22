@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import ScrollPicker from "../ScrollPicker";
 import Format from "../../utils/format";
 
@@ -15,11 +15,14 @@ export default function AddToListModal({item, onConfirm, dialogRef, initialValue
     const [score, setScore] = useState(initialValues?.rating ?? 0);
     const [progress, setProgress] = useState((initialValues?.episodes_watched || initialValues?.chapters_read) ?? 0);
 
-    useEffect(() => {
+    // start over from the entry whenever a different one comes in
+    const [shownValues, setShownValues] = useState(initialValues);
+    if (initialValues !== shownValues) {
+        setShownValues(initialValues);
         setStatus(initialValues?.status ?? 'planned');
         setScore(initialValues?.rating ?? 0);
         setProgress((initialValues?.episodes_watched || initialValues?.chapters_read) ?? 0);
-    }, [initialValues]);
+    }
 
     function statusOptions(type) {
         const withWishlist = !isLibraryItem;

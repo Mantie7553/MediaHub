@@ -1,5 +1,6 @@
-import { useState } from "react";
-import { Library, Sparkles } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import { Library, SearchX, Sparkles } from "lucide-react";
 import useApi from "../../hooks/useApi";
 import ContentList from "../../components/layout/ContentList";
 import useUserContent from "../../hooks/useUserContent";
@@ -9,8 +10,14 @@ import ErrorState from "../../components/states/ErrorState";
 import EmptyState from "../../components/states/EmptyState";
 import PageHeader from "../../components/layout/PageHeader";
 import SegmentedTabs from "../../components/SegmentedTabs";
+import HidingSearchBar from "../../components/HidingSearchBar";
+import { filterByQuery } from "../../utils/search";
 
-const sortOrder = (a, b) => (a.title ?? "").localeCompare(b.title ?? "");
+// list entries name their title media_title, library items title
+const sortOrder = (a, b) => (a.media_title ?? a.title ?? "").localeCompare(b.media_title ?? b.title ?? "");
+
+// how long typing pauses before the search goes into the address
+const SEARCH_DELAY_MS = 250;
 
 const filters = [
     { key: "all", label: "All" },
@@ -30,11 +37,31 @@ export default function DashboardPage() {
     const { userContent, userContentMap, loading: userLoading, error: userError, refresh, retry } = useUserContent();
     const library = useApi("/media?available=true", { initial: [] });
     const albums = useApi("/albums", { initial: [] });
+    // titles started and not finished, newest activity first
+    const continuing = useApi("/me/continue", { initial: [] });
 
-    const userAnime = userContent.filter(item => item.media_type === "anime").sort(sortOrder);
-    const userMovies = userContent.filter(item => item.media_type === "movie").sort(sortOrder);
-    const userMusic = userContent
-    .filter(item => item.media_type === "music_album")
+    // the search filters every row as it's typed, and is kept in the address (?q=) once typing
+    // pauses, so coming back to the dashboard or refreshing keeps it
+    const [params, setParams] = useSearchParams();
+    const [query, setQuery] = useState(params.get("q") ?? "");
+    const searchText = query.trim();
+    const searching = searchText !== "";
+    useEffect(() => {
+        if (searchText === (params.get("q") ?? "")) return;
+        const timer = setTimeout(() => {
+            // from the address as it is now: React Router hands updaters the last render's params
+            const next = new URLSearchParams(window.location.search);
+            if (searchText) next.set("q", searchText);
+            else next.delete("q");
+            setParams(next, { replace: true });
+        }, SEARCH_DELAY_MS);
+        return () => clearTimeout(timer);
+    }, [searchText, params, setParams]);
+    const matching = items => filterByQuery(items, searchText);
+
+    const userAnime = matching(userContent.filter(item => item.media_type === "anime")).sort(sortOrder);
+    const userMovies = matching(userContent.filter(item => item.media_type === "movie")).sort(sortOrder);
+    const userMusic = matching(userContent.filter(item => item.media_type === "music_album"))
         .map(item => ({
             id: item.album_id,
             title: item.media_title,
@@ -43,39 +70,38 @@ export default function DashboardPage() {
             track_count: null,
         }))
         .sort(sortOrder)
-    const userManga = userContent.filter(item => item.media_type === "manga").sort(sortOrder);
-    const userLightNovels = userContent.filter(item => item.media_type === "light_novel").sort(sortOrder);
+    const userManga = matching(userContent.filter(item => item.media_type === "manga")).sort(sortOrder);
+    const userLightNovels = matching(userContent.filter(item => item.media_type === "light_novel")).sort(sortOrder);
 
-    // shows started but not finished this season
-    const continueWatching = userAnime.filter(item =>
-        item.season_watched > 0 && (!item.season_total || item.season_watched < item.season_total));
+    const serverAnime = matching(library.data.filter(item => item.type === "anime")).sort(sortOrder);
+    const serverMovies = matching(library.data.filter(item => item.type === "movie")).sort(sortOrder);
+    const serverManga = matching(library.data.filter(item => item.type === "manga")).sort(sortOrder);
+    const serverLightNovels = matching(library.data.filter(item => item.type === "light_novel")).sort(sortOrder);
 
-    const serverAnime = library.data.filter(item => item.type === "anime").sort(sortOrder);
-    const serverMovies = library.data.filter(item => item.type === "movie").sort(sortOrder);
-    const serverManga = library.data.filter(item => item.type === "manga").sort(sortOrder);
-    const serverLightNovels = library.data.filter(item => item.type === "light_novel").sort(sortOrder);
+    const serverAlbums = matching(albums.data);
+    const continueItems = matching(continuing.data);
 
     // the same hint on every row of a section, so an empty dashboard explains itself once per row
     const tracked = {
         loading: userLoading,
         userContentMap,
         onListChange: refresh,
-        emptyText: "Nothing tracked yet",
-        emptyAction: { label: "Find something in Discover", to: "/discover" },
+        emptyText: searching ? `Nothing you track matches "${searchText}"` : "Nothing tracked yet",
+        emptyAction: searching ? undefined : { label: "Find something in Discover", to: "/discover" },
     };
     const available = {
         loading: library.loading,
         userContentMap,
         onListChange: refresh,
-        emptyText: "Nothing downloaded yet",
-        emptyHint: "Titles show up here once they finish downloading.",
+        emptyText: searching ? `Nothing on the server matches "${searchText}"` : "Nothing downloaded yet",
+        emptyHint: searching ? undefined : "Titles show up here once they finish downloading.",
     };
 
     const collectionRows = [
         { key: "anime", count: userAnime.length, render: () => <ContentList items={userAnime} heading="Anime" {...tracked}/> },
         { key: "movie", count: userMovies.length, render: () => <ContentList items={userMovies} heading="Movies" {...tracked}/> },
         { key: "manga", count: userManga.length, render: () => <ContentList items={userManga} heading="Manga" {...tracked}/> },
-        { key: "music", count: userMusic.length, render: () => <AlbumList albums={userMusic} heading="Music" loading={userLoading} emptyText="No albums saved yet" emptyAction={tracked.emptyAction}/> },
+        { key: "music", count: userMusic.length, render: () => <AlbumList albums={userMusic} heading="Music" loading={userLoading} emptyText={searching ? tracked.emptyText : "No albums saved yet"} emptyAction={tracked.emptyAction}/> },
         { key: "light_novel", count: userLightNovels.length, render: () => <ContentList items={userLightNovels} heading="Light Novels" {...tracked}/> },
     ];
 
@@ -83,7 +109,7 @@ export default function DashboardPage() {
         { key: "anime", count: serverAnime.length, error: library.error, reload: library.reload, render: () => <ContentList items={serverAnime} heading="Anime" {...available}/> },
         { key: "movie", count: serverMovies.length, error: library.error, reload: library.reload, render: () => <ContentList items={serverMovies} heading="Movies" {...available}/> },
         { key: "manga", count: serverManga.length, error: library.error, reload: library.reload, render: () => <ContentList items={serverManga} heading="Manga" {...available}/> },
-        { key: "music", count: albums.data.length, error: albums.error, reload: albums.reload, render: () => <AlbumList albums={albums.data} heading="Music" loading={albums.loading} emptyText="No music yet" emptyHint={available.emptyHint}/> },
+        { key: "music", count: serverAlbums.length, error: albums.error, reload: albums.reload, render: () => <AlbumList albums={serverAlbums} heading="Music" loading={albums.loading} emptyText={searching ? available.emptyText : "No music yet"} emptyHint={available.emptyHint}/> },
         { key: "light_novel", count: serverLightNovels.length, error: library.error, reload: library.reload, render: () => <ContentList items={serverLightNovels} heading="Light Novels" {...available}/> },
     ];
 
@@ -93,8 +119,13 @@ export default function DashboardPage() {
             subtitle="Pick up where you left off, or find something new."
         />
 
-        {!userLoading && continueWatching.length > 0 && (
-            <ContentList items={continueWatching} heading="Continue Watching" userContentMap={userContentMap} onListChange={refresh}/>
+        {/* pulled up against the header, the page's gap is meant for the rows. It has to stay a
+            direct child of the page so it can stick for the whole scroll */}
+        <HidingSearchBar value={query} onChange={setQuery} placeholder="Search your dashboard…" className="-mt-7 sm:-mt-11"/>
+
+        {!continuing.loading && continueItems.length > 0 && (
+            <ContentList items={continueItems} heading="Continue" userContentMap={userContentMap}
+                onListChange={() => { refresh(); continuing.reload(true); }}/>
         )}
 
         <DashboardSection
@@ -103,13 +134,17 @@ export default function DashboardPage() {
             rows={collectionRows}
             error={userError}
             onRetry={retry}
-            empty={<EmptyState compact icon={Library} title="Nothing tracked yet" hint="Add titles from Discover and they'll show up here." action={tracked.emptyAction}/>}
+            empty={searching
+                ? <EmptyState compact icon={SearchX} title={tracked.emptyText} hint="Check the spelling, or search Discover to add it."/>
+                : <EmptyState compact icon={Library} title="Nothing tracked yet" hint="Add titles from Discover and they'll show up here." action={tracked.emptyAction}/>}
         />
         <DashboardSection
             title="Available Now"
             loading={library.loading || albums.loading}
             rows={availableRows}
-            empty={<EmptyState compact icon={Sparkles} title="Nothing downloaded yet" hint={available.emptyHint}/>}
+            empty={searching
+                ? <EmptyState compact icon={SearchX} title={available.emptyText} hint="Check the spelling, or request it from Discover."/>
+                : <EmptyState compact icon={Sparkles} title="Nothing downloaded yet" hint={available.emptyHint}/>}
         />
     </div>
 }
