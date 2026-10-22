@@ -5,7 +5,7 @@
 FROM node:22 AS build
 WORKDIR /src
 COPY frontend/package.json frontend/package-lock.json ./
-RUN npm ci
+RUN npm ci --no-audit --fund=false
 COPY frontend/ ./
 ARG VITE_API_URL=/api
 ENV VITE_API_URL=${VITE_API_URL}

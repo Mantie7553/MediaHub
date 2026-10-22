@@ -1,14 +1,18 @@
+# Pull request -> test, so a broken change shows before it's merged.
 # Push to main -> test -> build images -> GHCR. Installs pick them up through watchtower.
 name: release
 
 on:
+  pull_request:
+    branches: [main]
   push:
     branches: [main]
   workflow_dispatch:
 
+# releases run one at a time and never cancel; a pull request's newer push replaces its older run
 concurrency:
-  group: release
-  cancel-in-progress: false
+  group: ${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || 'release' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   test:
@@ -29,14 +33,24 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: frontend/package-lock.json
+      - name: Frontend install
+        working-directory: frontend
+        # the npm cache from setup-node is enough, skip the extra registry calls
+        run: npm ci --prefer-offline --no-audit --fund=false
+      - name: Frontend lint
+        working-directory: frontend
+        run: npm run lint
+      - name: Frontend tests
+        working-directory: frontend
+        run: npm test
       - name: Frontend build
         working-directory: frontend
-        run: |
-          npm ci
-          npm run build
+        run: npm run build
 
   publish:
     needs: test
+    # images only come from main; a pull request just runs the tests
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       contents: read
