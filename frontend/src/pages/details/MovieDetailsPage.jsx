@@ -9,18 +9,20 @@ import { useMediaItem, useUserContent, useRemoveFromList } from "../../hooks";
 import DeleteFromServerButton from "../../components/DeleteFromServerButton";
 import Format from "../../utils/format";
 import api from "../../services/api";
-import { PencilLine, Play, RotateCcw, Upload } from "lucide-react";
+import { ListPlus, PencilLine, Play, RotateCcw, Upload } from "lucide-react";
 import DetailsHero from "../../components/details/DetailsHero";
 import { ActionMenu, ActionMenuItem, ListStatusMenu } from "../../components/details/Menus";
 import EditDetailsModal from "../../components/modals/EditDetailsModal";
 import UploadFilesModal from "../../components/modals/UploadFilesModal";
 import { getRole } from "../../utils/auth";
+import useCollectionPicker from "../../hooks/useCollectionPicker";
 
 export default function MovieDetailsPage() {
     const navigate = useNavigate();
     const { userContentMap, refresh } = useUserContent();
     const { id } = useParams();
     const { item: movie, loading, error, notFound, refetch } = useMediaItem(id);
+    const picker = useCollectionPicker();
     const userEntry = userContentMap[id];
     const removeEntry = useRemoveFromList(userEntry, refresh);
     const editRef = useRef(null);
@@ -90,11 +92,14 @@ export default function MovieDetailsPage() {
                         onSelect={updateStatus}
                         onRemove={removeEntry}
                     />
-                    {isAdmin && <ActionMenu>
-                        <ActionMenuItem icon={PencilLine} label="Edit details…" onClick={() => editRef.current.showModal()}/>
-                        {!movie.metadata.file_path && <ActionMenuItem icon={Upload} label="Add the movie file…" onClick={() => uploadRef.current.showModal()}/>}
-                        <DeleteFromServerButton asMenuItem item={{ id, title: movie.title, type: movie.type }} />
-                    </ActionMenu>}
+                    <ActionMenu>
+                        <ActionMenuItem icon={ListPlus} label="Add to a collection…" onClick={() => picker.open({ id, type: movie.type, title: movie.title })}/>
+                        {isAdmin && <>
+                            <ActionMenuItem icon={PencilLine} label="Edit details…" onClick={() => editRef.current.showModal()}/>
+                            {!movie.metadata.file_path && <ActionMenuItem icon={Upload} label="Add the movie file…" onClick={() => uploadRef.current.showModal()}/>}
+                            <DeleteFromServerButton asMenuItem item={{ id, title: movie.title, type: movie.type }} />
+                        </>}
+                    </ActionMenu>
                 </>}
             />
             {canResume && duration > 0 && (
@@ -113,6 +118,7 @@ export default function MovieDetailsPage() {
                 <EditDetailsModal dialogRef={editRef} item={movie} html onSaved={({ cover }) => { setNewCover(cover ?? null); refetch(false); }}/>
                 <UploadFilesModal dialogRef={uploadRef} kind="movie" target={{ id, title: movie.title }} onAdded={() => refetch(false)}/>
             </>}
+            {picker.modal}
         </div>
     )
 }

@@ -10,7 +10,7 @@ import { openViewer } from "../../utils/navigation";
 import { useMediaItem, useUserContent, useRemoveFromList } from "../../hooks";
 import DeleteFromServerButton from "../../components/DeleteFromServerButton";
 import api from "../../services/api";
-import { BookOpen, CheckCheck, PencilLine, RefreshCw, Undo2, Upload } from "lucide-react";
+import { BookOpen, CheckCheck, PencilLine, RefreshCw, Undo2, Upload, ListPlus } from "lucide-react";
 import DetailsHero from "../../components/details/DetailsHero";
 import StatusPill from "../../components/StatusPill";
 import { ActionMenu, ActionMenuItem, ListStatusMenu } from "../../components/details/Menus";
@@ -18,6 +18,7 @@ import ItemRow, { ItemList } from "../../components/details/ItemRow";
 import UploadChaptersModal from "../../components/modals/UploadChaptersModal";
 import EditDetailsModal from "../../components/modals/EditDetailsModal";
 import useAdminPieces from "../../hooks/useAdminPieces";
+import useCollectionPicker from "../../hooks/useCollectionPicker";
 import { checkForChapters } from "../../services/mediaService";
 import { getRole } from "../../utils/auth";
 
@@ -36,6 +37,7 @@ export default function MangaDetailsPage() {
     const [newCover, setNewCover] = useState(null);
     const isAdmin = getRole() === "admin";
     const pieces = useAdminPieces(() => refetch(false));
+    const picker = useCollectionPicker();
 
 
     // read state and pages start from each copy of the title that loads
@@ -138,6 +140,7 @@ export default function MangaDetailsPage() {
                         onRemove={removeEntry}
                     />
                     <ActionMenu>
+                        <ActionMenuItem icon={ListPlus} label="Add to a collection…" onClick={() => picker.open({ id, type: manga.type, title: manga.title })}/>
                         <ActionMenuItem icon={CheckCheck} label="Mark all read" onClick={() => markAll(true)}/>
                         <ActionMenuItem icon={Undo2} label="Mark all unread" onClick={() => markAll(false)}/>
                         {isAdmin && <>
@@ -179,6 +182,7 @@ export default function MangaDetailsPage() {
 
             {isAdmin && <EditDetailsModal dialogRef={editRef} item={manga} onSaved={({ cover }) => { setNewCover(cover ?? null); refetch(false); }}/>}
             {pieces.modals}
+            {picker.modal}
             {isAdmin && <UploadChaptersModal
                 dialogRef={uploadRef}
                 manga={{ id, title: manga.title }}
