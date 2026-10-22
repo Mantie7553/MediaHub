@@ -8,6 +8,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/Mantie7553/MediaHub/backend/internal/handlers/collections"
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/curation"
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/deletion"
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/invites"
@@ -91,6 +92,7 @@ func (s *Server) routes() {
 	invitesHandler := invites.NewHandler(s.db)
 	jobsHandler := jobs.NewHandler(s.db)
 	listsHandler := lists.NewHandler(s.db)
+	collectionsHandler := collections.NewHandler(s.db)
 	mangaHandler := manga.NewHandler(s.db)
 	mediaHandler := media.NewHandler(s.db)
 	deletionHandler := deletion.NewHandler(s.db)
@@ -213,6 +215,15 @@ func (s *Server) routes() {
 			r.Post("/me/media", listsHandler.Add)
 			r.Get("/me/media", listsHandler.GetAll)
 			r.Get("/me/continue", listsHandler.GetContinue)
+			// playlists and collections; the computed playlists answer to /collections/listened and /unlistened
+			r.Get("/me/collections", collectionsHandler.List)
+			r.Post("/me/collections", collectionsHandler.Create)
+			r.Get("/collections/{id}", collectionsHandler.Get)
+			r.Put("/collections/{id}", collectionsHandler.Update)
+			r.Delete("/collections/{id}", collectionsHandler.Delete)
+			r.Post("/collections/{id}/items", collectionsHandler.AddItem)
+			r.Delete("/collections/{id}/items/{entryId}", collectionsHandler.RemoveItem)
+			r.Put("/collections/{id}/items/{entryId}/position", collectionsHandler.MoveItem)
 			r.Put("/me/media/{id}", listsHandler.Update)
 			r.Delete("/me/media/{id}", listsHandler.Delete)
 			r.Put("/episodes/{id}/watched", listsHandler.UpdateProgress)

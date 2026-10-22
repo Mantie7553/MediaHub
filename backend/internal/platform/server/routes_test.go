@@ -200,3 +200,32 @@ func TestCurationRoutes(t *testing.T) {
 		t.Errorf("admin upload start: status = %d (%s)", rec.Code, rec.Body.String())
 	}
 }
+
+func TestCollectionRoutesNeedSignIn(t *testing.T) {
+	t.Setenv("CORS_ORIGIN", "http://localhost")
+	t.Setenv("JWT_SECRET", "access-secret-for-tests")
+	t.Setenv("MEDIA_SIGNING_SECRET", "media-secret-for-tests")
+	t.Setenv("MEDIA_ROOT", t.TempDir())
+
+	s := New(nil)
+	const id = "6f1c2b9e-1d2a-4b3c-8d4e-5f6a7b8c9d0e"
+	routes := []struct{ method, path string }{
+		{http.MethodGet, "/api/me/collections"},
+		{http.MethodPost, "/api/me/collections"},
+		{http.MethodGet, "/api/collections/" + id},
+		{http.MethodGet, "/api/collections/listened"},
+		{http.MethodPut, "/api/collections/" + id},
+		{http.MethodDelete, "/api/collections/" + id},
+		{http.MethodPost, "/api/collections/" + id + "/items"},
+		{http.MethodDelete, "/api/collections/" + id + "/items/" + id},
+		{http.MethodPut, "/api/collections/" + id + "/items/" + id + "/position"},
+	}
+	for _, rt := range routes {
+		req := httptest.NewRequest(rt.method, rt.path, strings.NewReader("{}"))
+		rec := httptest.NewRecorder()
+		s.router.ServeHTTP(rec, req)
+		if rec.Code != http.StatusUnauthorized {
+			t.Errorf("%s %s without a session: status = %d, want %d", rt.method, rt.path, rec.Code, http.StatusUnauthorized)
+		}
+	}
+}

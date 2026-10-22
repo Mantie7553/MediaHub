@@ -1,6 +1,6 @@
 import { useRef, useState } from "react"
 import { useParams } from "react-router-dom"
-import { Play, Clock, BookmarkPlus, Check, PencilLine, Upload } from "lucide-react"
+import { Play, BookmarkPlus, Check, PencilLine, Upload, ListPlus } from "lucide-react"
 import api from "../../services/api"
 import useApi from "../../hooks/useApi"
 import ErrorState from "../../components/states/ErrorState"
@@ -19,6 +19,8 @@ import Format from "../../utils/format"
 import EditDetailsModal from "../../components/modals/EditDetailsModal"
 import UploadFilesModal from "../../components/modals/UploadFilesModal"
 import useAdminPieces from "../../hooks/useAdminPieces"
+import useCollectionPicker from "../../hooks/useCollectionPicker"
+import TrackList from "../../components/details/TrackList"
 
 export default function AlbumDetailsPage() {
     const dialogRef = useRef(null);
@@ -33,16 +35,8 @@ export default function AlbumDetailsPage() {
     const removeEntry = useRemoveFromList(userContent, refresh);
     const { data: album, loading, error, notFound, reload } = useApi(`/albums/${id}`);
     const playAlbum = useAudioStore(state => state.playAlbum);
-    const currentTrack = useAudioStore(state => state.currentTrack);
-    const isPlaying = useAudioStore(state => state.isPlaying);
     const pieces = useAdminPieces(() => reload(true));
-
-    function formatDuration(secs) {
-        if (!secs) return "--:--"
-        const m = Math.floor(secs / 60)
-        const s = secs % 60
-        return `${m}:${String(s).padStart(2, "0")}`
-    }
+    const picker = useCollectionPicker();
 
     function handleAddToList({ status, score }) {
        const request = userContent
@@ -89,11 +83,14 @@ export default function AlbumDetailsPage() {
                         {userContent ? <Check size={16} className="text-primary"/> : <BookmarkPlus size={16}/>}
                         {userContent ? Format.statusLabel(userContent.status, "music_album") : "Add to list"}
                     </button>
-                    {isAdmin && <ActionMenu>
-                        <ActionMenuItem icon={PencilLine} label="Edit album…" onClick={() => editRef.current.showModal()}/>
-                        <ActionMenuItem icon={Upload} label="Add tracks…" onClick={() => uploadRef.current.showModal()}/>
-                        <DeleteFromServerButton asMenuItem item={{ id, title: album.title, type: "music_album" }} />
-                    </ActionMenu>}
+                    <ActionMenu>
+                        <ActionMenuItem icon={ListPlus} label="Add to playlist or collection…" onClick={() => picker.open({ id, type: "album", title: album.title })}/>
+                        {isAdmin && <>
+                            <ActionMenuItem icon={PencilLine} label="Edit album…" onClick={() => editRef.current.showModal()}/>
+                            <ActionMenuItem icon={Upload} label="Add tracks…" onClick={() => uploadRef.current.showModal()}/>
+                            <DeleteFromServerButton asMenuItem item={{ id, title: album.title, type: "music_album" }} />
+                        </>}
+                    </ActionMenu>
                 </>}
             />
 
@@ -102,41 +99,14 @@ export default function AlbumDetailsPage() {
                 <EmptyState compact title="No tracks yet" hint="Tracks show up here once they've downloaded."
                     action={isAdmin ? { label: "Add tracks", onClick: () => uploadRef.current.showModal() } : undefined} />
             ) : (
-                <section className="surface p-1.5 sm:p-2 animate-fade-up">
-                    <div className="flex items-center gap-4 px-3 py-2 text-xs uppercase tracking-wider text-base-content/40 border-b border-white/5 mb-1">
-                        <span className="w-8 text-right">#</span>
-                        <span className="flex-1">Title</span>
-                        <Clock size={14} />
-                    </div>
-                    <ol className="flex flex-col gap-0.5">
-                        {tracks.map((track, i) => {
-                            const playing = currentTrack?.id === track.media_item_id
-                            return <li key={track.media_item_id} className="flex items-center gap-1">
-                                <button
-                                    className={`group flex-1 min-w-0 flex items-center gap-4 px-3 py-2.5 rounded-field text-left transition-colors hover:bg-white/5
-                                        ${playing ? "bg-primary/8" : ""}`}
-                                    onClick={() => playAlbum(queueTracks, i)}
-                                    aria-label={`Play ${track.title}`}
-                                >
-                                    <span className="w-8 flex justify-end text-sm tabular-nums text-base-content/40">
-                                        {playing
-                                            ? <Equalizer animate={isPlaying}/>
-                                            : <>
-                                                <span className="group-hover:hidden">{track.track_number ?? i + 1}</span>
-                                                <Play size={14} fill="currentColor" className="hidden group-hover:block text-primary"/>
-                                            </>}
-                                    </span>
-                                    <span className={`flex-1 min-w-0 truncate text-sm font-medium ${playing ? "text-primary" : ""}`}>{track.title}</span>
-                                    <span className="text-xs tabular-nums text-base-content/45">{formatDuration(track.duration_secs)}</span>
-                                </button>
-                                {pieces.menu({
-                                    kind: "track", id: track.media_item_id, label: track.title,
-                                    title: track.title, artist: track.artist || album.artist, track_number: track.track_number,
-                                })}
-                            </li>
-                        })}
-                    </ol>
-                </section>
+                <TrackList
+                    tracks={tracks.map(t => ({ key: t.media_item_id, id: t.media_item_id, title: t.title, number: t.track_number, duration_secs: t.duration_secs }))}
+                    onPlay={i => playAlbum(queueTracks, i)}
+                    menu={(track, i) => pieces.menu({
+                        kind: "track", id: track.id, label: track.title,
+                        title: track.title, artist: tracks[i].artist || album.artist, track_number: tracks[i].track_number,
+                    }, <ActionMenuItem icon={ListPlus} label="Add to playlist…" onClick={() => picker.open({ id: track.id, type: "music_track", title: track.title })}/>)}
+                />
             )}
 
             {isAdmin && <>
@@ -154,6 +124,7 @@ export default function AlbumDetailsPage() {
                 />
             </>}
             {pieces.modals}
+            {picker.modal}
 
             <AddToListModal
                 dialogRef={dialogRef}
@@ -164,16 +135,4 @@ export default function AlbumDetailsPage() {
             />
         </div>
     )
-}
-
-/**
- * Three bouncing bars marking the track that's playing
- * @param {boolean} animate bounces while playing, still when paused
- */
-function Equalizer({ animate }) {
-    return <span className="flex items-end gap-[2px] h-3.5 text-primary" aria-label="Now playing">
-        {[0, 0.2, 0.4].map(delay => (
-            <span key={delay} className={`w-[3px] rounded-sm bg-current ${animate ? "animate-eq" : "h-1.5"}`} style={{ animationDelay: `${delay}s` }}></span>
-        ))}
-    </span>
 }

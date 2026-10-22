@@ -13,6 +13,8 @@ const LONG_DESCRIPTION = 320
  * description and actions. Runs to the edges of the page
  * @param {object} cover { src, source } as for components/Cover.jsx
  * @param {boolean} square album art instead of a poster
+ * @param {any} poster drawn in the poster's place instead of the cover, like a playlist's mosaic;
+ *  the cover still tints the background
  * @param {string} eyebrow a small label above the title, like the media type
  * @param {string} title the title
  * @param {any[]} meta short facts shown in a line, empty ones are skipped
@@ -24,7 +26,7 @@ const LONG_DESCRIPTION = 320
  * @param {any} actions the other buttons, in a row under the main one on phones
  * @param {any} note a line under the actions, like why it can't be played
  */
-export default function DetailsHero({ cover, square = false, eyebrow, title, meta = [], badges, genres = [], description, html = false, primary, actions, note }) {
+export default function DetailsHero({ cover, square = false, poster, eyebrow, title, meta = [], badges, genres = [], description, html = false, primary, actions, note }) {
     const navigate = useNavigate()
     const facts = meta.filter(Boolean)
 
@@ -44,7 +46,7 @@ export default function DetailsHero({ cover, square = false, eyebrow, title, met
         <div className="mt-4 lg:mt-6 flex flex-col sm:flex-row items-center sm:items-end gap-6 lg:gap-10 animate-fade-up">
             <div className={`shrink-0 overflow-hidden rounded-box bg-base-300 shadow-raised ring-1 ring-white/10
                 ${square ? "w-52 sm:w-56 lg:w-64 aspect-square" : "w-44 sm:w-52 lg:w-60 aspect-[2/3]"}`}>
-                <Cover src={cover?.src} source={cover?.source} alt={title} className="size-full object-cover"/>
+                {poster ?? <Cover src={cover?.src} source={cover?.source} alt={title} className="size-full object-cover"/>}
             </div>
 
             <div className="flex flex-col gap-4 min-w-0 w-full items-center text-center sm:items-start sm:text-left">

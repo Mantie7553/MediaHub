@@ -9,8 +9,9 @@ import Format from "../../utils/format";
  * @param {boolean} isLibraryItem the title is in the library (no wishlist option then)
  * @param {function} onRemove takes the title off the user's list, shown for titles on it
  * @param {function} onDelete admins: opens the permanent delete confirmation
+ * @param {function} onAddToCollection opens the playlist / collection picker, for titles in the library
  */
-export default function AddToListModal({item, onConfirm, dialogRef, initialValues, isLibraryItem, onRemove, onDelete}) {
+export default function AddToListModal({item, onConfirm, dialogRef, initialValues, isLibraryItem, onRemove, onDelete, onAddToCollection}) {
     const [status, setStatus] = useState(initialValues?.status ?? 'planned');
     const [score, setScore] = useState(initialValues?.rating ?? 0);
     const [progress, setProgress] = useState((initialValues?.episodes_watched || initialValues?.chapters_read) ?? 0);
@@ -70,11 +71,14 @@ export default function AddToListModal({item, onConfirm, dialogRef, initialValue
                     </button>
                 )}
             </section>
-            {onDelete && (
-                <section className="border-t border-white/5 pt-3 pl-4">
-                    <button className="link link-error text-sm" onClick={() => { dialogRef.current.close(); onDelete(); }}>
+            {(onAddToCollection || onDelete) && (
+                <section className="flex flex-wrap gap-x-6 gap-y-2 border-t border-white/5 pt-3 pl-4">
+                    {onAddToCollection && <button className="link link-hover text-sm text-primary" onClick={() => { dialogRef.current.close(); onAddToCollection(); }}>
+                        Add to a playlist or collection…
+                    </button>}
+                    {onDelete && <button className="link link-error text-sm" onClick={() => { dialogRef.current.close(); onDelete(); }}>
                         Delete from server…
-                    </button>
+                    </button>}
                 </section>
             )}
         </div>

@@ -31,10 +31,12 @@ const consequences = {
 };
 
 /**
- * Admin only: the ⋯ menu on each episode, chapter, volume or track row (edit, delete) and the
- * dialogs it opens. For anyone else menu() is null and modals is empty
+ * The ⋯ menu on each episode, chapter, volume or track row and the dialogs it opens. Admins get
+ * edit and delete; anyone gets the extra items a page passes in, like "Add to playlist". With
+ * neither, menu() is null and modals is empty
  * @param {function} onChanged called after a piece was edited or deleted, to reload the list
- * @returns menu(piece) for a row, where piece is { kind, id, label, ...its editable values },
+ * @returns menu(piece, extra) for a row, where piece is { kind, id, label, ...its editable
+ *  values } and extra is ActionMenuItem elements shown above the admin ones,
  *  and modals to render once on the page
  */
 export default function useAdminPieces(onChanged) {
@@ -63,9 +65,12 @@ export default function useAdminPieces(onChanged) {
             });
     }
 
-    const menu = p => isAdmin && <ActionMenu label={`${p.label} actions`} size="sm">
-        <ActionMenuItem icon={PencilLine} label="Edit…" onClick={() => open(editRef, p)}/>
-        <ActionMenuItem icon={Trash2} label="Delete…" danger onClick={() => open(deleteRef, p)}/>
+    const menu = (p, extra) => (isAdmin || extra) && <ActionMenu label={`${p.label} actions`} size="sm">
+        {extra}
+        {isAdmin && <>
+            <ActionMenuItem icon={PencilLine} label="Edit…" onClick={() => open(editRef, p)}/>
+            <ActionMenuItem icon={Trash2} label="Delete…" danger onClick={() => open(deleteRef, p)}/>
+        </>}
     </ActionMenu>;
 
     const modals = isAdmin && <>

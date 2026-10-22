@@ -11,7 +11,7 @@ import { useMediaItem, useUserContent, useRemoveFromList } from "../../hooks";
 import DeleteFromServerButton from "../../components/DeleteFromServerButton";
 import { animeBadge } from "../../utils/status";
 import Format from "../../utils/format";
-import { CheckCheck, PencilLine, Play, RotateCcw, Undo2, Upload } from "lucide-react";
+import { CheckCheck, PencilLine, Play, RotateCcw, Undo2, Upload, ListPlus } from "lucide-react";
 import DetailsHero from "../../components/details/DetailsHero";
 import StatusPill from "../../components/StatusPill";
 import { ActionMenu, ActionMenuItem, ListStatusMenu } from "../../components/details/Menus";
@@ -20,6 +20,7 @@ import SegmentedTabs from "../../components/SegmentedTabs";
 import EditDetailsModal from "../../components/modals/EditDetailsModal";
 import UploadFilesModal from "../../components/modals/UploadFilesModal";
 import useAdminPieces from "../../hooks/useAdminPieces";
+import useCollectionPicker from "../../hooks/useCollectionPicker";
 import { getRole } from "../../utils/auth";
 
 export default function AnimeDetailsPage() {
@@ -44,6 +45,7 @@ export default function AnimeDetailsPage() {
     const isAdmin = getRole() === "admin";
     const reloadEpisodes = () => setEpisodesAttempt(a => a + 1);
     const pieces = useAdminPieces(reloadEpisodes);
+    const picker = useCollectionPicker();
 
     useEffect(() => {
         // background: the refresh when the tab regains focus, which fails quietly
@@ -173,6 +175,7 @@ export default function AnimeDetailsPage() {
                         onRemove={removeEntry}
                     />
                     <ActionMenu>
+                        <ActionMenuItem icon={ListPlus} label="Add to a collection…" onClick={() => picker.open({ id, type: anime.type, title: anime.title })}/>
                         <ActionMenuItem icon={CheckCheck} label="Mark all watched" onClick={() => markShow(true)}/>
                         <ActionMenuItem icon={Undo2} label="Mark all unwatched" onClick={() => markShow(false)}/>
                         {isAdmin && <>
@@ -244,6 +247,7 @@ export default function AnimeDetailsPage() {
                 />
             </>}
             {pieces.modals}
+            {picker.modal}
         </div>
     )
 }

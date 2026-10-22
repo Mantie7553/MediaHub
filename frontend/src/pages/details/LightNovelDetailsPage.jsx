@@ -9,7 +9,7 @@ import { openViewer } from "../../utils/navigation";
 import { useMediaItem, useUserContent, useRemoveFromList } from "../../hooks";
 import DeleteFromServerButton from "../../components/DeleteFromServerButton";
 import api from "../../services/api";
-import { BookOpen, CheckCheck, PencilLine, Undo2, Upload } from "lucide-react";
+import { BookOpen, CheckCheck, PencilLine, Undo2, Upload, ListPlus } from "lucide-react";
 import Format from "../../utils/format";
 import DetailsHero from "../../components/details/DetailsHero";
 import { ActionMenu, ActionMenuItem, ListStatusMenu } from "../../components/details/Menus";
@@ -17,6 +17,7 @@ import ItemRow, { ItemList } from "../../components/details/ItemRow";
 import EditDetailsModal from "../../components/modals/EditDetailsModal";
 import UploadFilesModal from "../../components/modals/UploadFilesModal";
 import useAdminPieces from "../../hooks/useAdminPieces";
+import useCollectionPicker from "../../hooks/useCollectionPicker";
 import { getRole } from "../../utils/auth";
 
 export default function LightNovelDetailsPage() {
@@ -34,6 +35,7 @@ export default function LightNovelDetailsPage() {
     const [newCover, setNewCover] = useState(null);
     const isAdmin = getRole() === "admin";
     const pieces = useAdminPieces(() => refetch(false));
+    const picker = useCollectionPicker();
 
     // read state and positions start from each copy of the title that loads
     const [shownLn, setShownLn] = useState(null);
@@ -129,6 +131,7 @@ export default function LightNovelDetailsPage() {
                         onRemove={removeEntry}
                     />
                     <ActionMenu>
+                        <ActionMenuItem icon={ListPlus} label="Add to a collection…" onClick={() => picker.open({ id, type: ln.type, title: ln.title })}/>
                         <ActionMenuItem icon={CheckCheck} label="Mark all read" onClick={() => markAll(true)}/>
                         <ActionMenuItem icon={Undo2} label="Mark all unread" onClick={() => markAll(false)}/>
                         {isAdmin && <>
@@ -179,6 +182,7 @@ export default function LightNovelDetailsPage() {
                 />
             </>}
             {pieces.modals}
+            {picker.modal}
         </div>
     )
 }

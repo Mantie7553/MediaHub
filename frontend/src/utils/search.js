@@ -4,14 +4,15 @@ function fold(text) {
 }
 
 /**
- * Whether an item matches what was typed: every word has to appear in its title or artist
+ * Whether an item matches what was typed: every word has to appear in its title (a playlist or
+ * collection's name) or artist
  * @param {object} item a title, list entry or album
  * @param {string} query what was typed
  */
 export function matchesQuery(item, query) {
     const words = fold(query).split(/\s+/).filter(Boolean)
     if (words.length === 0) return true
-    const text = fold(`${item.media_title ?? item.title ?? ""} ${item.artist ?? ""}`)
+    const text = fold(`${item.media_title ?? item.title ?? item.name ?? ""} ${item.artist ?? ""}`)
     return words.every(word => text.includes(word))
 }
 

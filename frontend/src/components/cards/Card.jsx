@@ -11,6 +11,7 @@ import { Plus, Check, Play } from "lucide-react";
 import Cover from "../Cover";
 import { toast } from "../../stores/useToastStore";
 import useAudioStore from "../../stores/useAudioStore"
+import useCollectionPicker from "../../hooks/useCollectionPicker";
 
 /**
  * A poster card for a title, linking to its details page (tracks play instead)
@@ -132,6 +133,11 @@ function ActionButtons({item, userEntry, onListChange, onDeleted}) {
     // aren't in the library have neither
     const mediaId = item.media_item_id ?? item.id;
     const canDelete = getRole() === "admin" && !!mediaId;
+    const picker = useCollectionPicker(onListChange);
+    // list entries for albums carry album_id; anything else in the library has a media id
+    const collectable = item.album_id
+        ? { album_id: item.album_id, type: "album", title: item.media_title ?? item.title }
+        : mediaId && { id: mediaId, type: item.type ?? item.media_type, title: item.media_title ?? item.title };
 
     function handleOpenModal(e) {
         e.stopPropagation();
@@ -192,7 +198,9 @@ function ActionButtons({item, userEntry, onListChange, onDeleted}) {
     return <>
         <AddToListModal item={item} onConfirm={handleConfirm} dialogRef={dialogRef} initialValues={userEntry} isLibraryItem={isLibraryItem}
             onRemove={userEntry ? handleRemove : undefined}
-            onDelete={canDelete ? () => deleteRef.current.showModal() : undefined}/>
+            onDelete={canDelete ? () => deleteRef.current.showModal() : undefined}
+            onAddToCollection={collectable ? () => picker.open(collectable) : undefined}/>
+        {picker.modal}
         {canDelete && <DeleteMediaModal
             dialogRef={deleteRef}
             item={{ id: mediaId, title: item.media_title ?? item.title, type: item.type ?? item.media_type }}
