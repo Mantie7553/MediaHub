@@ -1,5 +1,5 @@
 import { ChevronDown, ChevronUp } from 'lucide-react'
-import { useState, useEffect, useMemo, useRef } from "react"
+import { useState, useEffect, useMemo, useRef, useCallback } from "react"
 import { useParams, useLocation, useNavigate } from "react-router-dom"
 import api from "../../services/api"
 import { useMediaItem } from "../../hooks"
@@ -43,6 +43,15 @@ function LightNovelReaderInner({ id, volumeId, volume, volumes, title }) {
     const nextVolume = volumes[currentIndex + 1] ?? null;
     const prevVolume = volumes[currentIndex - 1] ?? null;
 
+    const saveProgress = useCallback(pct => {
+        api.put(`/light-novels/volumes/${volumeId}/progress`, {
+            scroll_position: pct,
+        }).catch(() => {})
+        if (pct >= 1) {
+            // best effort like the progress save above, reading carries on either way
+            api.put(`/light-novels/volumes/${volumeId}/read`, { read: true }).catch(() => {})
+        }
+    }, [volumeId])
 
     // restore scroll position after content renders
     useEffect(() => {
@@ -54,7 +63,7 @@ function LightNovelReaderInner({ id, volumeId, volume, volumes, title }) {
             el.scrollTop = initialScroll * maxScroll;
             hasRestored.current = true;
         }, 150)
-    }, [content])
+    }, [content, initialScroll])
 
     // track scroll position
     useEffect(() => {
@@ -78,24 +87,14 @@ function LightNovelReaderInner({ id, volumeId, volume, volumes, title }) {
             el.removeEventListener("scroll", handleScroll)
             clearTimeout(debounceTimer.current)
         }
-    }, [content])
+    }, [content, saveProgress])
 
     // save on unmount
     useEffect(() => {
         return () => {
             saveProgress(scrollPctRef.current)
         }
-    }, [volumeId])
-
-    function saveProgress(pct) {
-        api.put(`/light-novels/volumes/${volumeId}/progress`, {
-            scroll_position: pct,
-        }).catch(() => {})
-        if (pct >= 1) {
-            // best effort like the progress save above, reading carries on either way
-            api.put(`/light-novels/volumes/${volumeId}/read`, { read: true }).catch(() => {})
-        }
-    }
+    }, [saveProgress])
 
     if (error) return <ErrorState error={error} title="Couldn't load this volume" onRetry={reload} showBack />
 

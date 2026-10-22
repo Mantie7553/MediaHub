@@ -86,6 +86,7 @@ export default function AudioPlayer() {
         if (!audioRef.current || !currentTrack) return
         remintedRef.current = false
         loadTrack(currentTrack.id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only a different track loads, not a new copy of the same one
     }, [currentTrack?.id])
 
     function handleTimeUpdate() {

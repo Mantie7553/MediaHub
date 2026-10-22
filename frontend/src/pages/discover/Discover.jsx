@@ -65,7 +65,7 @@ export default function Discover() {
         setQuery("");
     }
 
-    const listProps = { showActions: true, userContentMap, onListChange: refresh, loading: sections.loading };
+    const listProps = { userContentMap, onListChange: refresh, loading: sections.loading };
     const topRatedHeading = activeTab === "manga" ? "Latest Updates" : "Top Rated";
 
     return <div className="flex flex-col gap-10">
@@ -107,7 +107,7 @@ export default function Discover() {
                 ) : search ? (
                     search.error
                         ? <ErrorState compact error={search.error} onRetry={handleSearch} />
-                        : <ContentGrid items={search.results} heading={`Results for "${search.query}"`} showActions={true} userContentMap={userContentMap} onListChange={refresh}
+                        : <ContentGrid items={search.results} heading={`Results for "${search.query}"`} userContentMap={userContentMap} onListChange={refresh}
                             emptyText={`No results for "${search.query}"`} emptyHint="Check the spelling or try the title in another language." />
                 ) : sections.error ? (
                     <ErrorState compact error={sections.error} onRetry={sections.reload} />

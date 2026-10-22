@@ -6,7 +6,6 @@ import LoginPage from './pages/login/LoginPage'
 import ProtectedRoute from './components/layout/ProtectedRoute'
 import SettingsPage from './pages/settings/SettingsPage'
 import Discover from './pages/discover/Discover'
-import Library from './pages/library/Library'
 import { 
   AlbumDetailsPage,
   AnimeDetailsPage, LightNovelDetailsPage, 
@@ -35,7 +34,6 @@ function App() {
           <Route path="/downloads" element={<DownloadsPage />} />
           <Route path='/users' element={<UserManagementPage/>} />
           <Route path="/discover" element={<Discover />} />
-          <Route path="/library" element={<Library/>}/>
           <Route path="/settings" element={<SettingsPage/>} />
           <Route path="/anime/:id" element={<AnimeDetailsPage/>} />
           <Route path='/albums/:id' element={<AlbumDetailsPage/>}/>

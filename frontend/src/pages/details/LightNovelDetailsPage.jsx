@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import ErrorState from "../../components/states/ErrorState";
 import NotFound from "../../components/states/NotFound";
@@ -35,14 +35,17 @@ export default function LightNovelDetailsPage() {
     const isAdmin = getRole() === "admin";
     const pieces = useAdminPieces(() => refetch(false));
 
-    useEffect(() => {
+    // read state and positions start from each copy of the title that loads
+    const [shownLn, setShownLn] = useState(null);
+    if (ln !== shownLn) {
+        setShownLn(ln);
         if (ln?.metadata?.volumes) {
             setReadVolumes(new Set(ln.metadata.volumes.filter(v => v.completed).map(v => v.id)));
             const initial = {};
             ln.metadata.volumes.forEach(v => { initial[v.id] = v.scroll_position ?? 0; });
             setScrollPosition(initial);
         }
-    }, [ln]);
+    }
 
     function updateStatus(status) {
         const request = userEntry

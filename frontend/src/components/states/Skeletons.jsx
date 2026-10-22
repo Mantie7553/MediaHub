@@ -1,3 +1,5 @@
+import { cardGrid } from "../layout/cardGrid"
+
 /**
  * Placeholders shaped like the content they stand in for, so pages don't jump when data arrives
  */
@@ -35,7 +37,7 @@ export function CardRowSkeleton({ heading, count = 8, square = false }) {
  * @param {number} count how many cards
  */
 export function CardGridSkeleton({ count = 12 }) {
-    return <ul className="grid grid-cols-[repeat(auto-fill,minmax(9.5rem,1fr))] md:grid-cols-[repeat(auto-fill,minmax(10.5rem,1fr))] gap-x-4 gap-y-6" aria-busy="true">
+    return <ul className={cardGrid} aria-busy="true">
         {Array.from({ length: count }, (_, i) => <CardSkeleton key={i} fluid/>)}
     </ul>
 }

@@ -114,6 +114,7 @@ export default function PlayerPage() {
             .then(setPlaylistUrl)
             .catch(err => setError(err))
             .finally(() => setLoading(false))
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fetches once per title and retry, the start position is only for the first load
     }, [id, attempt])
 
     function retry() {
@@ -201,6 +202,7 @@ export default function PlayerPage() {
                 video.src = ""
             }
         }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the remint handler is set up once per playlist, fetchStream reads type and id only
     }, [playlistUrl])
 
     /**
@@ -320,6 +322,7 @@ export default function PlayerPage() {
         }
         textTracks.addEventListener("change", onChange)
         return () => textTracks.removeEventListener("change", onChange)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- applySubtitleSelection reads the same state listed here
     }, [loading, subtitles, subtitleFiles, selectedSubtitle])
 
     // save progress every 5 seconds and on unmount
@@ -330,6 +333,15 @@ export default function PlayerPage() {
                 positionRef.current = video.currentTime
                 durationRef.current = video.duration || durationRef.current
             }
+        }
+
+        function saveProgress() {
+            if (positionRef.current <= 0) return
+            const endpoint = type === "movie" ? `/movies/${id}/progress` : `/episodes/${id}/progress`
+            api.put(endpoint, {
+                position_secs: positionRef.current,
+                duration_secs: durationRef.current,
+            }).catch(() => {})
         }
 
         saveIntervalRef.current = setInterval(() => {
@@ -343,15 +355,6 @@ export default function PlayerPage() {
             saveProgress()
         }
     }, [type, id])
-
-    function saveProgress() {
-        if (positionRef.current <= 0) return
-        const endpoint = type === "movie" ? `/movies/${id}/progress` : `/episodes/${id}/progress`
-        api.put(endpoint, {
-            position_secs: positionRef.current,
-            duration_secs: durationRef.current,
-        }).catch(() => {})
-    }
 
     function goToEpisode(ep) {
         setLoading(true)

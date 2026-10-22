@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { mangaBadge } from "../../utils/status";
 import ErrorState from "../../components/states/ErrorState";
@@ -38,14 +38,17 @@ export default function MangaDetailsPage() {
     const pieces = useAdminPieces(() => refetch(false));
 
 
-    useEffect(() => {
+    // read state and pages start from each copy of the title that loads
+    const [shownManga, setShownManga] = useState(null);
+    if (manga !== shownManga) {
+        setShownManga(manga);
         if (manga?.metadata?.chapters) {
             const initial = {};
             manga.metadata.chapters.forEach(c => { initial[c.id] = c.last_page_read ?? 0; });
             setPageProgress(initial);
             setReadChapters(new Set(manga.metadata.chapters.filter(c => c.completed).map(c => c.id)));
         }
-    }, [manga]);
+    }
 
     function updateStatus(status) {
         const request = userEntry
