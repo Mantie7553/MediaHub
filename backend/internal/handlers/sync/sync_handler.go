@@ -725,40 +725,38 @@ func (h *Handler) syncMusic() (int, error) {
 			return nil
 		}
 
-		// upsert album if not "Singles"
+		// upsert the album, Singles included: an artist's singles are listed as an album too
 		var albumID *string
-		if albumName != "Singles" {
-			// the album the folder's other tracks are on, which may have been renamed since, or
-			// one named after the folder
-			var id string
+		// the album the folder's other tracks are on, which may have been renamed since, or
+		// one named after the folder
+		var id string
+		err = h.db.QueryRow(
+			`SELECT album_id FROM music_metadata WHERE album_id IS NOT NULL AND file_path LIKE $1 ESCAPE '\' LIMIT 1`,
+			utils.LikePrefix(filepath.Join(musicRoot, artist, albumName)+string(filepath.Separator)),
+		).Scan(&id)
+		if err == sql.ErrNoRows {
 			err = h.db.QueryRow(
-				`SELECT album_id FROM music_metadata WHERE album_id IS NOT NULL AND file_path LIKE $1 ESCAPE '\' LIMIT 1`,
-				utils.LikePrefix(filepath.Join(musicRoot, artist, albumName)+string(filepath.Separator)),
+				`SELECT id FROM albums WHERE title = $1 AND artist = $2`,
+				albumName, artist,
 			).Scan(&id)
-			if err == sql.ErrNoRows {
-				err = h.db.QueryRow(
-					`SELECT id FROM albums WHERE title = $1 AND artist = $2`,
-					albumName, artist,
-				).Scan(&id)
-			}
+		}
 
-			if err == sql.ErrNoRows {
-				err = h.db.QueryRow(
-					`INSERT INTO albums (title, artist)
-					VALUES ($1, $2)
-					RETURNING id`,
-					albumName, artist,
-				).Scan(&id)
-				if err != nil {
-					logger.Error("failed to create album %s: %s", albumName, err.Error())
-					return nil
-				}
-			} else if err != nil {
-				logger.Error("failed to query album %s: %s", albumName, err.Error())
+		if err == sql.ErrNoRows {
+			err = h.db.QueryRow(
+				`INSERT INTO albums (title, artist)
+				VALUES ($1, $2)
+				RETURNING id`,
+				albumName, artist,
+			).Scan(&id)
+			if err != nil {
+				logger.Error("failed to create album %s: %s", albumName, err.Error())
 				return nil
 			}
-			albumID = &id
+		} else if err != nil {
+			logger.Error("failed to query album %s: %s", albumName, err.Error())
+			return nil
 		}
+		albumID = &id
 
 		// upsert music_metadata with file_path
 		_, err = h.db.Exec(

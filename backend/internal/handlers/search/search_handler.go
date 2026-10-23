@@ -281,6 +281,11 @@ func (h *Handler) Save(w http.ResponseWriter, r *http.Request) {
 	// a track already in the library keeps its artist and album
 	if created && req.Type == "music_track" && req.ExternalSource == "ytdlp" && req.ExternalID != "" {
 		var albumID *string
+		// a track with no album is one of the artist's singles, which the library shows as
+		// an album of its own like the Singles folder it downloads into
+		if req.Album == "" && req.Artist != "" {
+			req.Album = "Singles"
+		}
 		if req.Album != "" {
 			var id string
 			err := h.db.QueryRow(
