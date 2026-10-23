@@ -9,6 +9,7 @@ import NotFound from "../../components/states/NotFound"
 import { ReaderSkeleton, TextSkeleton } from "../../components/states/Skeletons"
 import { exitViewer, switchViewer } from "../../utils/navigation"
 import ReaderToolbar from "../../components/ReaderToolbar"
+import useDocumentTitle from "../../hooks/useDocumentTitle"
 import { sanitizeHtml } from "../../utils/sanitize"
 
 export default function LightNovelReader() {
@@ -27,6 +28,7 @@ export default function LightNovelReader() {
 }
 
 function LightNovelReaderInner({ id, volumeId, volume, volumes, title }) {
+    useDocumentTitle(`${title} · Vol. ${volume.volume_number}`);
     const navigate = useNavigate();
     const location = useLocation();
     const initialScroll = volume?.scroll_position ?? 0;

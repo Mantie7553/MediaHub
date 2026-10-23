@@ -1,4 +1,5 @@
 import { endSession, getRole as sessionRole } from "../services/session";
+import useAudioStore from "../stores/useAudioStore";
 
 /**
  * Role of the logged in user, read from the access token
@@ -16,5 +17,7 @@ export function getRole() {
  */
 export function logout(navigate, everywhere = false) {
     endSession(everywhere);
+    // the next person to sign in here doesn't get this person's queue back
+    useAudioStore.getState().stop();
     navigate("/login");
 }
