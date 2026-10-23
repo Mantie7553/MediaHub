@@ -75,7 +75,7 @@ export default function AlbumDetailsPage() {
                     totalSecs > 0 && `${Math.round(totalSecs / 60)} min`,
                 ]}
                 description={album.description}
-                primary={<button className="btn btn-primary btn-lg shadow-glow px-6" onClick={() => playAlbum(queueTracks, 0)} disabled={tracks.length === 0}>
+                primary={<button className="btn btn-primary btn-lg shadow-glow px-6" onClick={() => playAlbum(queueTracks, 0, `/albums/${id}`)} disabled={tracks.length === 0}>
                     <Play size={18} fill="currentColor"/> Play
                 </button>}
                 actions={<>
@@ -101,7 +101,7 @@ export default function AlbumDetailsPage() {
             ) : (
                 <TrackList
                     tracks={tracks.map(t => ({ key: t.media_item_id, id: t.media_item_id, title: t.title, number: t.track_number, duration_secs: t.duration_secs }))}
-                    onPlay={i => playAlbum(queueTracks, i)}
+                    onPlay={i => playAlbum(queueTracks, i, `/albums/${id}`)}
                     menu={(track, i) => pieces.menu({
                         kind: "track", id: track.id, label: track.title,
                         title: track.title, artist: tracks[i].artist || album.artist, track_number: tracks[i].track_number,

@@ -85,6 +85,17 @@ describe("audio queue", () => {
         expect(current()).toBe(tracks[(at + 1) % tracks.length].id)
     })
 
+    it("remembers the page the queue was played from, until it's closed", () => {
+        useAudioStore.getState().playAlbum(tracks, 0, "/albums/1")
+        useAudioStore.getState().next()
+        expect(useAudioStore.getState().source).toBe("/albums/1")
+        useAudioStore.getState().play(tracks[0])
+        expect(useAudioStore.getState().source).toBe(null)
+        useAudioStore.getState().playAlbum(tracks, 0, "/playlists/2")
+        useAudioStore.getState().stop()
+        expect(useAudioStore.getState().source).toBe(null)
+    })
+
     it("plays a single track as a queue of one", () => {
         useAudioStore.getState().play(tracks[0])
         useAudioStore.getState().next()

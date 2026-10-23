@@ -3,7 +3,7 @@ import { Play, Pause, X, Music, SkipBack, SkipForward, Shuffle, Repeat, Repeat1,
 import useAudioStore from "../../stores/useAudioStore"
 import useSidebarStore from "../../stores/useSidebarStore"
 import api from "../../services/api"
-import { useLocation } from "react-router-dom"
+import { Link, useLocation } from "react-router-dom"
 import { readStored, writeStored } from "../../utils/storage"
 import { keyForFocused } from "../../utils/keys"
 
@@ -14,8 +14,18 @@ const SKIP_SECS = 10
 // how often the position is remembered while playing, for picking up after a reload
 const SAVE_EVERY_SECS = 5
 
+// the cover and title, a link to the page the music is playing from when there is one
+function TrackInfo({ source, title, children }) {
+    const className = "flex items-center gap-3 min-w-0 flex-1 sm:flex-none sm:w-64"
+    if (!source) return <div className={className}>{children}</div>
+    return <Link to={source} aria-label={`${title}, go to where it's playing from`}
+        className={`${className} -m-1.5 p-1.5 rounded-field hover:bg-white/5 active:bg-white/10 transition-colors`}>
+        {children}
+    </Link>
+}
+
 export default function AudioPlayer() {
-    const { currentTrack, isPlaying, pause, resume, stop, queue, shuffle, repeat, toggleShuffle, cycleRepeat } = useAudioStore()
+    const { currentTrack, isPlaying, pause, resume, stop, queue, shuffle, repeat, toggleShuffle, cycleRepeat, source } = useAudioStore()
     // the bar starts where the sidebar ends
     const sidebarCollapsed = useSidebarStore(state => state.collapsed)
     // the video player, readers and login page fill the screen: no tab bar or sidebar to sit beside
@@ -314,8 +324,8 @@ export default function AudioPlayer() {
             </div>
 
             <div className="flex items-center gap-3 sm:gap-4 px-3 sm:px-4 py-2">
-                {/* Track Info */}
-                <div className="flex items-center gap-3 min-w-0 flex-1 sm:flex-none sm:w-64">
+                {/* Track Info: opens the album or playlist it's playing from */}
+                <TrackInfo source={source} title={currentTrack.title}>
                     {currentTrack.thumbnail && failedThumb !== currentTrack.thumbnail ? (
                         <img src={currentTrack.thumbnail} alt="" onError={() => setFailedThumb(currentTrack.thumbnail)}
                             className="size-11 shrink-0 rounded-lg object-cover shadow-card" />
@@ -328,7 +338,7 @@ export default function AudioPlayer() {
                         <p className="text-sm font-medium truncate">{currentTrack.title}</p>
                         <p className="text-xs text-base-content/60 truncate">{currentTrack.artist}</p>
                     </div>
-                </div>
+                </TrackInfo>
 
                 {/* Controls */}
                 <div className="sm:flex-1 flex flex-col items-center gap-1">
