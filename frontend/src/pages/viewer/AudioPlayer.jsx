@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import { Play, Pause, X, Music, SkipBack, SkipForward, Shuffle, Repeat, Repeat1, Volume2, VolumeX } from "lucide-react"
-import useAudioStore from "../../stores/useAudioStore"
+import useAudioStore, { REPEAT_LABELS } from "../../stores/useAudioStore"
 import useSidebarStore from "../../stores/useSidebarStore"
 import api from "../../services/api"
 import { Link, useLocation } from "react-router-dom"
@@ -301,7 +301,7 @@ export default function AudioPlayer() {
     const pct = duration ? (progress / duration) * 100 : 0
     const hasQueue = queue.length > 1
     const RepeatIcon = repeat === "one" ? Repeat1 : Repeat
-    const repeatLabel = { off: "Repeat", all: "Repeat all, turn on repeat one", one: "Repeat one, turn repeat off" }[repeat]
+    const repeatLabel = REPEAT_LABELS[repeat]
 
     return <>
         <audio

@@ -5,6 +5,9 @@ import { shuffled } from "../utils/collections"
 const STORAGE_KEY = "mediahub.player"
 const REPEAT_MODES = ["off", "all", "one"]
 
+// what the repeat button does from each mode, for its label
+export const REPEAT_LABELS = { off: "Repeat", all: "Repeat all, turn on repeat one", one: "Repeat one, turn repeat off" }
+
 // the queue's indexes in play order: in order, or shuffled with the track at `first` up front
 function playOrder(length, shuffle, first) {
     const indexes = [...Array(length).keys()]
@@ -50,6 +53,12 @@ const useAudioStore = create((set, get) => ({
     playAlbum: (tracks, index, source = null) => {
         const order = playOrder(tracks.length, get().shuffle, index)
         set({ queue: tracks, order, position: order.indexOf(index), currentTrack: tracks[index], isPlaying: true, resumeAt: 0, source })
+    },
+
+    // play a whole album or playlist: from the top, or from a random track when shuffle is on
+    playAll: (tracks, source = null) => {
+        const first = get().shuffle ? Math.floor(Math.random() * tracks.length) : 0
+        get().playAlbum(tracks, first, source)
     },
 
     pause: () => set({ isPlaying: false }),

@@ -96,6 +96,20 @@ describe("audio queue", () => {
         expect(useAudioStore.getState().source).toBe(null)
     })
 
+    it("plays a whole album from the top, or shuffled through every track", () => {
+        useAudioStore.getState().playAll(tracks, "/albums/1")
+        expect(current()).toBe("a")
+
+        useAudioStore.setState({ shuffle: true })
+        useAudioStore.getState().playAll(tracks, "/albums/1")
+        const played = [current()]
+        for (let i = 1; i < tracks.length; i++) {
+            useAudioStore.getState().next()
+            played.push(current())
+        }
+        expect([...played].sort()).toEqual(["a", "b", "c", "d", "e"])
+    })
+
     it("plays a single track as a queue of one", () => {
         useAudioStore.getState().play(tracks[0])
         useAudioStore.getState().next()
