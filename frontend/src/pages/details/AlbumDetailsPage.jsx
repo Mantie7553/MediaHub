@@ -1,6 +1,6 @@
 import { useRef, useState } from "react"
 import { useParams } from "react-router-dom"
-import { Play, BookmarkPlus, Check, PencilLine, Upload, ListPlus } from "lucide-react"
+import { BookmarkPlus, Check, PencilLine, Upload, ListPlus } from "lucide-react"
 import api from "../../services/api"
 import useApi from "../../hooks/useApi"
 import ErrorState from "../../components/states/ErrorState"
@@ -21,6 +21,7 @@ import UploadFilesModal from "../../components/modals/UploadFilesModal"
 import useAdminPieces from "../../hooks/useAdminPieces"
 import useCollectionPicker from "../../hooks/useCollectionPicker"
 import TrackList from "../../components/details/TrackList"
+import { PlayButton, QueueModeButtons } from "../../components/details/PlaybackControls"
 
 export default function AlbumDetailsPage() {
     const dialogRef = useRef(null);
@@ -75,14 +76,13 @@ export default function AlbumDetailsPage() {
                     totalSecs > 0 && `${Math.round(totalSecs / 60)} min`,
                 ]}
                 description={album.description}
-                primary={<button className="btn btn-primary btn-lg shadow-glow px-6" onClick={() => playAlbum(queueTracks, 0)} disabled={tracks.length === 0}>
-                    <Play size={18} fill="currentColor"/> Play
-                </button>}
+                primary={<PlayButton tracks={queueTracks} source={`/albums/${id}`}/>}
                 actions={<>
                     <button className="btn flex-1 sm:flex-none border-white/10 bg-white/10 hover:bg-white/15 gap-2 font-medium" onClick={() => dialogRef.current.showModal()}>
                         {userContent ? <Check size={16} className="text-primary"/> : <BookmarkPlus size={16}/>}
                         {userContent ? Format.statusLabel(userContent.status, "music_album") : "Add to list"}
                     </button>
+                    <QueueModeButtons/>
                     <ActionMenu>
                         <ActionMenuItem icon={ListPlus} label="Add to playlist or collection…" onClick={() => picker.open({ id, type: "album", title: album.title })}/>
                         {isAdmin && <>
@@ -101,7 +101,7 @@ export default function AlbumDetailsPage() {
             ) : (
                 <TrackList
                     tracks={tracks.map(t => ({ key: t.media_item_id, id: t.media_item_id, title: t.title, number: t.track_number, duration_secs: t.duration_secs }))}
-                    onPlay={i => playAlbum(queueTracks, i)}
+                    onPlay={i => playAlbum(queueTracks, i, `/albums/${id}`)}
                     menu={(track, i) => pieces.menu({
                         kind: "track", id: track.id, label: track.title,
                         title: track.title, artist: tracks[i].artist || album.artist, track_number: tracks[i].track_number,

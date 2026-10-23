@@ -5,6 +5,9 @@ import { shuffled } from "../utils/collections"
 const STORAGE_KEY = "mediahub.player"
 const REPEAT_MODES = ["off", "all", "one"]
 
+// what the repeat button does from each mode, for its label
+export const REPEAT_LABELS = { off: "Repeat", all: "Repeat all, turn on repeat one", one: "Repeat one, turn repeat off" }
+
 // the queue's indexes in play order: in order, or shuffled with the track at `first` up front
 function playOrder(length, shuffle, first) {
     const indexes = [...Array(length).keys()]
@@ -24,13 +27,15 @@ function restore() {
             shuffle: saved.shuffle === true,
             repeat: REPEAT_MODES.includes(saved.repeat) ? saved.repeat : "off",
             resumeAt: Number(saved.time) || 0,
+            source: typeof saved.source === "string" && saved.source.startsWith("/") ? saved.source : null,
         }
     } catch {
         return {}
     }
 }
 
-const empty = { currentTrack: null, isPlaying: false, queue: [], order: [], position: -1, resumeAt: 0 }
+// source is the page the queue was played from (/albums/<id>, /playlists/<id>), which the bar links to
+const empty = { currentTrack: null, isPlaying: false, queue: [], order: [], position: -1, resumeAt: 0, source: null }
 
 const useAudioStore = create((set, get) => ({
     ...empty,
@@ -40,13 +45,20 @@ const useAudioStore = create((set, get) => ({
     // where the restored track picks up, in seconds
     ...restore(),
 
-    // play a single track
-    play: (track) => get().playAlbum([track], 0),
+    // play a single track, from the page given when it has one (its album)
+    play: (track, source = null) => get().playAlbum([track], 0, source),
 
-    // play from a list of tracks starting at an index, shuffled after it when shuffle is on
-    playAlbum: (tracks, index) => {
+    // play from a list of tracks starting at an index, shuffled after it when shuffle is on.
+    // source is the page they're played from
+    playAlbum: (tracks, index, source = null) => {
         const order = playOrder(tracks.length, get().shuffle, index)
-        set({ queue: tracks, order, position: order.indexOf(index), currentTrack: tracks[index], isPlaying: true, resumeAt: 0 })
+        set({ queue: tracks, order, position: order.indexOf(index), currentTrack: tracks[index], isPlaying: true, resumeAt: 0, source })
+    },
+
+    // play a whole album or playlist: from the top, or from a random track when shuffle is on
+    playAll: (tracks, source = null) => {
+        const first = get().shuffle ? Math.floor(Math.random() * tracks.length) : 0
+        get().playAlbum(tracks, first, source)
     },
 
     pause: () => set({ isPlaying: false }),
@@ -96,9 +108,9 @@ const useAudioStore = create((set, get) => ({
 
     // remember the queue and how far into the track it is, for the next page load
     save: (time) => {
-        const { queue, order, position, shuffle, repeat, currentTrack } = get()
+        const { queue, order, position, shuffle, repeat, currentTrack, source } = get()
         if (!currentTrack) return
-        writeStored(STORAGE_KEY, JSON.stringify({ queue, order, position, shuffle, repeat, time: Math.floor(time) }))
+        writeStored(STORAGE_KEY, JSON.stringify({ queue, order, position, shuffle, repeat, source, time: Math.floor(time) }))
     },
 }))
 

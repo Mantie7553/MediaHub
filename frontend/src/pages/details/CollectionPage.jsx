@@ -1,6 +1,6 @@
 import { useRef, useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
-import { ArrowDown, ArrowUp, ArrowUpToLine, Check, GripVertical, ListPlus, PencilLine, Play, Shuffle, SlidersHorizontal, Trash2, X } from "lucide-react"
+import { ArrowDown, ArrowUp, ArrowUpToLine, Check, GripVertical, ListPlus, PencilLine, SlidersHorizontal, Trash2, X } from "lucide-react"
 import useApi from "../../hooks/useApi"
 import useCollectionPicker from "../../hooks/useCollectionPicker"
 import { useUserContent } from "../../hooks"
@@ -19,7 +19,8 @@ import ErrorState from "../../components/states/ErrorState"
 import NotFound from "../../components/states/NotFound"
 import { DetailsSkeleton } from "../../components/states/Skeletons"
 import { deleteCollection, moveInCollection, removeFromCollection, updateCollection } from "../../services/collectionsService"
-import { SMART_PLAYLISTS, applyMove, dropTarget, moveTarget, shuffled } from "../../utils/collections"
+import { SMART_PLAYLISTS, applyMove, dropTarget, moveTarget } from "../../utils/collections"
+import { PlayButton, QueueModeButtons } from "../../components/details/PlaybackControls"
 
 // what each kind of entry is called on its own line
 const typeLabels = {
@@ -113,18 +114,13 @@ export default function CollectionPage() {
             ]}
             description={description}
             primary={isPlaylist
-                ? <button className="btn btn-primary btn-lg shadow-glow px-6" onClick={() => playAlbum(queue, 0)} disabled={queue.length === 0}>
-                    <Play size={18} fill="currentColor"/> Play
-                </button>
+                ? <PlayButton tracks={queue} source={`/playlists/${id}`}/>
                 : canEdit && count > 0 && <button className={`btn btn-lg px-6 ${arranging ? "btn-primary" : "border-white/10 bg-white/10 hover:bg-white/15"}`}
                     onClick={() => setArranging(!arranging)}>
                     {arranging ? <><Check size={18}/> Done</> : <><SlidersHorizontal size={18}/> Arrange</>}
                 </button>}
             actions={<>
-                {isPlaylist && <button className="btn flex-1 sm:flex-none border-white/10 bg-white/10 hover:bg-white/15 gap-2 font-medium"
-                    onClick={() => playAlbum(shuffled(queue), 0)} disabled={queue.length === 0}>
-                    <Shuffle size={16}/> Shuffle
-                </button>}
+                {isPlaylist && <QueueModeButtons/>}
                 {(canEdit || (isPlaylist && !data.smart)) && <ActionMenu label={`${data.name} actions`}>
                     {isPlaylist && !data.smart && <ActionMenuItem icon={ListPlus} label="Add to a collection…"
                         onClick={() => picker.open({ id, kind: "playlist", title: data.name })}/>}
@@ -152,7 +148,7 @@ export default function CollectionPage() {
                     key: e.entry_id || e.id, id: e.id, title: e.title, available: e.available,
                     subtitle: [e.artist, e.album_title].filter(Boolean).join(" · "), duration_secs: e.duration_secs,
                 }))}
-                onPlay={i => playAlbum(queue, playable.indexOf(entries[i]))}
+                onPlay={i => playAlbum(queue, playable.indexOf(entries[i]), `/playlists/${id}`)}
                 menu={(track, i) => <ActionMenu label={`${track.title} actions`} size="sm">
                     <ActionMenuItem icon={ListPlus} label="Add to playlist…" onClick={() => picker.open({ id: track.id, type: "music_track", title: track.title })}/>
                     {editItems(entries[i], i)}

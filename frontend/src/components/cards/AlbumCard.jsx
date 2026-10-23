@@ -28,7 +28,7 @@ export default function AlbumCard({ album, fluid = false }) {
                 toast.error("This album has no tracks to play")
                 return
             }
-            playAlbum(tracks, 0)
+            playAlbum(tracks, 0, `/albums/${album.id}`)
         }).catch(err => toast.error(err, "Could not play this album"))
     }
 
