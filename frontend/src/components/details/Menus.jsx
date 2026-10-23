@@ -1,6 +1,15 @@
+import { useRef, useState } from "react"
 import { Check, ChevronDown, MoreHorizontal, Plus } from "lucide-react"
 import Format from "../../utils/format"
 import { mediaStatusDot } from "../../utils/status"
+
+// sizes for placing an ActionMenu: its width (w-60), an item's height, the list's padding, the
+// phone tab bar's height (h-16) and the gap kept from the screen's edges
+const MENU_WIDTH_PX = 240
+const MENU_ITEM_PX = 40
+const MENU_PADDING_PX = 12
+const TAB_BAR_PX = 64
+const SCREEN_MARGIN_PX = 8
 
 // a daisyUI dropdown stays open while focused, so picking an item closes it by dropping focus
 function closeMenu() {
@@ -52,12 +61,32 @@ export function ListStatusMenu({ status, type, options, onSelect, onRemove }) {
  * @param {any} children ActionMenuItem elements
  */
 export function ActionMenu({ label = "More actions", size = "md", children }) {
-    return <div className="dropdown dropdown-end">
-        <div tabIndex={0} role="button" aria-label={label}
+    const menuRef = useRef(null)
+    const [place, setPlace] = useState({ start: false, top: false })
+
+    // decided as the menu opens: it lines up with the button's right edge unless that runs it off
+    // the left of the screen, and opens upwards when there's no room under the button (the phone
+    // tab bar and the player bar cover the bottom of the screen)
+    function placeMenu(e) {
+        const rect = e.currentTarget.getBoundingClientRect()
+        const root = document.documentElement
+        const covered = (parseFloat(getComputedStyle(root).getPropertyValue("--player-h")) || 0) +
+            (window.matchMedia("(min-width: 1024px)").matches ? 0 : TAB_BAR_PX)
+        // the menu is hidden until it opens, so its height comes from its items
+        const height = (menuRef.current?.children.length ?? 0) * MENU_ITEM_PX + MENU_PADDING_PX
+        const below = window.innerHeight - covered - rect.bottom
+        setPlace({
+            start: rect.right - MENU_WIDTH_PX < SCREEN_MARGIN_PX,
+            top: below < height + SCREEN_MARGIN_PX && rect.top > below,
+        })
+    }
+
+    return <div className={`dropdown ${place.start ? "dropdown-start" : "dropdown-end"} ${place.top ? "dropdown-top" : ""}`}>
+        <div tabIndex={0} role="button" aria-label={label} onPointerDown={placeMenu} onFocus={placeMenu}
             className={`btn btn-square border-white/10 bg-white/10 hover:bg-white/15 backdrop-blur ${size === "sm" ? "btn-sm" : ""}`}>
             <MoreHorizontal size={size === "sm" ? 16 : 20}/>
         </div>
-        <ul tabIndex={0} className="dropdown-content menu surface-raised z-30 mt-2 w-60 p-1.5 gap-0.5">
+        <ul ref={menuRef} tabIndex={0} className={`dropdown-content menu surface-raised z-30 ${place.top ? "mb-2" : "mt-2"} w-60 max-w-[calc(100vw-1rem)] p-1.5 gap-0.5`}>
             {children}
         </ul>
     </div>
