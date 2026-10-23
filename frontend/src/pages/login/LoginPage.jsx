@@ -7,12 +7,14 @@ import { validatePassword } from "../../utils/validate";
 import { AlertCircle, KeyRound, Mail, Ticket, User } from "lucide-react";
 import Logo from "../../components/layout/Logo";
 import TextField from "../../components/TextField";
+import useDocumentTitle from "../../hooks/useDocumentTitle";
 
 /**
  * Login page layout
  * @returns
  */
 export default function Login() {
+    useDocumentTitle("Sign in");
     const navigate = useNavigate();
     // invite links look like /login?invite=XXXX-XXXX-XXXX-XXXX and open straight to sign up
     const [searchParams] = useSearchParams();

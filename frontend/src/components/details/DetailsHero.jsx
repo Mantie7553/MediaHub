@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { useNavigate } from "react-router-dom"
+import useDocumentTitle from "../../hooks/useDocumentTitle"
 import { ArrowLeft } from "lucide-react"
 import Cover from "../Cover"
 import { goBack } from "../../utils/navigation"
@@ -28,6 +29,7 @@ const LONG_DESCRIPTION = 320
  */
 export default function DetailsHero({ cover, square = false, poster, eyebrow, title, meta = [], badges, genres = [], description, html = false, primary, actions, note }) {
     const navigate = useNavigate()
+    useDocumentTitle(title)
     const facts = meta.filter(Boolean)
 
     return <section className="relative z-10 isolate -mx-4 sm:-mx-6 lg:-mx-10 -mt-5 sm:-mt-6 lg:-mt-8 px-4 sm:px-6 lg:px-10 pt-3 lg:pt-6 pb-10 mb-2">

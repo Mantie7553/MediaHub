@@ -2,6 +2,7 @@ import { useNavigate } from "react-router-dom"
 import { ArrowLeft, Home, SearchX } from "lucide-react"
 import { goBack } from "../../utils/navigation"
 import { StateIcon } from "./EmptyState"
+import useDocumentTitle from "../../hooks/useDocumentTitle"
 
 /**
  * A page or item that doesn't exist
@@ -10,6 +11,7 @@ import { StateIcon } from "./EmptyState"
  */
 export default function NotFound({ title = "Page not found", hint = "This link doesn't lead anywhere. It may have been mistyped or removed." }) {
     const navigate = useNavigate()
+    useDocumentTitle(title)
 
     return <div className="flex flex-col items-center text-center gap-3 py-20 px-4 animate-fade-up">
         <StateIcon icon={SearchX}/>

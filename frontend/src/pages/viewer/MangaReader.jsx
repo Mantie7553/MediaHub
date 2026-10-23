@@ -8,6 +8,7 @@ import { PageSkeleton, ReaderSkeleton } from "../../components/states/Skeletons"
 import api from "../../services/api";
 import { exitViewer, switchViewer } from "../../utils/navigation";
 import ReaderToolbar from "../../components/ReaderToolbar";
+import useDocumentTitle from "../../hooks/useDocumentTitle";
 
 export default function MangaReader() {
     const { id, chapterId } = useParams();
@@ -25,6 +26,7 @@ export default function MangaReader() {
 }
 
 function MangaReaderInner({ id, chapterId, chapter, chapters, title }) {
+    useDocumentTitle(`${title} · Ch. ${chapter.chapter_number}`);
     const navigate = useNavigate();
     const location = useLocation();
     const initialPage = chapter?.last_page_read ?? 0;

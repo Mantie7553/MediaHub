@@ -5,7 +5,13 @@ import api from "../../services/api"
 import ErrorState from "../../components/states/ErrorState"
 import { toast } from "../../stores/useToastStore"
 import { exitViewer, switchViewer } from "../../utils/navigation"
-import { ArrowLeft, Languages, SkipBack, SkipForward } from "lucide-react"
+import { keyForFocused } from "../../utils/keys"
+import useDocumentTitle from "../../hooks/useDocumentTitle"
+import { ArrowLeft, Languages, SkipBack, SkipForward, X } from "lucide-react"
+
+// how long the next episode waits after one ends, and how far the arrow keys skip
+const UP_NEXT_SECS = 5
+const SKIP_SECS = 10
 
 export default function PlayerPage() {
     const location = useLocation();
@@ -365,6 +371,67 @@ export default function PlayerPage() {
         exitViewer(navigate, location, type === "movie" ? `/movies/${id}` : animeId ? `/anime/${animeId}` : null)
     }
 
+    // when an episode ends the next one starts after a countdown, unless it's cancelled or the
+    // episode is played again. Tied to the episode that ended, so moving on clears it
+    const [upNext, setUpNext] = useState(null)
+    const countdown = upNext?.from === id ? upNext.secs : null
+    useEffect(() => {
+        const video = videoRef.current
+        if (!video || !nextEpisode) return
+        const start = () => setUpNext({ from: id, secs: UP_NEXT_SECS })
+        const cancel = () => setUpNext(null)
+        video.addEventListener("ended", start)
+        video.addEventListener("play", cancel)
+        video.addEventListener("seeking", cancel)
+        return () => {
+            video.removeEventListener("ended", start)
+            video.removeEventListener("play", cancel)
+            video.removeEventListener("seeking", cancel)
+        }
+    }, [id, nextEpisode])
+    useEffect(() => {
+        if (countdown === null) return
+        const timer = setTimeout(() => {
+            if (countdown <= 1) goToEpisode(nextEpisode)
+            else setUpNext({ from: id, secs: countdown - 1 })
+        }, 1000)
+        return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- each second of the countdown sets the next one going
+    }, [countdown])
+
+    const playingEpisode = episodeList[currentIndex]
+    useDocumentTitle(playingEpisode ? playingEpisode.title ?? `Episode ${playingEpisode.episode_number}` : null)
+
+    // Space or K plays and pauses, the arrows skip, F is fullscreen, M mutes, Shift+N is the next episode
+    const playerRef = useRef(null)
+    useEffect(() => {
+        function onKeyDown(e) {
+            const video = videoRef.current
+            if (!video || keyForFocused(e)) return
+            const key = e.key.length === 1 ? e.key.toLowerCase() : e.key
+            if (key === " " || key === "k") {
+                if (video.paused) video.play().catch(() => {})
+                else video.pause()
+            } else if (key === "ArrowLeft" || key === "ArrowRight") {
+                const to = video.currentTime + (key === "ArrowLeft" ? -SKIP_SECS : SKIP_SECS)
+                video.currentTime = Math.min(Math.max(to, 0), video.duration || to)
+            } else if (key === "f") {
+                if (document.fullscreenElement) document.exitFullscreen().catch(() => {})
+                else playerRef.current?.requestFullscreen?.().catch(() => {})
+            } else if (key === "m") {
+                video.muted = !video.muted
+            } else if (key === "n" && e.shiftKey && nextEpisode) {
+                goToEpisode(nextEpisode)
+            } else {
+                return
+            }
+            e.preventDefault()
+        }
+        document.addEventListener("keydown", onKeyDown)
+        return () => document.removeEventListener("keydown", onKeyDown)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- goToEpisode only needs the episode it's given
+    }, [nextEpisode])
+
     if (error) return <div className="min-h-dvh bg-base-100">
         <ErrorState error={error} title="Couldn't play this video" onRetry={retry} showBack />
     </div>
@@ -373,7 +440,7 @@ export default function PlayerPage() {
     const currentEpisode = episodeList[currentIndex]
 
     return (
-    <div className="flex flex-col h-dvh bg-black text-white">
+    <div ref={playerRef} className="flex flex-col h-dvh bg-black text-white">
         <header className="relative z-20 flex items-center gap-2 px-2 sm:px-4 pt-[env(safe-area-inset-top)] h-[calc(3.5rem+env(safe-area-inset-top))] bg-linear-to-b from-black/90 to-black/60 backdrop-blur border-b border-white/5">
             <button className="btn btn-ghost btn-sm gap-1.5 text-white hover:bg-white/10" onClick={exit} aria-label="Back">
                 <ArrowLeft size={18}/> <span className="hidden sm:inline">Back</span>
@@ -492,6 +559,25 @@ export default function PlayerPage() {
                     />
                 ))}
             </video>
+            {countdown !== null && nextEpisode && (
+                <div className="absolute z-20 right-3 sm:right-6 bottom-16 sm:bottom-20 left-3 sm:left-auto sm:w-80 surface-raised text-base-content p-4 flex items-center gap-4 animate-fade-up" role="status">
+                    <div className="radial-progress text-primary shrink-0 text-sm font-semibold tabular-nums"
+                        style={{ "--value": (countdown / UP_NEXT_SECS) * 100, "--size": "3rem", "--thickness": "3px" }}
+                        aria-label={`Next episode in ${countdown} seconds`}>
+                        {countdown}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                        <p className="text-xs font-medium uppercase tracking-wider text-primary">Up next</p>
+                        <p className="text-sm font-medium truncate">
+                            Episode {nextEpisode.episode_number}{nextEpisode.title ? ` · ${nextEpisode.title}` : ""}
+                        </p>
+                        <button className="btn btn-primary btn-sm mt-2" onClick={() => goToEpisode(nextEpisode)}>Play now</button>
+                    </div>
+                    <button className="btn btn-ghost btn-sm btn-circle self-start" onClick={() => setUpNext(null)} aria-label="Cancel next episode">
+                        <X size={16}/>
+                    </button>
+                </div>
+            )}
         </div>
     </div>
 )
