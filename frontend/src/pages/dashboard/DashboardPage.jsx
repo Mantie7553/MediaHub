@@ -84,11 +84,11 @@ export default function DashboardPage() {
     const serverLightNovels = matching(library.data.filter(item => item.type === "light_novel")).sort(sortOrder);
 
     const serverAlbums = matching(albums.data);
-    const playlists = matching(collections.data.filter(c => c.kind === "playlist"));
+    // the playlists that fill themselves are always there, so they show (and count as the user
+    // having content) only once something is in them
+    const playlists = matching(collections.data.filter(c => c.kind === "playlist" && (!c.smart || c.item_count > 0)));
     const userCollections = matching(collections.data.filter(c => c.kind === "collection"));
-    // the playlists that fill themselves are always there, so only ones with something in them
-    // count as the user having content
-    const playlistCount = playlists.filter(p => !p.smart || p.item_count > 0).length;
+    const playlistCount = playlists.length;
     // once there's anything on the list, both rows show so a first playlist or collection can be
     // made from them
     const hasContent = userContent.length > 0 || collections.data.some(c => !c.smart || c.item_count > 0);
