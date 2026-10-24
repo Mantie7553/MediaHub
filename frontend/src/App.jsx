@@ -13,6 +13,7 @@ import {
 } from './pages/details'
 import { LightNovelReader, MangaReader, PlayerPage } from './pages/viewer'
 import UserManagementPage from './pages/Management/UserManagementPage'
+import InsightsPage from './pages/insights/InsightsPage'
 import AudioPlayer from './pages/viewer/AudioPlayer'
 import Toaster from './components/Toaster'
 import NotFound from './components/states/NotFound'
@@ -33,6 +34,7 @@ function App() {
           <Route path="/" element={<DashboardPage/>} />
           <Route path="/downloads" element={<DownloadsPage />} />
           <Route path='/users' element={<UserManagementPage/>} />
+          <Route path='/insights' element={<InsightsPage/>} />
           <Route path="/discover" element={<Discover />} />
           <Route path="/settings" element={<SettingsPage/>} />
           <Route path="/anime/:id" element={<AnimeDetailsPage/>} />

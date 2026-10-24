@@ -1,4 +1,4 @@
-import { Compass, Download, LayoutDashboard, Settings, Users } from "lucide-react"
+import { BarChart3, Compass, Download, LayoutDashboard, Settings, Users } from "lucide-react"
 
 /**
  * The app's main pages, shared by the desktop sidebar and the mobile tab bar
@@ -12,6 +12,7 @@ export default function navItems(role) {
         ...(role === "admin" ? [
             { path: "/downloads", title: "Downloads", short: "Downloads", icon: Download, group: "admin" },
             { path: "/users", title: "Users", short: "Users", icon: Users, group: "admin" },
+            { path: "/insights", title: "Insights", short: "Insights", icon: BarChart3, group: "admin" },
         ] : []),
         { path: "/settings", title: "Settings", short: "Settings", icon: Settings, group: "footer" },
     ]

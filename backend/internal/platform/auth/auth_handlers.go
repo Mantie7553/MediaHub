@@ -76,6 +76,7 @@ func (h *Handler) startSession(w http.ResponseWriter, r *http.Request, userID, r
 		return
 	}
 	setRefreshCookie(w, r, refreshToken)
+	touchLastSeen(h.db, userID)
 	utils.JSON(w, authResponse{Token: token}, status)
 }
 
@@ -263,6 +264,7 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 
 	// a browser that sent its token in the body moves it into the cookie now
 	setRefreshCookie(w, r, refreshToken)
+	touchLastSeen(h.db, userID)
 	utils.JSON(w, authResponse{Token: token})
 }
 

@@ -11,6 +11,7 @@ import (
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/collections"
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/curation"
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/deletion"
+	"github.com/Mantie7553/MediaHub/backend/internal/handlers/insights"
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/invites"
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/jobs"
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/lists"
@@ -105,6 +106,7 @@ func (s *Server) routes() {
 	s.sync = syncHandler
 	webhooksHandler := webhooks.NewHandler(s.db)
 	usersHandler := users.NewHandler(s.db)
+	insightsHandler := insights.NewHandler(s.db)
 
 	s.router.Use(secureHeaders)
 	s.router.Use(limitBody)
@@ -303,6 +305,9 @@ func (s *Server) routes() {
 			r.Post("/admin/users", usersHandler.Create)
 			r.Put("/admin/users/{id}", usersHandler.Update)
 			r.Delete("/admin/users/{id}", usersHandler.Delete)
+
+			// the Insights page: disk use, what people watch and read, users and downloads
+			r.Get("/admin/insights", insightsHandler.Get)
 
 			// Invite Handler endpoints
 			r.Get("/admin/invites", invitesHandler.GetAll)

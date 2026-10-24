@@ -229,3 +229,30 @@ func TestCollectionRoutesNeedSignIn(t *testing.T) {
 		}
 	}
 }
+
+func TestInsightsRouteIsAdminOnly(t *testing.T) {
+	t.Setenv("CORS_ORIGIN", "http://localhost")
+	t.Setenv("JWT_SECRET", "access-secret-for-tests")
+	t.Setenv("MEDIA_SIGNING_SECRET", "media-secret-for-tests")
+	t.Setenv("MEDIA_ROOT", t.TempDir())
+
+	s := New(nil)
+	userToken, err := auth.GenerateToken("user-1", "user")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		bearer string
+		status int
+	}{{"", http.StatusUnauthorized}, {userToken, http.StatusForbidden}} {
+		req := httptest.NewRequest(http.MethodGet, "/api/admin/insights", nil)
+		if c.bearer != "" {
+			req.Header.Set("Authorization", "Bearer "+c.bearer)
+		}
+		rec := httptest.NewRecorder()
+		s.router.ServeHTTP(rec, req)
+		if rec.Code != c.status {
+			t.Errorf("GET /api/admin/insights with bearer=%t: status = %d, want %d", c.bearer != "", rec.Code, c.status)
+		}
+	}
+}

@@ -154,6 +154,24 @@ func TestRemoteFetchesOnce(t *testing.T) {
 	}
 }
 
+func TestStats(t *testing.T) {
+	nas := t.TempDir()
+	f := newTestFiles(t, 1000)
+	src := filepath.Join(nas, "a")
+	writeFile(t, src, strings.Repeat("x", 40))
+	cachedPath(t, f, src)
+
+	used, max, dir := f.Stats()
+	if used != 40 || max != 1000 || dir != f.dir {
+		t.Errorf("Stats = %d, %d, %s; want 40, 1000, %s", used, max, dir, f.dir)
+	}
+
+	var off *Files
+	if used, max, dir := off.Stats(); used != 0 || max != 0 || dir != "" {
+		t.Errorf("nil Stats = %d, %d, %q; want zeros", used, max, dir)
+	}
+}
+
 func TestNilFilesPassesThrough(t *testing.T) {
 	var f *Files
 	if got := f.Local("/nas/x.mp3"); got != "/nas/x.mp3" {

@@ -148,6 +148,15 @@ func hashToken(token string) string {
 }
 
 /*
+Function:	touchLastSeen
+Purpose:	note that a user just signed in or refreshed their session, for the Insights page.
+A failure only leaves the time stale, so it doesn't fail the sign in
+*/
+func touchLastSeen(db *sql.DB, userID string) {
+	db.Exec(`UPDATE users SET last_seen_at = NOW() WHERE id = $1`, userID)
+}
+
+/*
 Function:	GenerateRefreshToken
 Purpose:	Create a new token for a user
 Params:
