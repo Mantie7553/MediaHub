@@ -9,6 +9,7 @@ import { statusBadge, statusColor } from "../../utils/status";
 import { toast } from "../../stores/useToastStore";
 import StatusPill from "../../components/StatusPill";
 import RecordsPanel from "./RecordsPanel";
+import SubmissionsPanel from "./SubmissionsPanel";
 
 // pending requests first, the rest newest first
 const byPendingThenNewest = (a, b) =>
@@ -75,6 +76,7 @@ export default function DownloadsPage() {
 
     return <div>
         <PageHeader title="Downloads" subtitle="Approve requests and keep an eye on what's downloading."/>
+        <div className="mb-6 empty:hidden"><SubmissionsPanel/></div>
         <div className="grid gap-6 xl:grid-cols-2 items-start">
             <RecordsPanel
                 title="Requests"

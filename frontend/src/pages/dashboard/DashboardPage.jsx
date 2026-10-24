@@ -44,6 +44,8 @@ export default function DashboardPage() {
     const continuing = useApi("/me/continue", { initial: [] });
     // the user's playlists (the two that fill themselves first) and collections
     const collections = useApi("/me/collections", { initial: [] });
+    // playlists and collections admins picked for everyone
+    const featured = useApi("/featured", { initial: [] });
 
     // the search filters every row as it's typed, and is kept in the address (?q=) once typing
     // pauses, so coming back to the dashboard or refreshing keeps it
@@ -93,6 +95,7 @@ export default function DashboardPage() {
     // made from them
     const hasContent = userContent.length > 0 || collections.data.some(c => !c.smart || c.item_count > 0);
     const continueItems = matching(continuing.data);
+    const featuredItems = matching(featured.data);
 
     // the same hint on every row of a section, so an empty dashboard explains itself once per row
     const tracked = {
@@ -145,6 +148,10 @@ export default function DashboardPage() {
         {!continuing.loading && continueItems.length > 0 && (
             <ContentList items={continueItems} heading="Continue" userContentMap={userContentMap}
                 onListChange={() => { refresh(); continuing.reload(true); }}/>
+        )}
+
+        {!featured.loading && featuredItems.length > 0 && (
+            <CollectionList collections={featuredItems} heading="Featured" canCreate={false}/>
         )}
 
         <DashboardSection

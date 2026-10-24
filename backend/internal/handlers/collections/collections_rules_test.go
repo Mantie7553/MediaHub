@@ -3,6 +3,8 @@ package collections
 import (
 	"errors"
 	"testing"
+
+	"github.com/Mantie7553/MediaHub/backend/internal/platform/auth"
 )
 
 func TestWhatEachKindHolds(t *testing.T) {
@@ -55,13 +57,51 @@ func TestComputedPlaylistIDs(t *testing.T) {
 	}
 }
 
-func TestOnlyTheOwnerHasAccess(t *testing.T) {
+func TestPrivateOnesAreTheOwners(t *testing.T) {
 	a := access{ownerID: "owner"}
-	if !a.canView("owner") || !a.canEdit("owner") {
-		t.Error("the owner should see and change it")
+	owner := &auth.UserContext{UserID: "owner", Role: "user"}
+	other := &auth.UserContext{UserID: "someone-else", Role: "user"}
+	admin := &auth.UserContext{UserID: "admin", Role: "admin"}
+	if !a.canView(owner) || !a.canEdit("owner") || !a.canDelete(owner) {
+		t.Error("the owner should see, change and delete it")
 	}
-	if a.canView("someone-else") || a.canEdit("someone-else") {
-		t.Error("nobody else should, until sharing exists")
+	if a.canView(other) || a.canEdit("someone-else") || a.canDelete(other) {
+		t.Error("nobody else should")
+	}
+	if a.canView(admin) || a.canDelete(admin) {
+		t.Error("admins shouldn't see a private one that isn't waiting for review")
+	}
+}
+
+func TestAdminsCanOpenOnesInReview(t *testing.T) {
+	a := access{ownerID: "owner", inReview: true}
+	admin := &auth.UserContext{UserID: "admin", Role: "admin"}
+	if !a.canView(admin) {
+		t.Error("an admin should be able to look at a submission")
+	}
+	if a.canEdit("admin") || a.canDelete(admin) {
+		t.Error("but not change or delete it")
+	}
+	if a.canView(&auth.UserContext{UserID: "someone-else", Role: "user"}) {
+		t.Error("other users still shouldn't see it")
+	}
+}
+
+func TestFeaturedOnesAreEveryonesAndNobodysToChange(t *testing.T) {
+	a := access{featured: true}
+	user := &auth.UserContext{UserID: "u", Role: "user"}
+	admin := &auth.UserContext{UserID: "admin", Role: "admin"}
+	if !a.canView(user) || !a.canView(admin) {
+		t.Error("everyone should see a featured one")
+	}
+	if a.canEdit("u") || a.canEdit("admin") || a.canEdit("") {
+		t.Error("nobody should change a featured one")
+	}
+	if a.canDelete(user) || !a.canDelete(admin) {
+		t.Error("only admins should take one down")
+	}
+	if (access{featured: true, partOf: true}).canDelete(admin) {
+		t.Error("a nested copy goes with its collection, not on its own")
 	}
 }
 

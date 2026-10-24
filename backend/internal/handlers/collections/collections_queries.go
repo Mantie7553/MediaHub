@@ -50,7 +50,8 @@ func coversOf(collectionID, s string) string {
 	WHERE cover IS NOT NULL ORDER BY first LIMIT 4)`
 }
 
-// the user's own playlists and collections, newest change first. $2 is a kind or ”, and $3 an
+// the user's own playlists and collections, newest change first (featured copies belong to
+// nobody, so they never show here). $2 is a kind or ”, and $3 an
 // item id to mark the ones that hold it, or ”
 var summariesQuery = `
 SELECT c.id, c.kind::text, c.name, c.description, c.updated_at,

@@ -1,6 +1,6 @@
 import { useRef, useState } from "react"
-import { useNavigate, useParams } from "react-router-dom"
-import { ArrowDown, ArrowUp, ArrowUpToLine, Check, GripVertical, ListPlus, PencilLine, SlidersHorizontal, Trash2, X } from "lucide-react"
+import { Link, useNavigate, useParams } from "react-router-dom"
+import { ArrowDown, ArrowUp, ArrowUpToLine, Check, Clock, Copy, GripVertical, ListPlus, PencilLine, Send, SlidersHorizontal, Sparkles, Trash2, X } from "lucide-react"
 import useApi from "../../hooks/useApi"
 import useCollectionPicker from "../../hooks/useCollectionPicker"
 import { useUserContent } from "../../hooks"
@@ -14,11 +14,13 @@ import { cardGrid } from "../../components/layout/cardGrid"
 import Cover from "../../components/Cover"
 import ConfirmModal from "../../components/modals/ConfirmModal"
 import CollectionNameModal from "../../components/modals/CollectionNameModal"
+import NoteModal from "../../components/modals/NoteModal"
 import EmptyState from "../../components/states/EmptyState"
 import ErrorState from "../../components/states/ErrorState"
 import NotFound from "../../components/states/NotFound"
 import { DetailsSkeleton } from "../../components/states/Skeletons"
-import { deleteCollection, moveInCollection, removeFromCollection, updateCollection } from "../../services/collectionsService"
+import { deleteCollection, featureNow, moveInCollection, removeFromCollection, saveCopy, submitForFeaturing, updateCollection, withdrawSubmission } from "../../services/collectionsService"
+import { getRole } from "../../utils/auth"
 import { SMART_PLAYLISTS, applyMove, dropTarget, moveTarget } from "../../utils/collections"
 import { PlayButton, QueueModeButtons } from "../../components/details/PlaybackControls"
 
@@ -31,7 +33,8 @@ const typeLabels = {
 /**
  * A playlist (/playlists/:id) or collection (/collections/:id): play it, change what's in it and
  * its order, rename or delete it. The two playlists that fill themselves (listened, unlistened)
- * can be played but not changed
+ * can be played but not changed. Owners can submit theirs to be featured; a featured one can't be
+ * changed, but anyone can save a copy of it, and admins can take it down
  */
 export default function CollectionPage() {
     const { id } = useParams()
@@ -42,7 +45,9 @@ export default function CollectionPage() {
     const picker = useCollectionPicker()
     const renameRef = useRef(null)
     const deleteRef = useRef(null)
+    const takeDownRef = useRef(null)
     const [arranging, setArranging] = useState(false)
+    const [copying, setCopying] = useState(false)
 
     // the order shown, changed straight away when something moves and put back from the server
     // whenever a fresh copy loads
@@ -54,13 +59,14 @@ export default function CollectionPage() {
     }
 
     if (loading) return <DetailsSkeleton square/>
-    if (notFound) return <NotFound title="Not found" hint="This playlist or collection doesn't exist, or isn't yours."/>
+    if (notFound) return <NotFound title="Not found" hint="This playlist or collection doesn't exist, isn't yours, or was taken down."/>
     if (error) return <ErrorState error={error} title="Couldn't load this" onRetry={reload} showBack/>
     if (!data) return null
 
     const isPlaylist = data.kind === "playlist"
     const noun = isPlaylist ? "playlist" : "collection"
     const canEdit = data.can_edit
+    const featured = data.featured
 
     function move(index, after) {
         if (after === undefined) return
@@ -83,8 +89,19 @@ export default function CollectionPage() {
 
     function destroy() {
         return deleteCollection(id)
-            .then(() => { toast.success(`Deleted ${data.name}`); navigate("/", { replace: true }) })
+            .then(() => { toast.success(featured ? `Took down ${data.name}` : `Deleted ${data.name}`); navigate("/", { replace: true }) })
             .catch(err => { toast.error(err, `Could not delete the ${noun}`); throw err })
+    }
+
+    function copyToMine() {
+        setCopying(true)
+        saveCopy(id)
+            .then(res => {
+                toast.success(`Saved a copy of ${data.name} to your ${noun}s`)
+                navigate(`/${res.data.kind === "collection" ? "collections" : "playlists"}/${res.data.id}`)
+            })
+            .catch(err => toast.error(err, "Could not save a copy"))
+            .finally(() => setCopying(false))
     }
 
     // the menu items that move or remove an entry, for the track rows
@@ -106,7 +123,7 @@ export default function CollectionPage() {
             cover={{ src: data.covers?.[0] }}
             square
             poster={<CollectionCover covers={data.covers} kind={data.kind} smart={data.smart} className="size-full"/>}
-            eyebrow={data.smart ? "Playlist · fills itself" : isPlaylist ? "Playlist" : "Collection"}
+            eyebrow={data.smart ? "Playlist · fills itself" : featured ? `Featured ${noun}` : isPlaylist ? "Playlist" : "Collection"}
             title={data.name}
             meta={[
                 `${count} ${isPlaylist ? (count === 1 ? "track" : "tracks") : (count === 1 ? "item" : "items")}`,
@@ -115,15 +132,20 @@ export default function CollectionPage() {
             description={description}
             primary={isPlaylist
                 ? <PlayButton tracks={queue} source={`/playlists/${id}`}/>
+                : featured ? <button className="btn btn-lg px-6 border-white/10 bg-white/10 hover:bg-white/15" onClick={copyToMine} disabled={copying}>
+                    {copying ? <span className="loading loading-spinner loading-sm"/> : <Copy size={18}/>} Save a copy
+                </button>
                 : canEdit && count > 0 && <button className={`btn btn-lg px-6 ${arranging ? "btn-primary" : "border-white/10 bg-white/10 hover:bg-white/15"}`}
                     onClick={() => setArranging(!arranging)}>
                     {arranging ? <><Check size={18}/> Done</> : <><SlidersHorizontal size={18}/> Arrange</>}
                 </button>}
             actions={<>
                 {isPlaylist && <QueueModeButtons/>}
-                {(canEdit || (isPlaylist && !data.smart)) && <ActionMenu label={`${data.name} actions`}>
+                {(canEdit || featured || (isPlaylist && !data.smart)) && <ActionMenu label={`${data.name} actions`}>
+                    {isPlaylist && featured && <ActionMenuItem icon={Copy} label="Save a copy to my playlists" onClick={copyToMine}/>}
                     {isPlaylist && !data.smart && <ActionMenuItem icon={ListPlus} label="Add to a collection…"
                         onClick={() => picker.open({ id, kind: "playlist", title: data.name })}/>}
+                    {data.can_delete && featured && <ActionMenuItem icon={Trash2} label="Take down…" danger onClick={() => takeDownRef.current.showModal()}/>}
                     {canEdit && <>
                         <ActionMenuItem icon={PencilLine} label={`Rename ${noun}…`} onClick={() => renameRef.current.showModal()}/>
                         <ActionMenuItem icon={Trash2} label={`Delete ${noun}…`} danger onClick={() => deleteRef.current.showModal()}/>
@@ -131,6 +153,9 @@ export default function CollectionPage() {
                 </ActionMenu>}
             </>}
         />
+
+        {canEdit && !data.smart && count > 0 && <FeatureStatus collection={data} noun={noun} onChange={() => reload(true)}/>}
+        {!canEdit && !featured && data.in_review && <ReviewNotice/>}
 
         {count === 0 ? (
             <EmptyState compact
@@ -172,8 +197,103 @@ export default function CollectionPage() {
                 ]}
                 onConfirm={destroy}/>
         </>}
+        {data.can_delete && featured && <ConfirmModal dialogRef={takeDownRef} title={`Take down “${data.name}”?`} confirmLabel="Take down"
+            lines={[
+                "It leaves everyone's Featured row for good. Copies people saved are theirs and stay.",
+                "The original it was made from isn't touched, so it can be submitted again.",
+            ]}
+            onConfirm={destroy}/>}
         {picker.modal}
     </div>
+}
+
+/**
+ * For the owner: where featuring this has got to, and the button that asks for it (or, for
+ * admins, does it). One that is already featured sends its changes as an update to the featured
+ * copy
+ */
+function FeatureStatus({ collection, noun, onChange }) {
+    const submitRef = useRef(null)
+    const [busy, setBusy] = useState(false)
+    const isAdmin = getRole() === "admin"
+    const submission = collection.submission
+    const copyId = collection.featured_copy_id
+    const copyPath = copyId && `/${collection.kind === "collection" ? "collections" : "playlists"}/${copyId}`
+    const waiting = submission?.status === "pending"
+    const rejected = submission?.status === "rejected"
+
+    function submit(note) {
+        return submitForFeaturing(collection.id, note).then(() => {
+            toast.success(copyId ? "Sent your changes for review" : `Sent your ${noun} for review`)
+            onChange()
+        })
+    }
+
+    function withdraw() {
+        setBusy(true)
+        withdrawSubmission(collection.id)
+            .then(() => { toast.success("Took back your request"); onChange() })
+            .catch(err => toast.error(err, "Could not take it back"))
+            .finally(() => setBusy(false))
+    }
+
+    function featureItNow() {
+        setBusy(true)
+        featureNow(collection.id)
+            .then(() => { toast.success(copyId ? "Updated the featured copy" : `Featured your ${noun}`); onChange() })
+            .catch(err => toast.error(err, `Could not feature the ${noun}`))
+            .finally(() => setBusy(false))
+    }
+
+    let Icon = Sparkles
+    let text = copyId
+        ? "A copy of this is featured. Changes you make here stay yours until you send them."
+        : "Share it with everyone: once an admin approves it, a copy shows in everyone's Featured row."
+    if (waiting) {
+        Icon = Clock
+        text = copyId ? "Your changes are waiting for an admin's review." : "Waiting for an admin's review."
+    } else if (rejected) {
+        Icon = X
+        text = <>An admin didn't feature this{submission.admin_note
+            ? <>: <span className="text-base-content/90">“{submission.admin_note}”</span></>
+            : "."} You can change it and send it again.</>
+    }
+
+    return <section className="surface flex flex-wrap items-center gap-x-4 gap-y-3 px-4 py-3 sm:px-5 animate-fade-up">
+        <Icon size={18} className={`shrink-0 ${rejected ? "text-error" : "text-primary"}`}/>
+        <p className="flex-1 min-w-48 text-sm text-base-content/70">{text}</p>
+        <div className="flex flex-wrap gap-2">
+            {copyPath && <Link to={copyPath} className="btn btn-sm btn-ghost">View featured</Link>}
+            {waiting && <button className="btn btn-sm btn-ghost" onClick={withdraw} disabled={busy}>Take back</button>}
+            {isAdmin
+                ? <button className="btn btn-sm btn-primary" onClick={featureItNow} disabled={busy}>
+                    {busy ? <span className="loading loading-spinner loading-xs"/> : <Sparkles size={15}/>}
+                    {copyId ? "Update featured copy" : "Feature now"}
+                </button>
+                : !waiting && <button className="btn btn-sm btn-primary" onClick={() => submitRef.current.showModal()}>
+                    <Send size={15}/> {copyId ? "Send changes" : "Submit for featuring"}
+                </button>}
+        </div>
+        <NoteModal dialogRef={submitRef}
+            title={copyId ? "Send your changes for review" : `Submit “${collection.name}” for featuring`}
+            intro={copyId
+                ? `If an admin approves, the featured copy is replaced with your ${noun} as it is then.`
+                : `An admin looks it over. If they approve, a copy of your ${noun} as it is then shows for everyone; later changes stay yours until you send them.`}
+            label="Message for the admins (optional)"
+            confirmLabel="Send for review"
+            onSave={submit}/>
+    </section>
+}
+
+/**
+ * For an admin opening someone's playlist or collection from the review queue
+ */
+function ReviewNotice() {
+    return <section className="surface flex flex-wrap items-center gap-x-4 gap-y-3 px-4 py-3 sm:px-5 animate-fade-up">
+        <Clock size={18} className="shrink-0 text-primary"/>
+        <p className="flex-1 min-w-48 text-sm text-base-content/70">Someone asked for this to be featured. Approve or turn it down from Downloads.</p>
+        <Link to="/downloads" className="btn btn-sm btn-ghost">Go to review</Link>
+    </section>
 }
 
 /**

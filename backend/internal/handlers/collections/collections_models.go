@@ -21,8 +21,26 @@ type Summary struct {
 // Detail is a playlist or collection with everything in it, in order
 type Detail struct {
 	Summary
-	CanEdit bool    `json:"can_edit"`
-	Items   []Entry `json:"items"`
+	CanEdit   bool `json:"can_edit"`
+	CanDelete bool `json:"can_delete"`
+	// a copy an admin approved, which everyone sees and nobody changes
+	Featured bool `json:"featured"`
+	// a submission to feature it is waiting for an admin
+	InReview bool `json:"in_review"`
+	// for the owner: their latest request to feature it, and the featured copy of it if
+	// there is one, so a new request reads as an update to that
+	Submission     *SubmissionState `json:"submission"`
+	FeaturedCopyID *string          `json:"featured_copy_id"`
+	Items          []Entry          `json:"items"`
+}
+
+// SubmissionState is where a request to feature a playlist or collection has got to
+type SubmissionState struct {
+	ID          string     `json:"id"`
+	Status      string     `json:"status"`
+	AdminNote   *string    `json:"admin_note"`
+	SubmittedAt time.Time  `json:"submitted_at"`
+	ResolvedAt  *time.Time `json:"resolved_at"`
 }
 
 /*
@@ -77,4 +95,20 @@ type addResponse struct {
 // After is the entry to move it below, or null for the top
 type moveRequest struct {
 	After *string `json:"after"`
+}
+
+type submitRequest struct {
+	Note *string `json:"note"`
+}
+
+// PendingSubmission is a request to feature a playlist or collection, as admins review it
+type PendingSubmission struct {
+	ID          string    `json:"id"`
+	Note        *string   `json:"note"`
+	SubmittedAt time.Time `json:"submitted_at"`
+	SubmittedBy string    `json:"submitted_by"`
+	Collection  Summary   `json:"collection"`
+	// the featured copy approving it would update, when one was made from it before
+	UpdatesID   *string `json:"updates_id"`
+	UpdatesName *string `json:"updates_name"`
 }

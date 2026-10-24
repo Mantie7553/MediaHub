@@ -44,17 +44,19 @@ Purpose:	Find a stored collection the user may see, locking it in a transaction 
 its entries happen one at a time
 Returns:	errNotFound when it doesn't exist or isn't theirs to see
 */
-func load(db querier, id, userID string, lock bool) (stored, error) {
+func load(db querier, id string, user *auth.UserContext, lock bool) (stored, error) {
 	c := stored{id: id}
 	if !isUUID(id) {
 		return c, errNotFound
 	}
-	query := `SELECT kind::text, owner_id FROM collections WHERE id = $1`
+	query := `SELECT c.kind::text, COALESCE(c.owner_id::text, ''), c.visibility = 'featured', c.part_of IS NOT NULL,
+		EXISTS (SELECT 1 FROM collection_submissions s WHERE s.collection_id = c.id AND s.status = 'pending')
+		FROM collections c WHERE c.id = $1`
 	if lock {
-		query += ` FOR UPDATE`
+		query += ` FOR UPDATE OF c`
 	}
-	err := db.QueryRow(query, id).Scan(&c.kind, &c.ownerID)
-	if errors.Is(err, sql.ErrNoRows) || (err == nil && !c.canView(userID)) {
+	err := db.QueryRow(query, id).Scan(&c.kind, &c.ownerID, &c.featured, &c.partOf, &c.inReview)
+	if errors.Is(err, sql.ErrNoRows) || (err == nil && !c.canView(user)) {
 		return c, errNotFound
 	}
 	return c, err
@@ -227,7 +229,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 		}
 		detail.Items = tracks
 	} else {
-		c, err := load(h.db, id, user.UserID, false)
+		c, err := load(h.db, id, user, false)
 		if errors.Is(err, errNotFound) {
 			utils.Error(w, http.StatusNotFound, "not found")
 			return
@@ -250,6 +252,18 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 		}
 		detail.ItemCount = len(detail.Items)
 		detail.CanEdit = c.canEdit(user.UserID)
+		detail.CanDelete = c.canDelete(user)
+		detail.Featured = c.featured
+		detail.InReview = c.inReview
+		if c.ownerID == user.UserID {
+			// the owner sees where featuring it has got to
+			if detail.Submission, err = latestSubmission(h.db, id); utils.InternalError(w, err) {
+				return
+			}
+			if detail.FeaturedCopyID, err = featuredCopyOf(h.db, id); utils.InternalError(w, err) {
+				return
+			}
+		}
 	}
 
 	if detail.Covers == nil {
@@ -278,6 +292,10 @@ func refuseEdit(w http.ResponseWriter, id string, c stored, err error, userID st
 	if utils.InternalError(w, err) {
 		return true
 	}
+	if c.featured {
+		utils.Error(w, http.StatusForbidden, "featured playlists and collections can't be changed; save a copy to make your own")
+		return true
+	}
 	if !c.canEdit(userID) {
 		utils.Error(w, http.StatusForbidden, "only its owner can change this")
 		return true
@@ -301,7 +319,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	var c stored
 	var err error
 	if !isSmart(id) {
-		c, err = load(h.db, id, user.UserID, false)
+		c, err = load(h.db, id, user, false)
 	}
 	if refuseEdit(w, id, c, err, user.UserID) {
 		return
@@ -342,7 +360,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 /*
 Function:	Delete
 Purpose:	Delete a playlist or collection. Its entries go with it, and so does it wherever it
-was nested
+was nested. Admins delete a featured one this way to take it down
 */
 func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 	user := auth.GetUser(r)
@@ -351,9 +369,15 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 	var c stored
 	var err error
 	if !isSmart(id) {
-		c, err = load(h.db, id, user.UserID, false)
+		c, err = load(h.db, id, user, false)
 	}
-	if refuseEdit(w, id, c, err, user.UserID) {
+	// an admin taking down a featured one, which nobody can otherwise change
+	takingDown := err == nil && c.featured && c.canDelete(user)
+	if !takingDown && refuseEdit(w, id, c, err, user.UserID) {
+		return
+	}
+	if !c.canDelete(user) {
+		utils.Error(w, http.StatusForbidden, "this can't be deleted on its own")
 		return
 	}
 
