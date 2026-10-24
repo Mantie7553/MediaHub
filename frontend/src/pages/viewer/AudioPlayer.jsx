@@ -6,6 +6,7 @@ import api from "../../services/api"
 import { Link, useLocation } from "react-router-dom"
 import { readStored, writeStored } from "../../utils/storage"
 import { keyForFocused } from "../../utils/keys"
+import { trackListening } from "../../utils/playCount"
 
 // how far into a track Previous restarts it instead of going back a track
 const RESTART_AFTER_SECS = 3
@@ -65,6 +66,8 @@ export default function AudioPlayer() {
 
     const remintedRef = useRef(false)
     const lastSavedRef = useRef(0)
+    // how long the current track has been listened to, for counting plays
+    const listeningRef = useRef(null)
 
     const baseURL = import.meta.env.VITE_API_URL
 
@@ -254,6 +257,13 @@ export default function AudioPlayer() {
         if (!audio) return
         setProgress(audio.currentTime)
         setDuration(audio.duration || 0)
+
+        const trackId = useAudioStore.getState().currentTrack?.id
+        if (trackId) {
+            const listening = trackListening(listeningRef.current, trackId, audio.currentTime, audio.duration || 0)
+            listeningRef.current = listening.state
+            if (listening.counted) api.post(`/music/${trackId}/plays`).catch(() => {})
+        }
 
         if (Math.abs(audio.currentTime - lastSavedRef.current) >= SAVE_EVERY_SECS) {
             lastSavedRef.current = audio.currentTime

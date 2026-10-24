@@ -35,7 +35,7 @@ func TestScanAddsUpEachLibraryFolder(t *testing.T) {
 	writeFile(t, filepath.Join(root, "temp", "anime-1-a0", "seg0.ts"), 7)
 	// Movies, Music and Light Novels don't exist and count as empty
 
-	u := newStorageScanner(root).Get(false)
+	u := newStorageScanner(root, nil).Get(false)
 	if len(u.Folders) != len(libraryFolders) {
 		t.Fatalf("got %d folders, want %d", len(u.Folders), len(libraryFolders))
 	}
@@ -57,7 +57,7 @@ func TestScanIsReusedUntilStaleOrRefreshed(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, filepath.Join(root, "Movies", "a.mkv"), 10)
 	now := time.Date(2026, 10, 23, 12, 0, 0, 0, time.UTC)
-	s := newStorageScanner(root)
+	s := newStorageScanner(root, nil)
 	s.now = func() time.Time { return now }
 
 	s.Get(false)
@@ -90,5 +90,42 @@ func TestSummarizeUsersCountsRecentlySeen(t *testing.T) {
 	s := summarizeUsers(list, now)
 	if s.Total != 5 || s.Active7 != 2 || s.Active30 != 3 {
 		t.Errorf("total %d, 7d %d, 30d %d; want 5, 2, 3", s.Total, s.Active7, s.Active30)
+	}
+}
+
+func TestEachNewScanIsReported(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "Music", "a.mp3"), 10)
+	var scans []storageUsage
+	s := newStorageScanner(root, func(u storageUsage) { scans = append(scans, u) })
+
+	s.Get(false)
+	s.Get(false)
+	s.Get(true)
+	if len(scans) != 2 {
+		t.Errorf("reported %d scans, want 2: a reused scan isn't a new one", len(scans))
+	}
+}
+
+func TestSnapshotOfAddsUpTheLibrary(t *testing.T) {
+	total, free := int64(1000), int64(400)
+	u := storageUsage{
+		Folders:   []folderUsage{{Type: "anime", Bytes: 300}, {Type: "music", Bytes: 50}},
+		Temp:      folderUsage{Bytes: 99},
+		DiskTotal: &total,
+		DiskFree:  &free,
+	}
+
+	library, folders, used, diskTotal := snapshotOf(u)
+	if library != 350 || folders["anime"] != 300 || folders["music"] != 50 {
+		t.Errorf("library %d, folders %v; want 350 split 300/50, temp left out", library, folders)
+	}
+	if used == nil || *used != 600 || diskTotal == nil || *diskTotal != 1000 {
+		t.Errorf("disk used/total = %v/%v, want 600/1000", used, diskTotal)
+	}
+
+	_, _, used, diskTotal = snapshotOf(storageUsage{})
+	if used != nil || diskTotal != nil {
+		t.Error("an unreadable disk should leave used and total empty")
 	}
 }

@@ -33,10 +33,11 @@ import (
 )
 
 type Server struct {
-	router *chi.Mux
-	db     *sql.DB
-	sync   *sync.Handler
-	search *search.Handler
+	router   *chi.Mux
+	db       *sql.DB
+	sync     *sync.Handler
+	search   *search.Handler
+	insights *insights.Handler
 }
 
 func New(db *sql.DB) *Server {
@@ -50,12 +51,13 @@ func New(db *sql.DB) *Server {
 
 /*
 Function:	StartBackgroundJobs
-Purpose:	start work that runs on its own schedule (the nightly library sync), and fetch
-Discover's lists so the first visit doesn't wait for them
+Purpose:	start work that runs on its own schedule (the nightly library sync, the daily
+storage snapshot), and fetch Discover's lists so the first visit doesn't wait for them
 */
 func (s *Server) StartBackgroundJobs() {
 	s.sync.StartSchedule()
 	s.search.WarmDiscovery()
+	s.insights.StartDailySnapshots()
 }
 
 func (s *Server) Start(addr string) error {
@@ -107,6 +109,7 @@ func (s *Server) routes() {
 	webhooksHandler := webhooks.NewHandler(s.db)
 	usersHandler := users.NewHandler(s.db)
 	insightsHandler := insights.NewHandler(s.db)
+	s.insights = insightsHandler
 
 	s.router.Use(secureHeaders)
 	s.router.Use(limitBody)
@@ -211,6 +214,7 @@ func (s *Server) routes() {
 			r.Get("/albums/{id}", musicHandler.GetAlbum)
 			r.Get("/music/recommended", musicHandler.GetRecommended)
 			r.Get("/music/artists", musicHandler.GetArtists)
+			r.Post("/music/{id}/plays", musicHandler.RecordPlay)
 
 			// List Handler endpoints
 			r.Get("/light-novels/{id}/volumes/{volumeId}/content", mediaHandler.ServeVolume)

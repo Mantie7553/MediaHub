@@ -256,3 +256,18 @@ func TestInsightsRouteIsAdminOnly(t *testing.T) {
 		}
 	}
 }
+
+func TestRecordPlayNeedsSignIn(t *testing.T) {
+	t.Setenv("CORS_ORIGIN", "http://localhost")
+	t.Setenv("JWT_SECRET", "access-secret-for-tests")
+	t.Setenv("MEDIA_SIGNING_SECRET", "media-secret-for-tests")
+	t.Setenv("MEDIA_ROOT", t.TempDir())
+
+	s := New(nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/music/6f1c2b9e-1d2a-4b3c-8d4e-5f6a7b8c9d0e/plays", nil)
+	rec := httptest.NewRecorder()
+	s.router.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("POST /api/music/{id}/plays without a token: status = %d, want 401", rec.Code)
+	}
+}

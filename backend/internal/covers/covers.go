@@ -9,10 +9,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
-)
 
-var uuidRe = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
+	"github.com/Mantie7553/MediaHub/backend/internal/platform/utils"
+)
 
 /*
 Function:	Path
@@ -24,7 +23,7 @@ Returns:	the path, and false when the id isn't a UUID or MEDIA_ROOT isn't set
 */
 func Path(mediaItemID string) (string, bool) {
 	root := os.Getenv("MEDIA_ROOT")
-	if root == "" || !uuidRe.MatchString(mediaItemID) {
+	if root == "" || !utils.IsUUID(mediaItemID) {
 		return "", false
 	}
 	return filepath.Join(root, "Covers", mediaItemID), true

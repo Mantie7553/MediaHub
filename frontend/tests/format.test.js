@@ -49,3 +49,10 @@ describe("relative times", () => {
         expect(Format.relativeTime(null, now)).toBe("Never")
     })
 })
+
+describe("calendar days", () => {
+    it("reads the API's day as a local date, not the day before", () => {
+        expect(Format.day("2026-10-23")).toBe("Oct 23")
+        expect(Format.day("2026-01-01")).toBe("Jan 1")
+    })
+})

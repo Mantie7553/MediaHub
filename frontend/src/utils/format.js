@@ -113,6 +113,17 @@ export default class Format {
         return Format.date(date);
     }
 
+    /**
+     * Format a calendar day from the API (YYYY-MM-DD) as -- Oct 23. It is read as a local day,
+     * not midnight UTC, so it doesn't show as the day before west of Greenwich
+     * @param {string} day the day
+     * @returns the day in the short display format
+     */
+    static day(day) {
+        const [y, m, d] = String(day).split("-").map(Number);
+        return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(new Date(y, m - 1, d));
+    }
+
     static statusLabel(status, type) {
         if (!status) return "Add to list";
         

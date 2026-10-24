@@ -2,7 +2,6 @@ package insights
 
 import (
 	"io/fs"
-	"os"
 	"path/filepath"
 	"sync"
 	"time"
@@ -28,13 +27,15 @@ type storageScanner struct {
 	root string
 	ttl  time.Duration
 	now  func() time.Time
+	// called with each new scan, to keep a daily snapshot
+	onScan func(storageUsage)
 
 	mu   sync.Mutex
 	last *storageUsage
 }
 
-func newStorageScanner(root string) *storageScanner {
-	return &storageScanner{root: root, ttl: scanTTL, now: time.Now}
+func newStorageScanner(root string, onScan func(storageUsage)) *storageScanner {
+	return &storageScanner{root: root, ttl: scanTTL, now: time.Now, onScan: onScan}
 }
 
 /*
@@ -63,6 +64,9 @@ func (s *storageScanner) Get(refresh bool) storageUsage {
 	}
 	usage.ScannedAt = s.now()
 	s.last = &usage
+	if s.onScan != nil {
+		s.onScan(usage)
+	}
 	return usage
 }
 
@@ -92,15 +96,4 @@ func folderSize(dir string) folderUsage {
 		return nil
 	})
 	return u
-}
-
-// the scanner for MEDIA_ROOT, shared so every request reuses one scan
-var (
-	scannerOnce sync.Once
-	scanner     *storageScanner
-)
-
-func mediaScanner() *storageScanner {
-	scannerOnce.Do(func() { scanner = newStorageScanner(os.Getenv("MEDIA_ROOT")) })
-	return scanner
 }

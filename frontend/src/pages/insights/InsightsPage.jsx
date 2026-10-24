@@ -1,9 +1,11 @@
-import { AlertTriangle, BookOpen, Clapperboard, Download, HardDrive, RefreshCw, Users } from "lucide-react";
+import { Activity, AlertTriangle, BookOpen, Clapperboard, Download, HardDrive, Music, RefreshCw, Users } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import PageHeader from "../../components/layout/PageHeader";
 import DataTable, { Panel } from "../../components/DataTable";
 import StatTile from "../../components/StatTile";
+import ColumnChart from "../../components/charts/ColumnChart";
+import LineChart from "../../components/charts/LineChart";
 import StatusPill from "../../components/StatusPill";
 import EmptyState from "../../components/states/EmptyState";
 import ErrorState from "../../components/states/ErrorState";
@@ -68,13 +70,15 @@ export default function InsightsPage() {
                     tone={failed > 0 ? "error" : undefined}/>
             </div>
 
-            <StoragePanel storage={storage} rescanning={rescanning} onRescan={rescan}/>
+            <StoragePanel storage={storage} history={data.storage_history} rescanning={rescanning} onRescan={rescan}/>
 
             <div className="grid gap-6 xl:grid-cols-2">
                 <TopPanel title="Most watched" icon={Clapperboard} items={data.top_watched} itemsHeader="Episodes" showHours
                     empty="Nothing watched in the last 30 days"/>
                 <TopPanel title="Most read" icon={BookOpen} items={data.top_read} itemsHeader="Chapters, volumes"
                     empty="Nothing read in the last 30 days"/>
+                <MostPlayedPanel tracks={data.top_played}/>
+                <ActivityPanel days={data.activity}/>
             </div>
 
             <Panel title="Users" icon={Users} meta={users.total} description="Last seen is the latest sign in or saved progress.">
@@ -118,13 +122,15 @@ export default function InsightsPage() {
     );
 }
 
-const folderColors = { anime: "bg-primary", movie: "bg-secondary", music: "bg-info", manga: "bg-success", light_novel: "bg-warning" };
+// in the library folders' order; checked as a set for color-blind separation and contrast on the
+// dark panel, so a change here should be checked again rather than swapped for theme colors
+const folderColors = { anime: "bg-[#f25912]", movie: "bg-[#8b5cf6]", music: "bg-[#4e9e54]", manga: "bg-[#4f86e8]", light_novel: "bg-[#b8860f]" };
 
 /**
  * The disk as one bar split by what fills it: each library folder, everything else on the disk,
  * then free space. Without the disk's size the bar is the library alone
  */
-function StoragePanel({ storage, rescanning, onRescan }) {
+function StoragePanel({ storage, history, rescanning, onRescan }) {
     const library = storage.folders.reduce((sum, f) => sum + f.bytes, 0);
     const disk = storage.disk_total ?? null;
     const used = disk != null ? disk - storage.disk_free : null;
@@ -149,7 +155,7 @@ function StoragePanel({ storage, rescanning, onRescan }) {
                     : Format.bytes(library)}
             </span>
         </div>
-        <div className="flex h-3 rounded-full bg-white/8 overflow-hidden gap-px" role="img"
+        <div className="flex h-3 rounded-full bg-white/8 overflow-hidden gap-0.5" role="img"
             aria-label={segments.map(s => `${s.label} ${percent(s.bytes, whole)}`).join(", ")}>
             {segments.filter(s => s.bytes > 0).map(s => (
                 // a sliver stays visible even when it rounds to nothing next to the disk
@@ -174,6 +180,14 @@ function StoragePanel({ storage, rescanning, onRescan }) {
         <p className="mt-5 text-sm text-base-content/55">
             Percentages are of the {disk != null ? "whole disk" : "library"}. Transcodes and unfinished uploads: <span className="tabular-nums text-base-content/80">{Format.bytes(storage.temp.bytes)}</span> in {storage.temp.files.toLocaleString()} files, cleared after 48 hours.
         </p>
+
+        <div className="mt-6 pt-5 border-t border-white/5">
+            {history.length >= 2
+                ? <LineChart title="Library size" formatValue={Format.bytes}
+                    summary={`last ${history.length} days`}
+                    data={history.map(p => ({ key: p.day, label: Format.day(p.day), value: p.library_bytes }))}/>
+                : <p className="text-sm text-base-content/55">The library's size is saved once a day; a chart of it shows up here from tomorrow.</p>}
+        </div>
     </Panel>;
 }
 
@@ -204,5 +218,50 @@ function TopPanel({ title, icon, items, itemsHeader, showHours = false, empty })
                     ...(showHours ? [{ key: "hours", header: "Hours", render: val => <span className="tabular-nums">{val.toFixed(1)}</span> }] : []),
                 ]}
             />}
+    </Panel>;
+}
+
+/**
+ * The tracks played the most in the last 30 days
+ */
+function MostPlayedPanel({ tracks }) {
+    return <Panel title="Most played" icon={Music} description="Last 30 days, by plays. A play counts after 30 seconds.">
+        {tracks.length === 0
+            ? <EmptyState compact title="Nothing played in the last 30 days"/>
+            : <DataTable
+                items={tracks}
+                columns={[
+                    { key: "title", header: "Track", primary: true, render: (val, item) => (
+                        <div className="min-w-0">
+                            {item.album_id
+                                ? <Link to={`/albums/${item.album_id}`} className="font-medium hover:text-primary transition-colors">{val}</Link>
+                                : <span className="font-medium">{val}</span>}
+                            <p className="text-xs text-base-content/45 truncate">{item.artist}</p>
+                        </div>
+                    )},
+                    { key: "users", header: "People", render: val => <span className="tabular-nums">{val}</span> },
+                    { key: "plays", header: "Plays", render: val => <span className="tabular-nums">{val}</span> },
+                ]}
+            />}
+    </Panel>;
+}
+
+/**
+ * People around and tracks played per day over the last 30 days, as two charts rather than one
+ * with two scales
+ */
+function ActivityPanel({ days }) {
+    const series = key => days.map(d => ({ key: d.day, label: Format.day(d.day), value: d[key] }));
+    const today = days[days.length - 1];
+    const peak = days.reduce((best, d) => d.users > best.users ? d : best, days[0]);
+    const plays = days.reduce((sum, d) => sum + d.plays, 0);
+
+    return <Panel title="Activity" icon={Activity} description="Last 30 days.">
+        <div className="flex flex-col gap-6">
+            <ColumnChart title="People active" data={series("users")}
+                summary={`today ${today.users} · peak ${peak.users} on ${Format.day(peak.day)}`}/>
+            <ColumnChart title="Tracks played" data={series("plays")} color="bg-secondary"
+                summary={`today ${today.plays} · ${plays.toLocaleString()} in 30 days`}/>
+        </div>
     </Panel>;
 }

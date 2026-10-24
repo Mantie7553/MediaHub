@@ -3,13 +3,16 @@ package insights
 import "time"
 
 type insightsResponse struct {
-	Storage     storageUsage `json:"storage"`
-	Cache       cacheUsage   `json:"cache"`
-	TopWatched  []topTitle   `json:"top_watched"`
-	TopRead     []topTitle   `json:"top_read"`
-	Users       userSummary  `json:"users"`
-	Jobs        jobSummary   `json:"jobs"`
-	GeneratedAt time.Time    `json:"generated_at"`
+	Storage        storageUsage   `json:"storage"`
+	Cache          cacheUsage     `json:"cache"`
+	TopWatched     []topTitle     `json:"top_watched"`
+	TopRead        []topTitle     `json:"top_read"`
+	TopPlayed      []topTrack     `json:"top_played"`
+	Activity       []activityDay  `json:"activity"`
+	StorageHistory []storagePoint `json:"storage_history"`
+	Users          userSummary    `json:"users"`
+	Jobs           jobSummary     `json:"jobs"`
+	GeneratedAt    time.Time      `json:"generated_at"`
 }
 
 type folderUsage struct {
@@ -75,4 +78,28 @@ type jobSummary struct {
 	Counts          map[string]int `json:"counts"`
 	PendingRequests int            `json:"pending_requests"`
 	RecentFailures  []failedJob    `json:"recent_failures"`
+}
+
+type topTrack struct {
+	ID      string  `json:"id"`
+	Title   string  `json:"title"`
+	Artist  string  `json:"artist"`
+	AlbumID *string `json:"album_id"`
+	Users   int     `json:"users"`
+	Plays   int     `json:"plays"`
+}
+
+// one day of the activity chart
+type activityDay struct {
+	Day   string `json:"day"` // YYYY-MM-DD
+	Users int    `json:"users"`
+	Plays int    `json:"plays"`
+}
+
+// one day's storage snapshot
+type storagePoint struct {
+	Day          string `json:"day"` // YYYY-MM-DD
+	LibraryBytes int64  `json:"library_bytes"`
+	DiskUsed     *int64 `json:"disk_used"`
+	DiskTotal    *int64 `json:"disk_total"`
 }
