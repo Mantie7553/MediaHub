@@ -118,48 +118,71 @@ export default function InsightsPage() {
     );
 }
 
+const folderColors = { anime: "bg-primary", movie: "bg-secondary", music: "bg-info", manga: "bg-success", light_novel: "bg-warning" };
+
 /**
- * How much each library folder holds, as bars against the largest one
+ * The disk as one bar split by what fills it: each library folder, everything else on the disk,
+ * then free space. Without the disk's size the bar is the library alone
  */
 function StoragePanel({ storage, rescanning, onRescan }) {
     const library = storage.folders.reduce((sum, f) => sum + f.bytes, 0);
-    const largest = Math.max(1, ...storage.folders.map(f => f.bytes));
-    const used = storage.disk_total != null ? storage.disk_total - storage.disk_free : null;
+    const disk = storage.disk_total ?? null;
+    const used = disk != null ? disk - storage.disk_free : null;
+    const whole = disk || library || 1;
+
+    const segments = [
+        ...storage.folders.map(f => ({ key: f.type, label: folderLabels[f.type] ?? f.name, bytes: f.bytes, files: f.files, color: folderColors[f.type] ?? "bg-accent" })),
+        // files outside the library folders (the OS, downloads in progress, anything else on the volume)
+        ...(used != null ? [{ key: "other", label: "Other files", bytes: Math.max(0, used - library), color: "bg-base-content/30" }] : []),
+    ];
 
     return <Panel title="Storage" icon={HardDrive} meta={Format.bytes(library)}
         description={`Scanned ${Format.relativeTime(storage.scanned_at)}, kept for an hour.`}
         actions={<button className="btn btn-sm btn-ghost" onClick={onRescan} disabled={rescanning}>
             <RefreshCw size={15} className={rescanning ? "animate-spin" : ""}/> Rescan
         </button>}>
-        {used != null && <div className="mb-6">
-            <div className="flex justify-between gap-3 text-sm mb-1.5">
-                <span className="text-base-content/70">Disk</span>
-                <span className="tabular-nums text-base-content/60 text-right">{Format.bytes(used)} used of {Format.bytes(storage.disk_total)}</span>
-            </div>
-            <Bar fraction={storage.disk_total ? used / storage.disk_total : 0}/>
-        </div>}
-        <ul className="flex flex-col gap-4">
-            {storage.folders.map(f => (
-                <li key={f.type}>
-                    <div className="flex justify-between gap-3 text-sm mb-1.5">
-                        <span className="min-w-0 truncate">{folderLabels[f.type] ?? f.name} <span className="text-base-content/40">· {f.files.toLocaleString()} files</span></span>
-                        <span className="tabular-nums text-base-content/70 shrink-0">{Format.bytes(f.bytes)}</span>
-                    </div>
-                    <Bar fraction={f.bytes / largest}/>
+        <div className="flex justify-between gap-3 text-sm mb-2">
+            <span className="text-base-content/70">{disk != null ? "Disk" : "Library"}</span>
+            <span className="tabular-nums text-base-content/60 text-right">
+                {disk != null
+                    ? <>{Format.bytes(used)} used of {Format.bytes(disk)} · <span className="text-base-content/80">{Format.bytes(storage.disk_free)} free</span></>
+                    : Format.bytes(library)}
+            </span>
+        </div>
+        <div className="flex h-3 rounded-full bg-white/8 overflow-hidden gap-px" role="img"
+            aria-label={segments.map(s => `${s.label} ${percent(s.bytes, whole)}`).join(", ")}>
+            {segments.filter(s => s.bytes > 0).map(s => (
+                // a sliver stays visible even when it rounds to nothing next to the disk
+                <div key={s.key} className={`h-full ${s.color} min-w-[3px]`} style={{ width: `${(s.bytes / whole) * 100}%` }}
+                    title={`${s.label}: ${Format.bytes(s.bytes)} (${percent(s.bytes, whole)})`}></div>
+            ))}
+        </div>
+
+        <ul className="mt-5 grid gap-x-8 gap-y-3 sm:grid-cols-2">
+            {segments.map(s => (
+                <li key={s.key} className="flex items-center gap-3 text-sm min-w-0">
+                    <span className={`size-2.5 shrink-0 rounded-full ${s.color}`}></span>
+                    <span className="min-w-0 flex-1 truncate">
+                        {s.label}
+                        {s.files != null && <span className="text-base-content/40"> · {s.files.toLocaleString()} files</span>}
+                    </span>
+                    <span className="tabular-nums text-base-content/80 shrink-0">{Format.bytes(s.bytes)}</span>
+                    <span className="tabular-nums text-base-content/45 shrink-0 w-12 text-right">{percent(s.bytes, whole)}</span>
                 </li>
             ))}
         </ul>
         <p className="mt-5 text-sm text-base-content/55">
-            Transcodes and unfinished uploads: <span className="tabular-nums text-base-content/80">{Format.bytes(storage.temp.bytes)}</span> in {storage.temp.files.toLocaleString()} files, cleared after 48 hours.
+            Percentages are of the {disk != null ? "whole disk" : "library"}. Transcodes and unfinished uploads: <span className="tabular-nums text-base-content/80">{Format.bytes(storage.temp.bytes)}</span> in {storage.temp.files.toLocaleString()} files, cleared after 48 hours.
         </p>
     </Panel>;
 }
 
-function Bar({ fraction }) {
-    const pct = Math.min(100, Math.max(0, fraction * 100));
-    return <div className="h-2 rounded-full bg-white/8 overflow-hidden">
-        <div className="h-full rounded-full bg-linear-to-r from-secondary to-primary" style={{ width: `${pct}%` }}></div>
-    </div>;
+// part as a share of whole, "<0.1%" for something there but too small to show
+function percent(part, whole) {
+    if (!part) return "0%";
+    const pct = (part / whole) * 100;
+    if (pct < 0.1) return "<0.1%";
+    return `${pct < 10 ? pct.toFixed(1) : Math.round(pct)}%`;
 }
 
 /**
