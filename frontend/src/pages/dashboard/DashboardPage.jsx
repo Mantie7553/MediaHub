@@ -13,6 +13,7 @@ import PageHeader from "../../components/layout/PageHeader";
 import SegmentedTabs from "../../components/SegmentedTabs";
 import HidingSearchBar from "../../components/HidingSearchBar";
 import { filterByQuery } from "../../utils/search";
+import { onCollectionsChanged } from "../../services/collectionsService";
 
 // list entries name their title media_title, library items title
 const sortOrder = (a, b) => (a.media_title ?? a.title ?? "").localeCompare(b.media_title ?? b.title ?? "");
@@ -46,6 +47,9 @@ export default function DashboardPage() {
     const collections = useApi("/me/collections", { initial: [] });
     // playlists and collections admins picked for everyone
     const featured = useApi("/featured", { initial: [] });
+    // adding something from a card's picker, or making a new one there, changes the rows
+    const reloadCollections = collections.reload;
+    useEffect(() => onCollectionsChanged(() => reloadCollections(true)), [reloadCollections]);
 
     // the search filters every row as it's typed, and is kept in the address (?q=) once typing
     // pauses, so coming back to the dashboard or refreshing keeps it
@@ -86,14 +90,11 @@ export default function DashboardPage() {
     const serverLightNovels = matching(library.data.filter(item => item.type === "light_novel")).sort(sortOrder);
 
     const serverAlbums = matching(albums.data);
-    // the playlists that fill themselves are always there, so they show (and count as the user
-    // having content) only once something is in them
+    // the playlists that fill themselves are always there, so they show only once something is
+    // in them
     const playlists = matching(collections.data.filter(c => c.kind === "playlist" && (!c.smart || c.item_count > 0)));
     const userCollections = matching(collections.data.filter(c => c.kind === "collection"));
     const playlistCount = playlists.length;
-    // once there's anything on the list, both rows show so a first playlist or collection can be
-    // made from them
-    const hasContent = userContent.length > 0 || collections.data.some(c => !c.smart || c.item_count > 0);
     const continueItems = matching(continuing.data);
     const featuredItems = matching(featured.data);
 
@@ -119,10 +120,12 @@ export default function DashboardPage() {
         { key: "manga", count: userManga.length, render: () => <ContentList items={userManga} heading="Manga" {...tracked}/> },
         { key: "music", count: userMusic.length, render: () => <AlbumList albums={userMusic} heading="Music" loading={userLoading} emptyText={searching ? tracked.emptyText : "No albums saved yet"} emptyAction={tracked.emptyAction}/> },
         { key: "light_novel", count: userLightNovels.length, render: () => <ContentList items={userLightNovels} heading="Light Novels" {...tracked}/> },
-        { key: "playlist", count: playlistCount, always: hasContent && !searching, error: collections.error, reload: collections.reload,
+        // like the other rows these show under "All" once they have something; their filter chips
+        // show them empty too, with the card that makes a first one
+        { key: "playlist", count: playlistCount, error: collections.error, reload: collections.reload,
             render: () => <CollectionList collections={playlists} kind="playlist" heading="Playlists" loading={collections.loading}
                 emptyText={searching ? tracked.emptyText : undefined}/> },
-        { key: "collection", count: userCollections.length, always: hasContent && !searching, error: collections.error, reload: collections.reload,
+        { key: "collection", count: userCollections.length, error: collections.error, reload: collections.reload,
             render: () => <CollectionList collections={userCollections} kind="collection" heading="Collections" loading={collections.loading}
                 emptyText={searching ? tracked.emptyText : undefined}/> },
     ];
@@ -178,9 +181,8 @@ export default function DashboardPage() {
 /**
  * A titled group of rows with filter chips. Under "All" empty rows are skipped, and an empty
  * section shows one message instead of one per row
- * @param {object[]} rows { key, count, render, error?, reload?, always? }, error and reload for rows
- *  that load separately, always to show the row under "All" even when it's empty. Only the
- *  filter chips for these rows are offered
+ * @param {object[]} rows { key, count, render, error?, reload? }, error and reload for rows that
+ *  load separately. Only the filter chips for these rows are offered
  * @param {any} error the whole section failed to load
  * @param {any} empty shown under "All" when every row is empty
  */
@@ -188,7 +190,7 @@ function DashboardSection({ title, rows, loading, error, onRetry, empty }) {
     const [filter, setFilter] = useState("all");
 
     const visible = filter === "all"
-        ? rows.filter(row => loading || row.error || row.count > 0 || row.always)
+        ? rows.filter(row => loading || row.error || row.count > 0)
         : rows.filter(row => row.key === filter);
 
     // rows sharing one failed request show its error once
