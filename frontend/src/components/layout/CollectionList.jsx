@@ -21,8 +21,9 @@ const ROW_LIMIT = 12
  * @param {boolean} loading shows placeholder cards instead
  * @param {string} emptyText shown instead of the row when there's nothing and no new card,
  *  e.g. while searching
+ * @param {boolean} canCreate ends the row with a card that makes a new one (not for featured ones)
  */
-export default function CollectionList({ collections, kind, heading, loading = false, emptyText }) {
+export default function CollectionList({ collections, kind, heading, loading = false, emptyText, canCreate = true }) {
     const navigate = useNavigate()
     const [expanded, setExpanded] = useState(false)
     const newRef = useRef(null)
@@ -35,7 +36,7 @@ export default function CollectionList({ collections, kind, heading, loading = f
     }
 
     const canExpand = collections.length > ROW_LIMIT
-    const newCard = !emptyText && <NewCollectionCard kind={kind} fluid={expanded} onClick={() => newRef.current.showModal()}/>
+    const newCard = canCreate && !emptyText && <NewCollectionCard kind={kind} fluid={expanded} onClick={() => newRef.current.showModal()}/>
 
     return <section className="animate-fade-up">
         <SectionHeader title={heading} count={collections.length} expanded={expanded}
@@ -53,6 +54,6 @@ export default function CollectionList({ collections, kind, heading, loading = f
                 {newCard}
             </Shelf>
         )}
-        <CollectionNameModal dialogRef={newRef} kind={kind} onSave={create}/>
+        {canCreate && <CollectionNameModal dialogRef={newRef} kind={kind} onSave={create}/>}
     </section>
 }

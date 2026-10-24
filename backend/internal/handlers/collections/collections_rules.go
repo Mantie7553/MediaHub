@@ -1,6 +1,10 @@
 package collections
 
-import "errors"
+import (
+	"errors"
+
+	"github.com/Mantie7553/MediaHub/backend/internal/platform/auth"
+)
 
 // the two kinds, as stored
 const (
@@ -71,21 +75,36 @@ func isSmart(id string) bool {
 }
 
 /*
-access is who may see and change a collection. It's the one place sharing will extend: today a
-collection belongs to its owner alone
+access is who may see and change a collection. A private one belongs to its owner alone. A
+featured one is a copy an admin approved: everyone can open it and nobody can change it, only an
+admin can take it down. Admins can also open a private one while it waits for their review
 */
 type access struct {
 	ownerID string
+	// a featured copy, or a playlist copied along with one
+	featured bool
+	// copied along with a featured collection: it goes when that does, not on its own
+	partOf bool
+	// a submission for it is waiting for an admin
+	inReview bool
 }
 
 // whether the user may open it. Anyone else gets a 404, so ids of other people's don't leak
-func (a access) canView(userID string) bool {
-	return a.ownerID == userID
+func (a access) canView(user *auth.UserContext) bool {
+	return a.ownerID == user.UserID || a.featured || (a.inReview && user.Role == "admin")
 }
 
-// whether the user may rename it, delete it or change what's in it
+// whether the user may rename it or change what's in it
 func (a access) canEdit(userID string) bool {
-	return a.ownerID == userID
+	return !a.featured && a.ownerID == userID
+}
+
+// whether the user may delete it: the owner, or an admin taking down a featured one
+func (a access) canDelete(user *auth.UserContext) bool {
+	if a.featured {
+		return !a.partOf && user.Role == "admin"
+	}
+	return a.ownerID == user.UserID
 }
 
 /*

@@ -53,3 +53,49 @@ export function removeFromCollection(id, entryId) {
 export function moveInCollection(id, entryId, after) {
     return api.put(`/collections/${id}/items/${entryId}/position`, { after })
 }
+
+/**
+ * Ask the admins to feature one of the user's playlists or collections
+ * @param {string} note an optional message for the admins
+ * @returns the response, with where the request is ({ status, ... })
+ */
+export function submitForFeaturing(id, note) {
+    return api.post(`/collections/${id}/submission`, { note: note || undefined })
+}
+
+// take back a request that is still waiting
+export function withdrawSubmission(id) {
+    return api.delete(`/collections/${id}/submission`)
+}
+
+/**
+ * Save a featured playlist or collection as the user's own copy, which they can change
+ * @returns the response, with the copy's { id, kind }
+ */
+export function saveCopy(id) {
+    return api.post(`/collections/${id}/copy`)
+}
+
+/**
+ * Admins: approve a submission, featuring it as it is now
+ * @returns the response, with { featured_id }
+ */
+export function approveSubmission(submissionId) {
+    return api.post(`/admin/collection-submissions/${submissionId}/approve`)
+}
+
+/**
+ * Admins: turn a submission down
+ * @param {string} note why, shown to the user
+ */
+export function rejectSubmission(submissionId, note) {
+    return api.post(`/admin/collection-submissions/${submissionId}/reject`, { note: note || undefined })
+}
+
+/**
+ * Admins: feature one of their own straight away, or update its featured copy
+ * @returns the response, with { featured_id }
+ */
+export function featureNow(id) {
+    return api.post(`/admin/collections/${id}/feature`)
+}

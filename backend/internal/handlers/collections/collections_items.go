@@ -27,7 +27,7 @@ Purpose:	What the item in an add request is, for the rules, checking it exists a
 nested playlist) that the user may see it
 Returns:	the kind, the column the entry stores it in, its id, or errNotFound
 */
-func itemKind(db querier, req addRequest, userID string) (kind, column, id string, err error) {
+func itemKind(db querier, req addRequest, user *auth.UserContext) (kind, column, id string, err error) {
 	given := 0
 	for _, v := range []string{req.MediaItemID, req.AlbumID, req.CollectionID} {
 		if v != "" {
@@ -58,7 +58,7 @@ func itemKind(db querier, req addRequest, userID string) (kind, column, id strin
 			return "", "", "", errSmartNested
 		}
 		var c stored
-		c, err = load(db, id, userID, false)
+		c, err = load(db, id, user, false)
 		kind = c.kind
 	}
 	if errors.Is(err, sql.ErrNoRows) {
@@ -90,13 +90,13 @@ func (h *Handler) AddItem(w http.ResponseWriter, r *http.Request) {
 
 	var c stored
 	if !isSmart(id) {
-		c, err = load(tx, id, user.UserID, true)
+		c, err = load(tx, id, user, true)
 	}
 	if refuseEdit(w, id, c, err, user.UserID) {
 		return
 	}
 
-	kind, column, itemID, err := itemKind(tx, req, user.UserID)
+	kind, column, itemID, err := itemKind(tx, req, user)
 	if errors.Is(err, errNotFound) {
 		utils.Error(w, http.StatusNotFound, "that isn't in the library")
 		return
@@ -186,7 +186,7 @@ func (h *Handler) RemoveItem(w http.ResponseWriter, r *http.Request) {
 	var c stored
 	var err error
 	if !isSmart(id) {
-		c, err = load(h.db, id, user.UserID, false)
+		c, err = load(h.db, id, user, false)
 	}
 	if refuseEdit(w, id, c, err, user.UserID) {
 		return
@@ -272,7 +272,7 @@ func (h *Handler) MoveItem(w http.ResponseWriter, r *http.Request) {
 
 	var c stored
 	if !isSmart(id) {
-		c, err = load(tx, id, user.UserID, true)
+		c, err = load(tx, id, user, true)
 	}
 	if refuseEdit(w, id, c, err, user.UserID) {
 		return

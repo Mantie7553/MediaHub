@@ -230,6 +230,12 @@ func (s *Server) routes() {
 			r.Post("/collections/{id}/items", collectionsHandler.AddItem)
 			r.Delete("/collections/{id}/items/{entryId}", collectionsHandler.RemoveItem)
 			r.Put("/collections/{id}/items/{entryId}/position", collectionsHandler.MoveItem)
+			// featuring: users submit theirs, everyone sees the featured copies and can save one as
+			// their own
+			r.Get("/featured", collectionsHandler.ListFeatured)
+			r.Post("/collections/{id}/submission", collectionsHandler.Submit)
+			r.Delete("/collections/{id}/submission", collectionsHandler.Withdraw)
+			r.Post("/collections/{id}/copy", collectionsHandler.SaveCopy)
 			r.Put("/me/media/{id}", listsHandler.Update)
 			r.Delete("/me/media/{id}", listsHandler.Delete)
 			r.Put("/episodes/{id}/watched", listsHandler.UpdateProgress)
@@ -312,6 +318,12 @@ func (s *Server) routes() {
 
 			// the Insights page: disk use, what people watch and read, users and downloads
 			r.Get("/admin/insights", insightsHandler.Get)
+
+			// reviewing what users submit to be featured, and featuring an admin's own
+			r.Get("/admin/collection-submissions", collectionsHandler.ListSubmissions)
+			r.Post("/admin/collection-submissions/{id}/approve", collectionsHandler.Approve)
+			r.Post("/admin/collection-submissions/{id}/reject", collectionsHandler.Reject)
+			r.Post("/admin/collections/{id}/feature", collectionsHandler.Feature)
 
 			// Invite Handler endpoints
 			r.Get("/admin/invites", invitesHandler.GetAll)
