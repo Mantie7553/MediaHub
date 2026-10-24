@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -28,12 +27,7 @@ func NewHandler(db *sql.DB) *Handler {
 // the most a description can hold
 const maxDescriptionLength = 1000
 
-// ids are UUIDs; anything else can't be one of ours, and would make Postgres fail the query
-var uuidPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
-
-func isUUID(s string) bool {
-	return uuidPattern.MatchString(s)
-}
+var isUUID = utils.IsUUID
 
 // what the handlers need to know about a stored collection before acting on it
 type stored struct {

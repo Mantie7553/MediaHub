@@ -183,6 +183,19 @@ func (f *Files) Local(src string) string {
 }
 
 /*
+Function:	Stats
+Purpose:	bytes the cache holds, the most it may hold and its folder. All zero when it is off
+*/
+func (f *Files) Stats() (used, max int64, dir string) {
+	if f == nil {
+		return 0, 0, ""
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.total, f.max, f.dir
+}
+
+/*
 Function:	Forget
 Purpose:	check src on the NAS again on its next read, for a file that was just replaced
 */

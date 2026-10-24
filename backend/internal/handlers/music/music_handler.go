@@ -338,3 +338,34 @@ func (h *Handler) GetArtists(w http.ResponseWriter, r *http.Request) {
 
 	utils.JSON(w, artists)
 }
+
+/*
+Function:	RecordPlay
+Purpose:	count a play of a track for the current user. The player calls this once someone has
+listened long enough, so skipping through a queue isn't counted
+Params:
+  - w: http response writer
+  - r: http request, with the track's media item id in the path
+*/
+func (h *Handler) RecordPlay(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if !utils.IsUUID(id) {
+		utils.Error(w, http.StatusNotFound, "track not found")
+		return
+	}
+	user := auth.GetUser(r)
+
+	res, err := h.db.Exec(
+		`INSERT INTO music_plays (user_id, media_item_id)
+		SELECT $1, media_item_id FROM music_metadata WHERE media_item_id = $2`,
+		user.UserID, id,
+	)
+	if utils.InternalError(w, err) {
+		return
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		utils.Error(w, http.StatusNotFound, "track not found")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}

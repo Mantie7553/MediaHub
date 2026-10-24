@@ -229,3 +229,45 @@ func TestCollectionRoutesNeedSignIn(t *testing.T) {
 		}
 	}
 }
+
+func TestInsightsRouteIsAdminOnly(t *testing.T) {
+	t.Setenv("CORS_ORIGIN", "http://localhost")
+	t.Setenv("JWT_SECRET", "access-secret-for-tests")
+	t.Setenv("MEDIA_SIGNING_SECRET", "media-secret-for-tests")
+	t.Setenv("MEDIA_ROOT", t.TempDir())
+
+	s := New(nil)
+	userToken, err := auth.GenerateToken("user-1", "user")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		bearer string
+		status int
+	}{{"", http.StatusUnauthorized}, {userToken, http.StatusForbidden}} {
+		req := httptest.NewRequest(http.MethodGet, "/api/admin/insights", nil)
+		if c.bearer != "" {
+			req.Header.Set("Authorization", "Bearer "+c.bearer)
+		}
+		rec := httptest.NewRecorder()
+		s.router.ServeHTTP(rec, req)
+		if rec.Code != c.status {
+			t.Errorf("GET /api/admin/insights with bearer=%t: status = %d, want %d", c.bearer != "", rec.Code, c.status)
+		}
+	}
+}
+
+func TestRecordPlayNeedsSignIn(t *testing.T) {
+	t.Setenv("CORS_ORIGIN", "http://localhost")
+	t.Setenv("JWT_SECRET", "access-secret-for-tests")
+	t.Setenv("MEDIA_SIGNING_SECRET", "media-secret-for-tests")
+	t.Setenv("MEDIA_ROOT", t.TempDir())
+
+	s := New(nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/music/6f1c2b9e-1d2a-4b3c-8d4e-5f6a7b8c9d0e/plays", nil)
+	rec := httptest.NewRecorder()
+	s.router.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("POST /api/music/{id}/plays without a token: status = %d, want 401", rec.Code)
+	}
+}

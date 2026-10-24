@@ -78,6 +78,52 @@ export default class Format {
         return h > 0 ? `${h}:${String(m).padStart(2, "0")}:${s}` : `${m}:${s}`;
     }
 
+    /**
+     * Format a size in bytes as -- 1.4 TB, 820 MB, 12 KB
+     * @param {number} n bytes
+     * @returns the size with its unit, one decimal under 10 of a unit; "—" when unknown
+     */
+    static bytes(n) {
+        if (n == null || !Number.isFinite(n)) return "—";
+        const units = ["B", "KB", "MB", "GB", "TB", "PB"];
+        let value = Math.max(0, n);
+        let unit = 0;
+        while (value >= 1024 && unit < units.length - 1) {
+            value /= 1024;
+            unit++;
+        }
+        const digits = unit > 0 && value < 10 ? 1 : 0;
+        return `${value.toFixed(digits)} ${units[unit]}`;
+    }
+
+    /**
+     * Format how long ago a date was as -- just now, 5 min ago, 3 h ago, 2 days ago, then the date
+     * @param {any} date the date
+     * @param {Date} now the time to measure from
+     * @returns the age in the proper display format; "Never" when there is no date
+     */
+    static relativeTime(date, now = new Date()) {
+        if (!date) return "Never";
+        const secs = Math.max(0, (now - new Date(date)) / 1000);
+        if (secs < 60) return "just now";
+        if (secs < 3600) return `${Math.floor(secs / 60)} min ago`;
+        if (secs < 86400) return `${Math.floor(secs / 3600)} h ago`;
+        const days = Math.floor(secs / 86400);
+        if (days < 30) return days === 1 ? "yesterday" : `${days} days ago`;
+        return Format.date(date);
+    }
+
+    /**
+     * Format a calendar day from the API (YYYY-MM-DD) as -- Oct 23. It is read as a local day,
+     * not midnight UTC, so it doesn't show as the day before west of Greenwich
+     * @param {string} day the day
+     * @returns the day in the short display format
+     */
+    static day(day) {
+        const [y, m, d] = String(day).split("-").map(Number);
+        return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(new Date(y, m - 1, d));
+    }
+
     static statusLabel(status, type) {
         if (!status) return "Add to list";
         

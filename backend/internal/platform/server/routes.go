@@ -11,6 +11,7 @@ import (
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/collections"
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/curation"
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/deletion"
+	"github.com/Mantie7553/MediaHub/backend/internal/handlers/insights"
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/invites"
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/jobs"
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/lists"
@@ -32,10 +33,11 @@ import (
 )
 
 type Server struct {
-	router *chi.Mux
-	db     *sql.DB
-	sync   *sync.Handler
-	search *search.Handler
+	router   *chi.Mux
+	db       *sql.DB
+	sync     *sync.Handler
+	search   *search.Handler
+	insights *insights.Handler
 }
 
 func New(db *sql.DB) *Server {
@@ -49,12 +51,13 @@ func New(db *sql.DB) *Server {
 
 /*
 Function:	StartBackgroundJobs
-Purpose:	start work that runs on its own schedule (the nightly library sync), and fetch
-Discover's lists so the first visit doesn't wait for them
+Purpose:	start work that runs on its own schedule (the nightly library sync, the daily
+storage snapshot), and fetch Discover's lists so the first visit doesn't wait for them
 */
 func (s *Server) StartBackgroundJobs() {
 	s.sync.StartSchedule()
 	s.search.WarmDiscovery()
+	s.insights.StartDailySnapshots()
 }
 
 func (s *Server) Start(addr string) error {
@@ -105,6 +108,8 @@ func (s *Server) routes() {
 	s.sync = syncHandler
 	webhooksHandler := webhooks.NewHandler(s.db)
 	usersHandler := users.NewHandler(s.db)
+	insightsHandler := insights.NewHandler(s.db)
+	s.insights = insightsHandler
 
 	s.router.Use(secureHeaders)
 	s.router.Use(limitBody)
@@ -209,6 +214,7 @@ func (s *Server) routes() {
 			r.Get("/albums/{id}", musicHandler.GetAlbum)
 			r.Get("/music/recommended", musicHandler.GetRecommended)
 			r.Get("/music/artists", musicHandler.GetArtists)
+			r.Post("/music/{id}/plays", musicHandler.RecordPlay)
 
 			// List Handler endpoints
 			r.Get("/light-novels/{id}/volumes/{volumeId}/content", mediaHandler.ServeVolume)
@@ -303,6 +309,9 @@ func (s *Server) routes() {
 			r.Post("/admin/users", usersHandler.Create)
 			r.Put("/admin/users/{id}", usersHandler.Update)
 			r.Delete("/admin/users/{id}", usersHandler.Delete)
+
+			// the Insights page: disk use, what people watch and read, users and downloads
+			r.Get("/admin/insights", insightsHandler.Get)
 
 			// Invite Handler endpoints
 			r.Get("/admin/invites", invitesHandler.GetAll)

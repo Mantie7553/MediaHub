@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/logger"
@@ -110,6 +111,17 @@ func SafeFileName(name string) bool {
 		return false
 	}
 	return name == filepath.Base(name)
+}
+
+// ids are UUIDs; anything else can't be one of ours, and would make Postgres fail the query
+var uuidPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
+
+/*
+Function:	IsUUID
+Purpose:	check that s is a UUID, before using it as an id in a query
+*/
+func IsUUID(s string) bool {
+	return uuidPattern.MatchString(s)
 }
 
 /*
