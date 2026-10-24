@@ -66,8 +66,12 @@ export default function AddToCollectionModal({ dialogRef, item, options, loadErr
 
     const what = kinds.length === 2 ? "playlist or collection" : kinds[0] ?? "collection";
 
+    // React passes events up through a portal to whatever renders it, which is often a card's
+    // link or play button: clicks stop here so picking a playlist doesn't also open the title.
+    // Not cancelled, or the Create button couldn't submit its form
     return createPortal(
-        <dialog className="modal modal-bottom sm:modal-middle" ref={dialogRef} onClose={() => setAdded({})}>
+        <dialog className="modal modal-bottom sm:modal-middle" ref={dialogRef} onClose={() => setAdded({})}
+            onClick={e => e.stopPropagation()}>
             <div className="modal-box flex flex-col gap-4 max-h-[85dvh]">
                 <h2 className="text-xl font-semibold min-w-0 break-words">Add “{title}” to…</h2>
 

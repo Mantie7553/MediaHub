@@ -1,4 +1,4 @@
-import { useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Link, useNavigate, useParams } from "react-router-dom"
 import { ArrowDown, ArrowUp, ArrowUpToLine, Check, Clock, Copy, GripVertical, ListPlus, PencilLine, Send, SlidersHorizontal, Sparkles, Trash2, X } from "lucide-react"
 import useApi from "../../hooks/useApi"
@@ -19,7 +19,7 @@ import EmptyState from "../../components/states/EmptyState"
 import ErrorState from "../../components/states/ErrorState"
 import NotFound from "../../components/states/NotFound"
 import { DetailsSkeleton } from "../../components/states/Skeletons"
-import { deleteCollection, featureNow, moveInCollection, removeFromCollection, saveCopy, submitForFeaturing, updateCollection, withdrawSubmission } from "../../services/collectionsService"
+import { deleteCollection, featureNow, moveInCollection, onCollectionsChanged, removeFromCollection, saveCopy, submitForFeaturing, updateCollection, withdrawSubmission } from "../../services/collectionsService"
 import { getRole } from "../../utils/auth"
 import { SMART_PLAYLISTS, applyMove, dropTarget, moveTarget } from "../../utils/collections"
 import { PlayButton, QueueModeButtons } from "../../components/details/PlaybackControls"
@@ -48,6 +48,8 @@ export default function CollectionPage() {
     const takeDownRef = useRef(null)
     const [arranging, setArranging] = useState(false)
     const [copying, setCopying] = useState(false)
+    // the cards on a collection's page have their own picker, which can add to this one
+    useEffect(() => onCollectionsChanged(() => reload(true)), [reload])
 
     // the order shown, changed straight away when something moves and put back from the server
     // whenever a fresh copy loads

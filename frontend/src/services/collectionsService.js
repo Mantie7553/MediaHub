@@ -1,5 +1,24 @@
 import api from './api'
 
+// what to tell when something is added to a playlist or collection, or a new one is made, from
+// anywhere: the pickers on cards and pages change what other parts of the screen show
+const listeners = new Set()
+
+/**
+ * Hear about playlists and collections changing, to reload what shows them
+ * @param {function} listener called after something is added or a new one is made
+ * @returns a function that stops listening, for an effect's cleanup
+ */
+export function onCollectionsChanged(listener) {
+    listeners.add(listener)
+    return () => { listeners.delete(listener) }
+}
+
+function changed(res) {
+    listeners.forEach(listener => listener())
+    return res
+}
+
 /**
  * The user's playlists and collections, playlists starting with the two that fill themselves
  * @param {string} kind "playlist", "collection", or nothing for both
@@ -14,7 +33,7 @@ export function listCollections(kind, contains) {
  * @returns the response, with { id }
  */
 export function createCollection(kind, name, description) {
-    return api.post("/me/collections", { kind, name, description })
+    return api.post("/me/collections", { kind, name, description }).then(changed)
 }
 
 /**
@@ -35,7 +54,7 @@ export function deleteCollection(id) {
  * @returns the response, with { added, already }
  */
 export function addToCollection(id, item) {
-    return api.post(`/collections/${id}/items`, item)
+    return api.post(`/collections/${id}/items`, item).then(changed)
 }
 
 /**
