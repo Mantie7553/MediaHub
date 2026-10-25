@@ -21,10 +21,15 @@ const (
 	subtitlesOff = "off"
 )
 
-// subtitle codecs ffmpeg can turn into WebVTT; image based ones (PGS, VobSub) can't be
+// subtitle codecs ffmpeg can turn into WebVTT
 var textSubtitleCodecs = map[string]bool{
 	"ass": true, "ssa": true, "subrip": true, "srt": true,
 	"mov_text": true, "webvtt": true, "text": true,
+}
+
+// image based subtitles, which can't become WebVTT but can be burned into the video
+var imageSubtitleCodecs = map[string]bool{
+	"hdmv_pgs_subtitle": true, "dvd_subtitle": true, "dvb_subtitle": true,
 }
 
 var (
@@ -176,19 +181,26 @@ func selectAudio(streams []probeStream, preferred string) *probeStream {
 
 /*
 Function:	subtitleTracks
-Purpose:	the text subtitle tracks to extract, with what's needed to choose a default later
+Purpose:	the subtitle tracks the player can show, text ones to extract and image ones to burn
+            in, with what's needed to choose a default later
 Params:
   - streams: the file's streams from ffprobe
 */
 func subtitleTracks(streams []probeStream) []subtitleTrack {
 	tracks := []subtitleTrack{}
 	for _, s := range streams {
-		if s.CodecType != "subtitle" || !textSubtitleCodecs[s.CodecName] {
+		image := imageSubtitleCodecs[s.CodecName]
+		if s.CodecType != "subtitle" || (!textSubtitleCodecs[s.CodecName] && !image) {
 			continue
+		}
+		file := ""
+		if !image {
+			file = fmt.Sprintf("subs_%d.vtt", s.Index)
 		}
 		tracks = append(tracks, subtitleTrack{
 			Index:       s.Index,
-			File:        fmt.Sprintf("subs_%d.vtt", s.Index),
+			File:        file,
+			Image:       image,
 			Language:    s.Tags.Language,
 			Label:       trackLabel(s),
 			Title:       s.Tags.Title,
@@ -201,17 +213,19 @@ func subtitleTracks(streams []probeStream) []subtitleTrack {
 
 /*
 Function:	buildManifest
-Purpose:	what a transcode with this audio track contains
+Purpose:	what a transcode with this audio track and burned in subtitle contains
 Params:
   - filePath: the source file
   - probe: the file's streams and length from ffprobe
   - audioIndex: the chosen audio stream, -1 for none
+  - burnIndex: the image subtitle to burn in, -1 for none
 */
-func buildManifest(filePath string, probe probeResult, audioIndex int) streamManifest {
+func buildManifest(filePath string, probe probeResult, audioIndex, burnIndex int) streamManifest {
 	manifest := streamManifest{
 		Source:     filePath,
 		Duration:   probe.Duration,
 		AudioIndex: audioIndex,
+		BurnIndex:  burnIndex,
 		Subtitles:  subtitleTracks(probe.Streams),
 	}
 	for _, s := range probe.Streams {
@@ -223,6 +237,22 @@ func buildManifest(filePath string, probe probeResult, audioIndex int) streamMan
 		}
 	}
 	return manifest
+}
+
+/*
+Function:	imageSubtitle
+Purpose:	whether index is an image subtitle track that can be burned in
+Params:
+  - tracks: the subtitle tracks
+  - index: the stream index
+*/
+func imageSubtitle(tracks []subtitleTrack, index int) bool {
+	for _, t := range tracks {
+		if t.Index == index && t.Image {
+			return true
+		}
+	}
+	return false
 }
 
 /*
@@ -240,9 +270,10 @@ func matchesLanguage(language, preferred string) bool {
 Function:	defaultSubtitle
 Purpose:	pick the subtitle track to show. If the audio is already in the preferred subtitle
             language only a signs/songs track is shown, otherwise full dialogue, avoiding
-            signs-only, SDH and dubtitle tracks. Returns the stream index, or -1 for none
+            signs-only, SDH and dubtitle tracks. Text beats an image track, which has to be
+            burned in. Returns the stream index, or -1 for none
 Params:
-  - tracks: the extracted subtitle tracks
+  - tracks: the subtitle tracks
   - audioLanguage: language of the chosen audio track
   - preferred: the preferred subtitle language, or "off"
 */
@@ -273,6 +304,9 @@ func defaultSubtitle(tracks []subtitleTrack, audioLanguage, preferred string) in
 		}
 		if lessUsefulRe.MatchString(t.Title) {
 			score -= 20
+		}
+		if t.Image {
+			score -= 30
 		}
 		if t.FileDefault {
 			score += 5

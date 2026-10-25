@@ -33,15 +33,17 @@ func NewHandler(db *sql.DB) *Handler {
 	return &Handler{db: db, transcodes: map[string]*transcode{}}
 }
 
-// one transcode folder per media and audio track, e.g. a2
-var variantRe = regexp.MustCompile(`^a(-1|\d+)$`)
+// one transcode folder per media, audio track and burned in subtitle, e.g. a2 or a2-b5
+var variantRe = regexp.MustCompile(`^a(-1|\d+)(-b\d+)?$`)
 
 /*
 Function:	StreamMedia
 Purpose:	Start (or reuse) the transcode of an episode or movie and return signed playlist and
             subtitle URLs once enough of it exists to play from the optional ?start= position,
             where ffmpeg starts when those segments don't exist yet.
-            ?audio= picks an audio stream, otherwise the user's preferred language is used
+            ?audio= picks an audio stream, otherwise the user's preferred language is used.
+            ?burn= burns an image subtitle into the video, -1 for none; without it one is burned
+            in when it's the subtitle the user's preferences pick
 Params:
   - w: http response writer to respond to the front end
   - r: http request coming from the frontend
@@ -100,11 +102,26 @@ func (h *Handler) StreamMedia(w http.ResponseWriter, r *http.Request) {
 		audioIndex = audio.Index
 	}
 
+	manifest := buildManifest(filePath, probe, audioIndex, -1)
+	if requested := r.URL.Query().Get("burn"); requested != "" {
+		idx, err := strconv.Atoi(requested)
+		if err != nil || (idx != -1 && !imageSubtitle(manifest.Subtitles, idx)) {
+			utils.Error(w, http.StatusBadRequest, "invalid subtitle track")
+			return
+		}
+		manifest.BurnIndex = idx
+	} else if idx := defaultSubtitle(manifest.Subtitles, manifest.AudioLanguage, prefs.Subtitle); imageSubtitle(manifest.Subtitles, idx) {
+		manifest.BurnIndex = idx
+	}
+
 	variant := "a" + strconv.Itoa(audioIndex)
+	if manifest.BurnIndex >= 0 {
+		variant += "-b" + strconv.Itoa(manifest.BurnIndex)
+	}
 	key := mediaType + "-" + mediaID + "-" + variant
 	tempDir := filepath.Join(os.Getenv("MEDIA_ROOT"), "temp", key)
 
-	tc, err := h.getTranscode(key, tempDir, buildManifest(filePath, probe, audioIndex))
+	tc, err := h.getTranscode(key, tempDir, manifest)
 	if utils.InternalError(w, err) {
 		return
 	}
@@ -182,7 +199,7 @@ Params:
   - r: http request coming from the frontend
   - mediaType: episode or movie
   - mediaID: the id of the episode or movie
-  - variant: the transcode folder suffix for the chosen audio, e.g. a2
+  - variant: the transcode folder suffix for the chosen audio and subtitle, e.g. a2-b5
   - manifest: what the transcode contains
   - audio: every audio track in the file
   - prefs: the user's language preferences, used to pick the default subtitle
@@ -200,6 +217,7 @@ func writeStreamURLs(w http.ResponseWriter, r *http.Request, mediaType, mediaID,
 		Playlist:  base + "/" + playlistFile + query,
 		Audio:     []audioResponse{},
 		Subtitles: []subtitleResponse{},
+		Burned:    manifest.BurnIndex,
 	}
 	for _, a := range audio {
 		resp.Audio = append(resp.Audio, audioResponse{
@@ -212,12 +230,17 @@ func writeStreamURLs(w http.ResponseWriter, r *http.Request, mediaType, mediaID,
 
 	defaultIndex := defaultSubtitle(manifest.Subtitles, manifest.AudioLanguage, prefs.Subtitle)
 	for _, s := range manifest.Subtitles {
-		resp.Subtitles = append(resp.Subtitles, subtitleResponse{
-			URL:      base + "/" + s.File + query,
+		sub := subtitleResponse{
+			Index:    s.Index,
+			Burn:     s.Image,
 			Language: s.Language,
 			Label:    s.Label,
 			Default:  s.Index == defaultIndex,
-		})
+		}
+		if !s.Image {
+			sub.URL = base + "/" + s.File + query
+		}
+		resp.Subtitles = append(resp.Subtitles, sub)
 	}
 
 	utils.JSON(w, resp)

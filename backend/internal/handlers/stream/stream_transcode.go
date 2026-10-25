@@ -168,7 +168,7 @@ Purpose:	whether any subtitle file hasn't been extracted yet, e.g. after a resta
 */
 func (tc *transcode) missingSubtitles() bool {
 	for _, s := range tc.manifest.Subtitles {
-		if !fileExists(filepath.Join(tc.dir, s.File)) {
+		if !s.Image && !fileExists(filepath.Join(tc.dir, s.File)) {
 			return true
 		}
 	}
@@ -200,7 +200,7 @@ Params:
 func sameSource(existing, wanted streamManifest) bool {
 	return existing.Source != "" && existing.Source == wanted.Source &&
 		existing.Duration > 0 && existing.Duration == wanted.Duration &&
-		existing.AudioIndex == wanted.AudioIndex
+		existing.AudioIndex == wanted.AudioIndex && existing.BurnIndex == wanted.BurnIndex
 }
 
 /*
@@ -463,11 +463,22 @@ func transcodeArgs(dir string, manifest streamManifest, startSeg int) []string {
 		args = append(args, "-ss", offset)
 	}
 	args = append(args, inputOnlyLocal...)
-	args = append(args, "-i", manifest.Source, "-map", "0:v:0")
+	args = append(args, "-i", manifest.Source)
+
+	filter, codec := encoderArgs(encoder)
+	if manifest.BurnIndex >= 0 {
+		// the subtitle is scaled to the video first, DVD subtitles are often a smaller canvas.
+		// The overlay runs on the CPU before any upload to the GPU
+		args = append(args, "-filter_complex", fmt.Sprintf(
+			"[0:%d][0:v:0]scale2ref[sub][video];[video][sub]overlay=eof_action=pass,%s[out]",
+			manifest.BurnIndex, filter), "-map", "[out]")
+	} else {
+		args = append(args, "-map", "0:v:0", "-vf", filter)
+	}
 	if manifest.AudioIndex >= 0 {
 		args = append(args, "-map", fmt.Sprintf("0:%d", manifest.AudioIndex))
 	}
-	args = append(args, encoderArgs(encoder)...)
+	args = append(args, codec...)
 	args = append(args,
 		// keyframe every segment so HLS can cut there
 		"-force_key_frames", fmt.Sprintf("expr:gte(t,n_forced*%d)", segmentSecs),
@@ -521,25 +532,25 @@ func vaapiDevice() string {
 
 /*
 Function:	encoderArgs
-Purpose:	ffmpeg filter and video encoder arguments for an encoder from transcodeEncoder. All of
-            them cap the bitrate, uncapped AMF output was 9-22 Mbps which stalls over the tunnel
+Purpose:	the video filter an encoder from transcodeEncoder needs, and its encoder arguments.
+            All of them cap the bitrate, uncapped AMF output was 9-22 Mbps which stalls over the tunnel
 Params:
   - encoder: "amf", "vaapi", "nvenc" or "libx264"
 */
-func encoderArgs(encoder string) []string {
+func encoderArgs(encoder string) (string, []string) {
 	rate := []string{"-b:v", "6M", "-maxrate", "8M", "-bufsize", "12M"}
 	switch encoder {
 	case "amf":
 		// forced_idr makes AMF's forced keyframes real cut points, libx264 and VAAPI already do
-		return append([]string{"-vf", "format=yuv420p", "-c:v", "h264_amf", "-rc", "vbr_peak", "-forced_idr", "1"}, rate...)
+		return "format=yuv420p", append([]string{"-c:v", "h264_amf", "-rc", "vbr_peak", "-forced_idr", "1"}, rate...)
 	case "vaapi":
 		// frames are uploaded to the GPU after converting, the encoder only takes GPU surfaces
-		return append([]string{"-vf", "format=nv12,hwupload", "-c:v", "h264_vaapi"}, rate...)
+		return "format=nv12,hwupload", append([]string{"-c:v", "h264_vaapi"}, rate...)
 	case "nvenc":
 		// 8-bit first, h264_nvenc has no 10-bit mode. forced-idr makes the forced keyframes cut points
-		return append([]string{"-vf", "format=yuv420p", "-c:v", "h264_nvenc", "-preset", "p4", "-rc", "vbr", "-forced-idr", "1"}, rate...)
+		return "format=yuv420p", append([]string{"-c:v", "h264_nvenc", "-preset", "p4", "-rc", "vbr", "-forced-idr", "1"}, rate...)
 	default:
-		return append([]string{"-vf", "format=yuv420p", "-c:v", "libx264", "-preset", "veryfast"}, rate...)
+		return "format=yuv420p", append([]string{"-c:v", "libx264", "-preset", "veryfast"}, rate...)
 	}
 }
 

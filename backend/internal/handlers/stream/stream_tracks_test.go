@@ -78,7 +78,7 @@ func pick(streams []probeStream, audioPref, subPref string) (audio, subtitle int
 	if a := selectAudio(streams, audioPref); a != nil {
 		audio = a.Index
 	}
-	m := buildManifest("in.mkv", probeResult{Streams: streams}, audio)
+	m := buildManifest("in.mkv", probeResult{Streams: streams}, audio, -1)
 	return audio, defaultSubtitle(m.Subtitles, m.AudioLanguage, subPref)
 }
 
@@ -96,8 +96,10 @@ func TestTrackSelection(t *testing.T) {
 		{"gamers: japanese audio second, full subs not signs", gamers, "jpn", "eng", 2, 4},
 		{"frieren: japanese default but second", frieren, "jpn", "eng", 2, 4},
 		{"blue box: skips commentary, SDH, dubtitle", blueBox, "jpn", "eng", 1, 4},
-		{"durarara: only text track is signs", durarara, "jpn", "eng", 2, 3},
-		{"no game no life: only image subtitles", noGameNoLife, "jpn", "eng", 1, -1},
+		{"durarara: dialogue only as PGS, burned in over the signs track", durarara, "jpn", "eng", 2, 4},
+		{"no game no life: only image subtitles", noGameNoLife, "jpn", "eng", 1, 3},
+		{"durarara dub: text signs, no image dialogue", durarara, "eng", "eng", 1, 3},
+		{"text dialogue beats image dialogue", append([]probeStream{s(5, "subtitle", "subrip", "eng", "", 0, 0)}, noGameNoLife...), "jpn", "eng", 1, 5},
 		{"english movie: no japanese, only forced signs on", englishMovie, "jpn", "eng", 1, 3},
 
 		// English dub preference
@@ -128,13 +130,24 @@ func TestTrackSelection(t *testing.T) {
 	}
 }
 
-func TestSubtitleTracksSkipsImageFormats(t *testing.T) {
+func TestSubtitleTracksImageFormatsAreBurnOnly(t *testing.T) {
 	tracks := subtitleTracks(durarara)
-	if len(tracks) != 1 || tracks[0].Index != 3 {
-		t.Fatalf("tracks = %+v, want only the ASS track", tracks)
+	if len(tracks) != 2 || tracks[0].Index != 3 || tracks[1].Index != 4 {
+		t.Fatalf("tracks = %+v, want the ASS and PGS tracks", tracks)
 	}
-	if len(subtitleTracks(noGameNoLife)) != 0 {
-		t.Fatal("PGS tracks should not be extracted")
+	if tracks[0].Image || tracks[0].File != "subs_3.vtt" {
+		t.Errorf("ASS track = %+v, want a WebVTT file", tracks[0])
+	}
+	if !tracks[1].Image || tracks[1].File != "" {
+		t.Errorf("PGS track = %+v, want burn only with no file", tracks[1])
+	}
+	if !imageSubtitle(tracks, 4) || imageSubtitle(tracks, 3) || imageSubtitle(tracks, 1) {
+		t.Error("imageSubtitle wrong")
+	}
+
+	other := subtitleTracks([]probeStream{s(2, "subtitle", "eia_608", "eng", "", 0, 0)})
+	if len(other) != 0 {
+		t.Errorf("unsupported codec listed: %+v", other)
 	}
 }
 

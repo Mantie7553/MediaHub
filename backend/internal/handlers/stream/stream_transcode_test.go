@@ -106,7 +106,7 @@ func TestWaitForSegment(t *testing.T) {
 
 func TestTranscodeArgs(t *testing.T) {
 	t.Setenv("TRANSCODE_ENCODER", "amf")
-	args := strings.Join(transcodeArgs("out", streamManifest{Source: "in.mkv", AudioIndex: 2}, 0), " ")
+	args := strings.Join(transcodeArgs("out", streamManifest{Source: "in.mkv", BurnIndex: -1, AudioIndex: 2}, 0), " ")
 	for _, want := range []string{
 		"-map 0:v:0", "-map 0:2", "-b:v 6M", "-maxrate 8M", "-forced_idr 1",
 		"-hls_time 4", "-start_number 0", "-hls_flags temp_file", "-ac 2",
@@ -125,14 +125,14 @@ func TestTranscodeArgs(t *testing.T) {
 		t.Errorf("ffmpeg writes the served playlist: %s", args)
 	}
 
-	resumed := strings.Join(transcodeArgs("out", streamManifest{Source: "in.mkv", AudioIndex: 2}, 150), " ")
+	resumed := strings.Join(transcodeArgs("out", streamManifest{Source: "in.mkv", BurnIndex: -1, AudioIndex: 2}, 150), " ")
 	for _, want := range []string{"-ss 600 -protocol_whitelist file -i in.mkv", "-output_ts_offset 600", "-start_number 150"} {
 		if !strings.Contains(resumed, want) {
 			t.Errorf("resumed args missing %q: %s", want, resumed)
 		}
 	}
 
-	noAudio := strings.Join(transcodeArgs("out", streamManifest{Source: "in.mkv", AudioIndex: -1}, 0), " ")
+	noAudio := strings.Join(transcodeArgs("out", streamManifest{Source: "in.mkv", BurnIndex: -1, AudioIndex: -1}, 0), " ")
 	if strings.Contains(noAudio, "-map 0:-1") {
 		t.Errorf("mapped a missing audio track: %s", noAudio)
 	}
@@ -155,7 +155,7 @@ func TestTranscodeEncoder(t *testing.T) {
 
 	t.Setenv("TRANSCODE_ENCODER", "vaapi")
 	t.Setenv("TRANSCODE_VAAPI_DEVICE", "")
-	args := strings.Join(transcodeArgs("out", streamManifest{Source: "in.mkv", AudioIndex: 1}, 0), " ")
+	args := strings.Join(transcodeArgs("out", streamManifest{Source: "in.mkv", BurnIndex: -1, AudioIndex: 1}, 0), " ")
 	for _, want := range []string{"-vaapi_device /dev/dri/renderD128", "format=nv12,hwupload", "-c:v h264_vaapi", "-maxrate 8M"} {
 		if !strings.Contains(args, want) {
 			t.Errorf("vaapi args missing %q: %s", want, args)
@@ -167,7 +167,7 @@ func TestTranscodeEncoder(t *testing.T) {
 	}
 
 	t.Setenv("TRANSCODE_ENCODER", "nvenc")
-	args = strings.Join(transcodeArgs("out", streamManifest{Source: "in.mkv", AudioIndex: 1}, 0), " ")
+	args = strings.Join(transcodeArgs("out", streamManifest{Source: "in.mkv", BurnIndex: -1, AudioIndex: 1}, 0), " ")
 	for _, want := range []string{"format=yuv420p", "-c:v h264_nvenc", "-forced-idr 1", "-maxrate 8M", "-force_key_frames"} {
 		if !strings.Contains(args, want) {
 			t.Errorf("nvenc args missing %q: %s", want, args)
@@ -178,7 +178,7 @@ func TestTranscodeEncoder(t *testing.T) {
 	}
 
 	t.Setenv("TRANSCODE_ENCODER", "libx264")
-	args = strings.Join(transcodeArgs("out", streamManifest{Source: "in.mkv", AudioIndex: 1}, 0), " ")
+	args = strings.Join(transcodeArgs("out", streamManifest{Source: "in.mkv", BurnIndex: -1, AudioIndex: 1}, 0), " ")
 	for _, want := range []string{"-c:v libx264", "-preset veryfast", "-maxrate 8M", "-force_key_frames"} {
 		if !strings.Contains(args, want) {
 			t.Errorf("libx264 args missing %q: %s", want, args)
@@ -187,6 +187,38 @@ func TestTranscodeEncoder(t *testing.T) {
 	for _, bad := range []string{"-vaapi_device", "-forced_idr", "h264_amf"} {
 		if strings.Contains(args, bad) {
 			t.Errorf("libx264 args contain %q: %s", bad, args)
+		}
+	}
+}
+
+func TestTranscodeArgsBurnIn(t *testing.T) {
+	manifest := streamManifest{Source: "in.mkv", AudioIndex: 1, BurnIndex: 4}
+	for encoder, chain := range map[string]string{
+		"libx264": "overlay=eof_action=pass,format=yuv420p[out]",
+		"nvenc":   "overlay=eof_action=pass,format=yuv420p[out]",
+		// the overlay has to happen before the frames go to the GPU
+		"vaapi": "overlay=eof_action=pass,format=nv12,hwupload[out]",
+	} {
+		t.Setenv("TRANSCODE_ENCODER", encoder)
+		args := strings.Join(transcodeArgs("out", manifest, 0), " ")
+		for _, want := range []string{"-filter_complex [0:4][0:v:0]scale2ref[sub][video];[video][sub]" + chain, "-map [out]", "-map 0:1"} {
+			if !strings.Contains(args, want) {
+				t.Errorf("%s args missing %q: %s", encoder, want, args)
+			}
+		}
+		if strings.Contains(args, "-vf") || strings.Contains(args, "-map 0:v:0") {
+			t.Errorf("%s args use -vf with burn in: %s", encoder, args)
+		}
+	}
+}
+
+func TestVariantRe(t *testing.T) {
+	for v, want := range map[string]bool{
+		"a1": true, "a-1": true, "a2-b5": true, "a-1-b3": true,
+		"a2-b": false, "a2-b-1": false, "b5": false, "a2-b5-b6": false, "a2/b5": false,
+	} {
+		if got := variantRe.MatchString(v); got != want {
+			t.Errorf("variantRe(%q) = %v, want %v", v, got, want)
 		}
 	}
 }
@@ -210,7 +242,7 @@ func TestHwaccelFor(t *testing.T) {
 		t.Errorf("none should disable it, got %q", got)
 	}
 
-	args := strings.Join(transcodeArgs("out", streamManifest{Source: "in.mkv", VideoCodec: "av1", AudioIndex: 1}, 0), " ")
+	args := strings.Join(transcodeArgs("out", streamManifest{Source: "in.mkv", BurnIndex: -1, VideoCodec: "av1", AudioIndex: 1}, 0), " ")
 	if strings.Contains(args, "-hwaccel") {
 		t.Errorf("hwaccel added while disabled: %s", args)
 	}
@@ -251,5 +283,10 @@ func TestGetTranscodeReusesSegments(t *testing.T) {
 	// folders from before playlists were written up front have no source or duration
 	if sameSource(streamManifest{AudioIndex: 1}, manifest) {
 		t.Fatal("old folder treated as the same source")
+	}
+	burned := manifest
+	burned.BurnIndex = 4
+	if sameSource(burned, manifest) {
+		t.Fatal("a burned in subtitle treated as the same transcode")
 	}
 }

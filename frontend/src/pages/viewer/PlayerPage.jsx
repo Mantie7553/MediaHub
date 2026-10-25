@@ -21,13 +21,16 @@ export default function PlayerPage() {
     const [playlistUrl, setPlaylistUrl] = useState(null);
     // [{ index, label, language, selected }]
     const [audioTracks, setAudioTracks] = useState([]);
-    // [{ url, label, language }]
+    // [{ index, url, burn, label, language }], url is null for image tracks that can only be burned in
     const [subtitles, setSubtitles] = useState([]);
     // subtitle url -> downloaded file (object URL) once it exists
     const [subtitleFiles, setSubtitleFiles] = useState({});
     // index into subtitles, -1 for off
     const [selectedSubtitle, setSelectedSubtitle] = useState(-1);
-    const [switchingAudio, setSwitchingAudio] = useState(false);
+    // stream index of the subtitle burned into the current stream, -1 for none
+    const [burned, setBurned] = useState(-1);
+    // what's being switched while a new stream starts, e.g. "Switching audio…"
+    const [switching, setSwitching] = useState("");
     const [prefsMessage, setPrefsMessage] = useState("");
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -77,21 +80,27 @@ export default function PlayerPage() {
 
     // returns signed playlist/subtitle URLs, the media token in them expires after ~2 hours.
     // start makes the server wait until the transcode reaches that point, audio picks the
-    // track (otherwise the user's preferred language). keepSubtitle keeps the current choice
-    function fetchStream(start = 0, audio = null, keepSubtitle = undefined) {
+    // track (otherwise the user's preferred language). keepSubtitle keeps the current choice.
+    // burn is the image subtitle to burn into the video (-1 none), otherwise the server burns
+    // one in when the user's preferences pick it
+    function fetchStream(start = 0, audio = null, keepSubtitle = undefined, burn = undefined) {
         const params = {}
         if (start > 0) params.start = Math.floor(start)
         if (audio !== null) params.audio = audio
+        if (burn !== undefined) params.burn = burn
 
         return api.get(`/stream/media/${type}/${id}`, { params })
             .then(res => {
                 const tracks = (res.data.subtitles ?? []).map(t => ({
-                    url: `${baseURL}${t.url}`,
+                    index: t.index,
+                    url: t.url ? `${baseURL}${t.url}` : null,
+                    burn: t.burn,
                     label: t.label,
                     language: t.language,
                 }))
                 setAudioTracks(res.data.audio ?? [])
                 setSubtitles(tracks)
+                setBurned(res.data.burned ?? -1)
 
                 if (keepSubtitle === undefined) {
                     setSelectedSubtitle((res.data.subtitles ?? []).findIndex(t => t.default))
@@ -107,13 +116,14 @@ export default function PlayerPage() {
     }
 
     // the current choices, for the token remint handler which is set up once per playlist
-    const choicesRef = useRef({ audio: null, subtitle: null })
+    const choicesRef = useRef({ audio: null, subtitle: null, burn: -1 })
     useEffect(() => {
         choicesRef.current = {
             audio: audioTracks.find(a => a.selected)?.index ?? null,
             subtitle: selectedSubtitle >= 0 ? subtitles[selectedSubtitle]?.label ?? null : null,
+            burn: burned,
         }
-    }, [audioTracks, subtitles, selectedSubtitle])
+    }, [audioTracks, subtitles, selectedSubtitle, burned])
 
     useEffect(() => {
         fetchStream(initialPosition)
@@ -182,7 +192,7 @@ export default function PlayerPage() {
             hls.attachMedia(video)
             hls.on(Hls.Events.MANIFEST_PARSED, () => {
                 ignoreTrackChangesRef.current = false
-                setSwitchingAudio(false)
+                setSwitching("")
                 // reloaded with a fresh token, put playback back where it was
                 if (resume) {
                     video.currentTime = resume.position
@@ -205,8 +215,8 @@ export default function PlayerPage() {
                 }
                 reminted = true
                 resume = { position: video.currentTime, playing: !video.paused }
-                const { audio, subtitle } = choicesRef.current
-                fetchStream(video.currentTime, audio, subtitle)
+                const { audio, subtitle, burn } = choicesRef.current
+                fetchStream(video.currentTime, audio, subtitle, burn)
                     .then(url => {
                         if (!destroyed) hls.loadSource(url)
                     })
@@ -223,26 +233,51 @@ export default function PlayerPage() {
     }, [playlistUrl])
 
     /**
-     * Restart playback with another audio track, from the current position.
-     * Each audio track is its own transcode on the server
+     * Restart playback from the current position with another audio track or burned in
+     * subtitle. Each combination is its own transcode on the server. Returns whether it worked
      */
-    function switchAudio(index) {
+    function restartStream(audio, burn, keepSubtitle, message) {
         const video = videoRef.current
-        if (!video) return
+        if (!video) return Promise.resolve(false)
         startAtRef.current = video.currentTime
         autoplayRef.current = !video.paused
         ignoreTrackChangesRef.current = true
-        setSwitchingAudio(true)
+        setSwitching(message)
         setPrefsMessage("")
 
-        fetchStream(video.currentTime, index, currentSubtitleLabel())
-            .then(setPlaylistUrl)
-            .catch(err => {
-                // the current audio keeps playing, so this doesn't need to stop playback
-                setSwitchingAudio(false)
-                ignoreTrackChangesRef.current = false
-                toast.error(err, "Could not switch the audio track")
+        return fetchStream(video.currentTime, audio, keepSubtitle, burn)
+            .then(url => {
+                setPlaylistUrl(url)
+                return true
             })
+            .catch(err => {
+                // the current stream keeps playing, so this doesn't need to stop playback
+                setSwitching("")
+                ignoreTrackChangesRef.current = false
+                toast.error(err, message === "Switching audio…" ? "Could not switch the audio track" : "Could not change the subtitles")
+                return false
+            })
+    }
+
+    function switchAudio(index) {
+        restartStream(index, burned, currentSubtitleLabel(), "Switching audio…")
+    }
+
+    /**
+     * Show a subtitle track (-1 for off). Text tracks switch straight away, an image track
+     * has to be burned into the video, so going to or from one restarts the stream
+     */
+    function chooseSubtitle(i) {
+        const previous = selectedSubtitle
+        const track = subtitles[i]
+        const burn = track?.burn ? track.index : -1
+        setSelectedSubtitle(i)
+        setPrefsMessage("")
+        if (burn === burned) return
+
+        const audio = audioTracks.find(a => a.selected)?.index ?? null
+        restartStream(audio, burn, track?.label ?? null, "Switching subtitles…")
+            .then(ok => { if (!ok) setSelectedSubtitle(previous) })
     }
 
     /**
@@ -273,7 +308,7 @@ export default function PlayerPage() {
         const controller = new AbortController()
         const created = []
 
-        subtitles.forEach(t => {
+        subtitles.filter(t => t.url).forEach(t => {
             (async () => {
                 for (let attempt = 0; attempt < 30 && !controller.signal.aborted; attempt++) {
                     try {
@@ -330,17 +365,17 @@ export default function PlayerPage() {
                 // the chosen track is still downloading
                 applySubtitleSelection()
             } else if (showing.length === 1 && showing[0] !== selectedElement) {
-                setSelectedSubtitle(subtitles.findIndex(t => t.url === showing[0].dataset.url))
+                chooseSubtitle(subtitles.findIndex(t => t.url === showing[0].dataset.url))
             } else if (showing.length === 0 && selectedElement) {
-                setSelectedSubtitle(-1)
+                chooseSubtitle(-1)
             } else if (showing.length > 1) {
                 applySubtitleSelection()
             }
         }
         textTracks.addEventListener("change", onChange)
         return () => textTracks.removeEventListener("change", onChange)
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- applySubtitleSelection reads the same state listed here
-    }, [loading, subtitles, subtitleFiles, selectedSubtitle])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- applySubtitleSelection and chooseSubtitle read the same state listed here
+    }, [loading, subtitles, subtitleFiles, selectedSubtitle, burned, audioTracks])
 
     // save progress every 5 seconds and on unmount
     useEffect(() => {
@@ -496,7 +531,7 @@ export default function PlayerPage() {
                             <select
                                 className="select select-sm w-full"
                                 value={selectedAudio?.index ?? ""}
-                                disabled={audioTracks.length < 2 || switchingAudio}
+                                disabled={audioTracks.length < 2 || switching !== ""}
                                 onChange={e => switchAudio(Number(e.target.value))}
                             >
                                 {audioTracks.length === 0 && <option value="">No audio</option>}
@@ -504,26 +539,27 @@ export default function PlayerPage() {
                                     <option key={a.index} value={a.index}>{a.label}</option>
                                 ))}
                             </select>
-                            {switchingAudio && <span className="text-xs text-base-content/60 flex items-center gap-2">
-                                <span className="loading loading-spinner loading-xs"></span> Switching audio…
-                            </span>}
                         </label>
                         <label className="flex flex-col gap-1.5">
                             <span className="text-xs font-medium uppercase tracking-wider text-base-content/50">Subtitles</span>
                             <select
                                 className="select select-sm w-full"
                                 value={selectedSubtitle}
-                                onChange={e => { setSelectedSubtitle(Number(e.target.value)); setPrefsMessage("") }}
+                                disabled={switching !== ""}
+                                onChange={e => chooseSubtitle(Number(e.target.value))}
                             >
                                 <option value={-1}>Off</option>
                                 {subtitles.map((t, i) => (
-                                    <option key={t.url} value={i}>{t.label}</option>
+                                    <option key={t.index} value={i}>{t.burn ? `${t.label} (burned in)` : t.label}</option>
                                 ))}
                             </select>
                             {subtitles.length === 0 && (
-                                <span className="text-xs text-base-content/60">This video has no text subtitles</span>
+                                <span className="text-xs text-base-content/60">This video has no subtitles</span>
                             )}
                         </label>
+                        {switching && <span className="text-xs text-base-content/60 flex items-center gap-2">
+                            <span className="loading loading-spinner loading-xs"></span> {switching}
+                        </span>}
                         <button className="btn btn-sm btn-primary" onClick={saveAsDefault}>
                             Use these languages by default
                         </button>
@@ -559,7 +595,7 @@ export default function PlayerPage() {
                 crossOrigin="anonymous"
                 className={`w-full h-full max-h-full object-contain ${loading ? "invisible" : ""}`}
             >
-                {subtitles.filter(t => subtitleFiles[t.url]).map(t => (
+                {subtitles.filter(t => t.url && subtitleFiles[t.url]).map(t => (
                     <track
                         key={t.url}
                         data-url={t.url}

@@ -34,10 +34,12 @@ type audioTrack struct {
 	Label    string
 }
 
-// subtitle track extracted to WebVTT for the player
+// subtitle track: a text one extracted to WebVTT for the player, or an image one (PGS,
+// VobSub) that can only be burned into the video
 type subtitleTrack struct {
 	Index       int    `json:"index"`
-	File        string `json:"file"`
+	File        string `json:"file"` // empty for image tracks
+	Image       bool   `json:"image"`
 	Language    string `json:"language"`
 	Label       string `json:"label"`
 	Title       string `json:"title"`
@@ -52,6 +54,7 @@ type streamManifest struct {
 	VideoCodec    string          `json:"video_codec"`
 	AudioIndex    int             `json:"audio_index"`
 	AudioLanguage string          `json:"audio_language"`
+	BurnIndex     int             `json:"burn_index"` // image subtitle drawn into the video, -1 for none
 	Subtitles     []subtitleTrack `json:"subtitles"`
 }
 
@@ -68,7 +71,9 @@ type audioResponse struct {
 }
 
 type subtitleResponse struct {
-	URL      string `json:"url"`
+	Index    int    `json:"index"`
+	URL      string `json:"url,omitempty"` // empty for tracks that can only be burned in
+	Burn     bool   `json:"burn"`
 	Language string `json:"language"`
 	Label    string `json:"label"`
 	Default  bool   `json:"default"`
@@ -78,4 +83,5 @@ type streamResponse struct {
 	Playlist  string             `json:"playlist"`
 	Audio     []audioResponse    `json:"audio"`
 	Subtitles []subtitleResponse `json:"subtitles"`
+	Burned    int                `json:"burned"` // the subtitle burned into this stream, -1 for none
 }
