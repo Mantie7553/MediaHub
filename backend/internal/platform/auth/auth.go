@@ -153,10 +153,23 @@ Purpose:	note that a user just signed in or refreshed their session, and that th
 today, for the Insights page. A failure only leaves these stale, so it doesn't fail the sign in
 */
 func touchLastSeen(db *sql.DB, userID string) {
+	db.Exec(`UPDATE users SET last_seen_at = NOW() WHERE id = $1`, userID)
+	MarkActiveToday(db, userID)
+}
+
+/*
+Function:	MarkActiveToday
+Purpose:	note that a user was around today, for the Insights activity chart. Called on sign in
+and whenever something is watched, read or played. A failure only leaves the chart short, so
+callers don't fail over it
+Params:
+  - db: a connection to the database
+  - userID: the user
+*/
+func MarkActiveToday(db *sql.DB, userID string) {
 	db.Exec(
-		`WITH seen AS (UPDATE users SET last_seen_at = NOW() WHERE id = $1 RETURNING id)
-		INSERT INTO user_active_days (user_id, day)
-		SELECT id, CURRENT_DATE FROM seen
+		`INSERT INTO user_active_days (user_id, day)
+		SELECT id, CURRENT_DATE FROM users WHERE id = $1
 		ON CONFLICT DO NOTHING`,
 		userID,
 	)

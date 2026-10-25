@@ -1,6 +1,7 @@
 package media
 
 import (
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -79,5 +80,20 @@ func TestCoverClientRedirects(t *testing.T) {
 
 	if coverClient.CheckRedirect == nil || coverClient.Timeout == 0 {
 		t.Fatal("coverClient must set a redirect policy and timeout")
+	}
+}
+
+func TestWatchedSeconds(t *testing.T) {
+	for _, tt := range []struct{ in, want float64 }{
+		{4.75, 4.75},
+		{0, 0},
+		{-3, 0},
+		{math.NaN(), 0},
+		{math.Inf(1), maxWatchedPerSave},
+		{600, maxWatchedPerSave},
+	} {
+		if got := watchedSeconds(tt.in); got != tt.want {
+			t.Errorf("watchedSeconds(%v) = %v, want %v", tt.in, got, tt.want)
+		}
 	}
 }

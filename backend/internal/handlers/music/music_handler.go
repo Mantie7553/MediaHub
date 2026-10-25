@@ -367,5 +367,6 @@ func (h *Handler) RecordPlay(w http.ResponseWriter, r *http.Request) {
 		utils.Error(w, http.StatusNotFound, "track not found")
 		return
 	}
+	auth.MarkActiveToday(h.db, user.UserID)
 	w.WriteHeader(http.StatusNoContent)
 }

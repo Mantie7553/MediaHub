@@ -9,6 +9,7 @@ import { keyForFocused } from "../../utils/keys"
 import useDocumentTitle from "../../hooks/useDocumentTitle"
 import useAssRenderer from "../../hooks/useAssRenderer"
 import { subtitleMode } from "../../utils/subtitles"
+import { watchedBetween } from "../../utils/watchTime"
 import { ArrowLeft, Languages, SkipBack, SkipForward, X } from "lucide-react"
 
 // how long the next episode waits after one ends, and how far the arrow keys skip
@@ -421,34 +422,56 @@ export default function PlayerPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- applySubtitleSelection and chooseSubtitle read the same state listed here
     }, [loading, subtitles, subtitleFiles, selectedSubtitle, burned, audioTracks, mode])
 
-    // save progress every 5 seconds and on unmount
+    // save progress every 5 seconds, on pause, when the page is hidden or closed, and on
+    // unmount, with the seconds actually watched since the last save (for Insights)
     useEffect(() => {
+        const video = videoRef.current
+        let last = null
+        let watched = 0
+
+        function onTimeUpdate() {
+            if (!video.paused && !video.seeking) watched += watchedBetween(last, video.currentTime)
+            last = video.currentTime
+        }
+
         function updateRefs() {
-            const video = videoRef.current
             if (video) {
                 positionRef.current = video.currentTime
                 durationRef.current = video.duration || durationRef.current
             }
         }
 
-        function saveProgress() {
+        // keepalive lets the request finish while the page is closing
+        function saveProgress(keepalive = false) {
+            updateRefs()
             if (positionRef.current <= 0) return
             const endpoint = type === "movie" ? `/movies/${id}/progress` : `/episodes/${id}/progress`
+            const sent = watched
+            watched = 0
             api.put(endpoint, {
                 position_secs: positionRef.current,
                 duration_secs: durationRef.current,
-            }).catch(() => {})
+                watched_secs: sent,
+            }, keepalive ? { adapter: "fetch", fetchOptions: { keepalive: true } } : undefined)
+                .catch(() => { watched += sent })
         }
 
-        saveIntervalRef.current = setInterval(() => {
-            updateRefs()
-            saveProgress()
-        }, 5000)
+        const onPause = () => saveProgress()
+        const onVisibility = () => { if (document.visibilityState === "hidden") saveProgress(true) }
+        const onPageHide = () => saveProgress(true)
+        video?.addEventListener("timeupdate", onTimeUpdate)
+        video?.addEventListener("pause", onPause)
+        document.addEventListener("visibilitychange", onVisibility)
+        window.addEventListener("pagehide", onPageHide)
+        saveIntervalRef.current = setInterval(saveProgress, 5000)
 
         return () => {
             clearInterval(saveIntervalRef.current)
-            updateRefs()
-            saveProgress()
+            video?.removeEventListener("timeupdate", onTimeUpdate)
+            video?.removeEventListener("pause", onPause)
+            document.removeEventListener("visibilitychange", onVisibility)
+            window.removeEventListener("pagehide", onPageHide)
+            saveProgress(true)
         }
     }, [type, id])
 

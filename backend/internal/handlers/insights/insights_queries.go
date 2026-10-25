@@ -11,22 +11,28 @@ const window = "30 days"
 /*
 Function:	topWatched
 Purpose:	the anime and movies the most people watched in the window, with how many
-episodes were started and the hours watched (from saved positions, so roughly)
+episodes were started and the hours actually played (counted since 2026-10-24)
 */
 func topWatched(db *sql.DB) ([]topTitle, error) {
 	rows, err := db.Query(`
 		WITH watch AS (
-			SELECT e.media_item_id, p.user_id, p.position_secs, p.updated_at
+			SELECT e.media_item_id, p.user_id, p.updated_at
 			FROM user_episode_progress p
 			JOIN episodes e ON e.id = p.episode_id
 			UNION ALL
-			SELECT media_item_id, user_id, position_secs, updated_at
+			SELECT media_item_id, user_id, updated_at
 			FROM user_movie_progress
+		), played AS (
+			SELECT media_item_id, SUM(seconds) AS seconds
+			FROM watch_time
+			WHERE day > CURRENT_DATE - INTERVAL '` + window + `'
+			GROUP BY media_item_id
 		)
 		SELECT mi.id, mi.type, mi.title, COUNT(DISTINCT w.user_id), COUNT(*),
-			COALESCE(SUM(w.position_secs), 0) / 3600.0
+			COALESCE(MAX(p.seconds), 0) / 3600.0
 		FROM watch w
 		JOIN media_items mi ON mi.id = w.media_item_id
+		LEFT JOIN played p ON p.media_item_id = w.media_item_id
 		WHERE w.updated_at > NOW() - INTERVAL '` + window + `'
 		GROUP BY mi.id, mi.type, mi.title
 		ORDER BY 4 DESC, 6 DESC
