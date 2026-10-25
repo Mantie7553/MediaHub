@@ -92,7 +92,7 @@ func (h *Handler) getTranscode(key, dir string, manifest streamManifest) (*trans
 	}
 
 	if tc.missingSubtitles() {
-		go extractSubtitles(tc.manifest.Source, dir, tc.manifest.Subtitles)
+		go extractSubtitles(dir, tc.manifest)
 	}
 	h.transcodes[key] = tc
 	return tc, nil
@@ -164,11 +164,19 @@ func (tc *transcode) create() error {
 
 /*
 Function:	missingSubtitles
-Purpose:	whether any subtitle file hasn't been extracted yet, e.g. after a restart of the server
+Purpose:	whether any subtitle or font file hasn't been extracted yet, e.g. after a restart of the server
 */
 func (tc *transcode) missingSubtitles() bool {
 	for _, s := range tc.manifest.Subtitles {
 		if !s.Image && !fileExists(filepath.Join(tc.dir, s.File)) {
+			return true
+		}
+		if s.AssFile != "" && !fileExists(filepath.Join(tc.dir, s.AssFile)) {
+			return true
+		}
+	}
+	for _, f := range tc.manifest.Fonts {
+		if !fileExists(filepath.Join(tc.dir, f.File)) {
 			return true
 		}
 	}
@@ -579,14 +587,23 @@ func hwaccelFor(codec string) string {
 
 /*
 Function:	extractSubtitles
-Purpose:	convert the chosen subtitle tracks to WebVTT in one pass over the file. Each is written
-            to a .tmp file and renamed when complete so the player never loads half a file
+Purpose:	extract the attached fonts, then convert the text subtitle tracks to WebVTT (and keep
+            ASS tracks as ASS too) in one pass over the file. Each file is written to .tmp and
+            renamed when complete so the player never loads half a file
 Params:
-  - filePath: the source file
   - dir: the transcode folder
-  - subs: the tracks to extract
+  - manifest: the source file, its subtitle tracks and fonts
 */
-func extractSubtitles(filePath, dir string, subs []subtitleTrack) {
+func extractSubtitles(dir string, manifest streamManifest) {
+	filePath := manifest.Source
+	extractFonts(filePath, dir, manifest.Fonts)
+
+	var subs []subtitleTrack
+	for _, s := range manifest.Subtitles {
+		if !s.Image {
+			subs = append(subs, s)
+		}
+	}
 	if len(subs) == 0 {
 		return
 	}
@@ -597,6 +614,10 @@ func extractSubtitles(filePath, dir string, subs []subtitleTrack) {
 		for _, s := range tracks {
 			args = append(args, "-map", fmt.Sprintf("0:%d", s.Index), "-c:s", "webvtt", "-f", "webvtt",
 				filepath.Join(dir, s.File+".tmp"))
+			if s.AssFile != "" {
+				args = append(args, "-map", fmt.Sprintf("0:%d", s.Index), "-c:s", "ass", "-f", "ass",
+					filepath.Join(dir, s.AssFile+".tmp"))
+			}
 		}
 		out, err := exec.Command("ffmpeg", args...).CombinedOutput()
 		if err != nil {
@@ -616,6 +637,9 @@ func extractSubtitles(filePath, dir string, subs []subtitleTrack) {
 	}
 
 	for _, s := range subs {
+		if s.AssFile != "" {
+			os.Rename(filepath.Join(dir, s.AssFile+".tmp"), filepath.Join(dir, s.AssFile))
+		}
 		tmp := filepath.Join(dir, s.File+".tmp")
 		data, err := os.ReadFile(tmp)
 		if err != nil {
@@ -625,6 +649,33 @@ func extractSubtitles(filePath, dir string, subs []subtitleTrack) {
 			continue
 		}
 		os.Rename(tmp, filepath.Join(dir, s.File))
+	}
+}
+
+/*
+Function:	extractFonts
+Purpose:	write the fonts attached to a file into the transcode folder, for rendering ASS subtitles
+Params:
+  - filePath: the source file
+  - dir: the transcode folder
+  - fonts: the attachments to extract
+*/
+func extractFonts(filePath, dir string, fonts []fontFile) {
+	if len(fonts) == 0 {
+		return
+	}
+	args := []string{"-v", "error", "-y"}
+	for _, f := range fonts {
+		args = append(args, fmt.Sprintf("-dump_attachment:%d", f.Index), filepath.Join(dir, f.File+".tmp"))
+	}
+	args = append(args, inputOnlyLocal...)
+	// dumping happens on opening the input, nothing needs decoding
+	args = append(args, "-i", filePath, "-t", "0", "-f", "null", "-")
+	if out, err := exec.Command("ffmpeg", args...).CombinedOutput(); err != nil {
+		logger.Warn("font extraction in %s failed: %v: %s", dir, err, strings.TrimSpace(string(out)))
+	}
+	for _, f := range fonts {
+		os.Rename(filepath.Join(dir, f.File+".tmp"), filepath.Join(dir, f.File))
 	}
 }
 

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -26,6 +27,12 @@ var textSubtitleCodecs = map[string]bool{
 	"ass": true, "ssa": true, "subrip": true, "srt": true,
 	"mov_text": true, "webvtt": true, "text": true,
 }
+
+// subtitle codecs kept as they are for rendering in the browser, with their styling and positions
+var assSubtitleCodecs = map[string]bool{"ass": true, "ssa": true}
+
+// font files an ASS track can use, by extension
+var fontExtensions = map[string]bool{".ttf": true, ".otf": true, ".ttc": true, ".woff": true, ".woff2": true}
 
 // image based subtitles, which can't become WebVTT but can be burned into the video
 var imageSubtitleCodecs = map[string]bool{
@@ -53,7 +60,7 @@ Params:
 func probeStreams(filePath string) (probeResult, error) {
 	args := append([]string{"-v", "error"}, inputOnlyLocal...)
 	out, err := exec.Command("ffprobe", append(args,
-		"-show_entries", "stream=index,codec_type,codec_name:stream_tags=language,title:stream_disposition=default,forced:format=duration",
+		"-show_entries", "stream=index,codec_type,codec_name:stream_tags=language,title,filename,mimetype:stream_disposition=default,forced:format=duration",
 		"-of", "json",
 		filePath,
 	)...).Output()
@@ -193,13 +200,17 @@ func subtitleTracks(streams []probeStream) []subtitleTrack {
 		if s.CodecType != "subtitle" || (!textSubtitleCodecs[s.CodecName] && !image) {
 			continue
 		}
-		file := ""
+		file, assFile := "", ""
 		if !image {
 			file = fmt.Sprintf("subs_%d.vtt", s.Index)
+		}
+		if assSubtitleCodecs[s.CodecName] {
+			assFile = fmt.Sprintf("subs_%d.ass", s.Index)
 		}
 		tracks = append(tracks, subtitleTrack{
 			Index:       s.Index,
 			File:        file,
+			AssFile:     assFile,
 			Image:       image,
 			Language:    s.Tags.Language,
 			Label:       trackLabel(s),
@@ -209,6 +220,42 @@ func subtitleTracks(streams []probeStream) []subtitleTrack {
 		})
 	}
 	return tracks
+}
+
+/*
+Function:	fontFiles
+Purpose:	the fonts attached to a file, which ASS subtitles are styled with. Only extracted
+            when there is an ASS track to use them
+Params:
+  - streams: the file's streams from ffprobe
+  - subs: the file's subtitle tracks
+*/
+func fontFiles(streams []probeStream, subs []subtitleTrack) []fontFile {
+	fonts := []fontFile{}
+	hasASS := false
+	for _, s := range subs {
+		hasASS = hasASS || s.AssFile != ""
+	}
+	if !hasASS {
+		return fonts
+	}
+
+	for _, s := range streams {
+		if s.CodecType != "attachment" {
+			continue
+		}
+		ext := strings.ToLower(filepath.Ext(s.Tags.Filename))
+		if !fontExtensions[ext] {
+			// a font with an odd name: the renderer reads the format from the file itself
+			mime := strings.ToLower(s.Tags.Mimetype)
+			if !strings.Contains(mime, "font") && !strings.Contains(mime, "opentype") {
+				continue
+			}
+			ext = ".ttf"
+		}
+		fonts = append(fonts, fontFile{Index: s.Index, File: fmt.Sprintf("font_%d%s", s.Index, ext)})
+	}
+	return fonts
 }
 
 /*
@@ -228,6 +275,7 @@ func buildManifest(filePath string, probe probeResult, audioIndex, burnIndex int
 		BurnIndex:  burnIndex,
 		Subtitles:  subtitleTracks(probe.Streams),
 	}
+	manifest.Fonts = fontFiles(probe.Streams, manifest.Subtitles)
 	for _, s := range probe.Streams {
 		if s.CodecType == "video" && manifest.VideoCodec == "" {
 			manifest.VideoCodec = s.CodecName

@@ -7,6 +7,8 @@ import { toast } from "../../stores/useToastStore"
 import { exitViewer, switchViewer } from "../../utils/navigation"
 import { keyForFocused } from "../../utils/keys"
 import useDocumentTitle from "../../hooks/useDocumentTitle"
+import useAssRenderer from "../../hooks/useAssRenderer"
+import { subtitleMode } from "../../utils/subtitles"
 import { ArrowLeft, Languages, SkipBack, SkipForward, X } from "lucide-react"
 
 // how long the next episode waits after one ends, and how far the arrow keys skip
@@ -21,10 +23,18 @@ export default function PlayerPage() {
     const [playlistUrl, setPlaylistUrl] = useState(null);
     // [{ index, label, language, selected }]
     const [audioTracks, setAudioTracks] = useState([]);
-    // [{ index, url, burn, label, language }], url is null for image tracks that can only be burned in
+    // [{ index, url, assUrl, burn, label, language }], url is null for image tracks that can
+    // only be burned in, assUrl is set for ASS tracks that can be shown with their styling
     const [subtitles, setSubtitles] = useState([]);
     // subtitle url -> downloaded file (object URL) once it exists
     const [subtitleFiles, setSubtitleFiles] = useState({});
+    // ASS url -> the file's text once downloaded, and the ones the renderer failed on
+    const [assFiles, setAssFiles] = useState({});
+    const [assFailed, setAssFailed] = useState({});
+    // URLs of the fonts attached to the video, for ASS
+    const [fonts, setFonts] = useState([]);
+    // the <video> itself is fullscreen (its own button), so nothing can be drawn over it
+    const [videoFullscreen, setVideoFullscreen] = useState(false);
     // index into subtitles, -1 for off
     const [selectedSubtitle, setSelectedSubtitle] = useState(-1);
     // stream index of the subtitle burned into the current stream, -1 for none
@@ -94,6 +104,7 @@ export default function PlayerPage() {
                 const tracks = (res.data.subtitles ?? []).map(t => ({
                     index: t.index,
                     url: t.url ? `${baseURL}${t.url}` : null,
+                    assUrl: t.ass_url ? `${baseURL}${t.ass_url}` : null,
                     burn: t.burn,
                     label: t.label,
                     language: t.language,
@@ -101,6 +112,7 @@ export default function PlayerPage() {
                 setAudioTracks(res.data.audio ?? [])
                 setSubtitles(tracks)
                 setBurned(res.data.burned ?? -1)
+                setFonts((res.data.fonts ?? []).map(f => `${baseURL}${f}`))
 
                 if (keepSubtitle === undefined) {
                     setSelectedSubtitle((res.data.subtitles ?? []).findIndex(t => t.default))
@@ -303,28 +315,34 @@ export default function PlayerPage() {
 
     // subtitle files are written a few seconds after the playlist is ready on a first play.
     // Download them here, retrying until they exist, and only render a <track> once its file
-    // is here: a <track> that fails to load never retries, even if it gets a new src later
+    // is here: a <track> that fails to load never retries, even if it gets a new src later.
+    // ASS files are kept as text for the renderer
     useEffect(() => {
         const controller = new AbortController()
         const created = []
 
-        subtitles.filter(t => t.url).forEach(t => {
-            (async () => {
-                for (let attempt = 0; attempt < 30 && !controller.signal.aborted; attempt++) {
-                    try {
-                        const res = await fetch(t.url, { signal: controller.signal })
-                        if (res.ok) {
-                            const blobUrl = URL.createObjectURL(new Blob([await res.text()], { type: "text/vtt" }))
-                            created.push(blobUrl)
-                            setSubtitleFiles(files => ({ ...files, [t.url]: blobUrl }))
-                            return
-                        }
-                    } catch {
-                        if (controller.signal.aborted) return
+        async function download(url, done) {
+            for (let attempt = 0; attempt < 30 && !controller.signal.aborted; attempt++) {
+                try {
+                    const res = await fetch(url, { signal: controller.signal })
+                    if (res.ok) {
+                        done(await res.text())
+                        return
                     }
-                    await new Promise(r => setTimeout(r, 2000))
+                } catch {
+                    if (controller.signal.aborted) return
                 }
-            })()
+                await new Promise(r => setTimeout(r, 2000))
+            }
+        }
+
+        subtitles.forEach(t => {
+            if (t.url) download(t.url, text => {
+                const blobUrl = URL.createObjectURL(new Blob([text], { type: "text/vtt" }))
+                created.push(blobUrl)
+                setSubtitleFiles(files => ({ ...files, [t.url]: blobUrl }))
+            })
+            if (t.assUrl) download(t.assUrl, text => setAssFiles(files => ({ ...files, [t.assUrl]: text })))
         })
 
         return () => {
@@ -333,19 +351,39 @@ export default function PlayerPage() {
         }
     }, [subtitles])
 
-    // show only the selected subtitle track. <track> elements only exist for downloaded files,
-    // so match them to the menu by url rather than position
+    // how the chosen track is shown: burned in, rendered from its ASS file, or as a <track>
+    const selectedTrack = subtitles[selectedSubtitle] ?? null
+    const mode = subtitleMode(selectedTrack, {
+        assReady: !!assFiles[selectedTrack?.assUrl],
+        assFailed: !!assFailed[selectedTrack?.assUrl],
+        videoFullscreen,
+    })
+    const assCanvasRef = useRef(null)
+    const assContent = mode === "ass" ? assFiles[selectedTrack.assUrl] : null
+    useAssRenderer(videoRef, assCanvasRef, assContent, fonts, err => {
+        console.warn("ASS subtitles could not be shown, using plain ones", err)
+        setAssFailed(failed => ({ ...failed, [selectedTrack?.assUrl]: true }))
+    })
+
+    useEffect(() => {
+        const onChange = () => setVideoFullscreen(!!videoRef.current && document.fullscreenElement === videoRef.current)
+        document.addEventListener("fullscreenchange", onChange)
+        return () => document.removeEventListener("fullscreenchange", onChange)
+    }, [])
+
+    // show only the selected subtitle track, when it's shown as a <track>. <track> elements only
+    // exist for downloaded files, so match them to the menu by url rather than position
     function applySubtitleSelection() {
         const video = videoRef.current
         if (!video) return
-        const selectedUrl = subtitles[selectedSubtitle]?.url
+        const selectedUrl = mode === "vtt" ? subtitles[selectedSubtitle]?.url : null
         video.querySelectorAll("track").forEach(el => {
-            const mode = el.dataset.url === selectedUrl ? "showing" : "disabled"
-            if (el.track.mode !== mode) el.track.mode = mode
+            const trackMode = el.dataset.url === selectedUrl ? "showing" : "disabled"
+            if (el.track.mode !== trackMode) el.track.mode = trackMode
         })
     }
 
-    useEffect(applySubtitleSelection, [subtitles, subtitleFiles, selectedSubtitle])
+    useEffect(applySubtitleSelection, [subtitles, subtitleFiles, selectedSubtitle, mode])
 
     // keep the menu in sync when the browser's own captions button is used. The browser also
     // turns tracks on by itself as they're added, so only a single different track (or none)
@@ -356,6 +394,12 @@ export default function PlayerPage() {
         const textTracks = video.textTracks
         function onChange() {
             if (ignoreTrackChangesRef.current) return
+            // a burned in or ASS track isn't one of the browser's, so its captions menu can't
+            // tell what's showing: keep the menu's choice
+            if (mode === "burn" || mode === "ass") {
+                applySubtitleSelection()
+                return
+            }
             const elements = Array.from(video.querySelectorAll("track"))
             const showing = elements.filter(el => el.track.mode === "showing")
             const selectedUrl = subtitles[selectedSubtitle]?.url
@@ -375,7 +419,7 @@ export default function PlayerPage() {
         textTracks.addEventListener("change", onChange)
         return () => textTracks.removeEventListener("change", onChange)
     // eslint-disable-next-line react-hooks/exhaustive-deps -- applySubtitleSelection and chooseSubtitle read the same state listed here
-    }, [loading, subtitles, subtitleFiles, selectedSubtitle, burned, audioTracks])
+    }, [loading, subtitles, subtitleFiles, selectedSubtitle, burned, audioTracks, mode])
 
     // save progress every 5 seconds and on unmount
     useEffect(() => {
@@ -606,6 +650,8 @@ export default function PlayerPage() {
                     />
                 ))}
             </video>
+            {/* a new canvas for each file, a canvas can only be given to one renderer */}
+            {assContent && <canvas key={selectedTrack.assUrl} ref={assCanvasRef} className="absolute pointer-events-none" aria-hidden="true"/>}
             {countdown !== null && nextEpisode && (
                 <div className="absolute z-20 right-3 sm:right-6 bottom-16 sm:bottom-20 left-3 sm:left-auto sm:w-80 surface-raised text-base-content p-4 flex items-center gap-4 animate-fade-up" role="status">
                     <div className="radial-progress text-primary shrink-0 text-sm font-semibold tabular-nums"

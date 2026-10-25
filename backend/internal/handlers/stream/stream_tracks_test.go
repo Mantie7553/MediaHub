@@ -135,11 +135,14 @@ func TestSubtitleTracksImageFormatsAreBurnOnly(t *testing.T) {
 	if len(tracks) != 2 || tracks[0].Index != 3 || tracks[1].Index != 4 {
 		t.Fatalf("tracks = %+v, want the ASS and PGS tracks", tracks)
 	}
-	if tracks[0].Image || tracks[0].File != "subs_3.vtt" {
-		t.Errorf("ASS track = %+v, want a WebVTT file", tracks[0])
+	if tracks[0].Image || tracks[0].File != "subs_3.vtt" || tracks[0].AssFile != "subs_3.ass" {
+		t.Errorf("ASS track = %+v, want WebVTT and ASS files", tracks[0])
 	}
-	if !tracks[1].Image || tracks[1].File != "" {
+	if !tracks[1].Image || tracks[1].File != "" || tracks[1].AssFile != "" {
 		t.Errorf("PGS track = %+v, want burn only with no file", tracks[1])
+	}
+	if srt := subtitleTracks(englishMovie); srt[0].AssFile != "" {
+		t.Errorf("SRT track kept as ASS: %+v", srt[0])
 	}
 	if !imageSubtitle(tracks, 4) || imageSubtitle(tracks, 3) || imageSubtitle(tracks, 1) {
 		t.Error("imageSubtitle wrong")
@@ -148,6 +151,41 @@ func TestSubtitleTracksImageFormatsAreBurnOnly(t *testing.T) {
 	other := subtitleTracks([]probeStream{s(2, "subtitle", "eia_608", "eng", "", 0, 0)})
 	if len(other) != 0 {
 		t.Errorf("unsupported codec listed: %+v", other)
+	}
+}
+
+// attachment builds an attached file stream
+func attachment(index int, codec, filename, mimetype string) probeStream {
+	p := s(index, "attachment", codec, "", "", 0, 0)
+	p.Tags.Filename = filename
+	p.Tags.Mimetype = mimetype
+	return p
+}
+
+func TestFontFiles(t *testing.T) {
+	streams := append([]probeStream{}, chainsawMan...)
+	streams = append(streams,
+		attachment(5, "ttf", "Gandhi Sans.TTF", "application/x-truetype-font"),
+		attachment(6, "otf", "font", "application/vnd.ms-opentype"),
+		attachment(7, "", "cover.jpg", "image/jpeg"),
+		attachment(8, "ttf", "../../evil.woff2", "font/woff2"),
+	)
+	fonts := fontFiles(streams, subtitleTracks(streams))
+	want := []fontFile{{5, "font_5.ttf"}, {6, "font_6.ttf"}, {8, "font_8.woff2"}}
+	if len(fonts) != len(want) {
+		t.Fatalf("fonts = %+v, want %+v", fonts, want)
+	}
+	for i := range want {
+		if fonts[i] != want[i] {
+			t.Errorf("font %d = %+v, want %+v", i, fonts[i], want[i])
+		}
+	}
+
+	// no ASS track to use them
+	withSRT := append([]probeStream{}, englishMovie...)
+	withSRT = append(withSRT, attachment(4, "ttf", "a.ttf", "font/ttf"))
+	if got := fontFiles(withSRT, subtitleTracks(withSRT)); len(got) != 0 {
+		t.Errorf("fonts extracted without an ASS track: %+v", got)
 	}
 }
 

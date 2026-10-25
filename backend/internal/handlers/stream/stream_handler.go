@@ -240,7 +240,14 @@ func writeStreamURLs(w http.ResponseWriter, r *http.Request, mediaType, mediaID,
 		if !s.Image {
 			sub.URL = base + "/" + s.File + query
 		}
+		if s.AssFile != "" {
+			sub.AssURL = base + "/" + s.AssFile + query
+		}
 		resp.Subtitles = append(resp.Subtitles, sub)
+	}
+	resp.Fonts = []string{}
+	for _, f := range manifest.Fonts {
+		resp.Fonts = append(resp.Fonts, base+"/"+f.File+query)
 	}
 
 	utils.JSON(w, resp)
@@ -323,9 +330,15 @@ func (h *Handler) ServeSegment(w http.ResponseWriter, r *http.Request) {
 	// Types are set here because the system MIME table (Debian's) calls .ts a text file, and the
 	// proxy then compresses every segment
 	contentTypes := map[string]string{
-		".m3u8": "application/vnd.apple.mpegurl",
-		".ts":   "video/mp2t",
-		".vtt":  "text/vtt; charset=utf-8",
+		".m3u8":  "application/vnd.apple.mpegurl",
+		".ts":    "video/mp2t",
+		".vtt":   "text/vtt; charset=utf-8",
+		".ass":   "text/plain; charset=utf-8",
+		".ttf":   "font/ttf",
+		".otf":   "font/otf",
+		".ttc":   "font/collection",
+		".woff":  "font/woff",
+		".woff2": "font/woff2",
 	}
 	contentType, servable := contentTypes[filepath.Ext(file)]
 	if (mediaType != "episode" && mediaType != "movie") || !utils.SafeFileName(mediaID) ||

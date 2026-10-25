@@ -12,6 +12,8 @@ type probeStream struct {
 	Tags struct {
 		Language string `json:"language"`
 		Title    string `json:"title"`
+		Filename string `json:"filename"` // attachments
+		Mimetype string `json:"mimetype"`
 	} `json:"tags"`
 }
 
@@ -39,6 +41,7 @@ type audioTrack struct {
 type subtitleTrack struct {
 	Index       int    `json:"index"`
 	File        string `json:"file"` // empty for image tracks
+	AssFile     string `json:"ass_file"` // the ASS/SSA track as it is, for rendering with its styling
 	Image       bool   `json:"image"`
 	Language    string `json:"language"`
 	Label       string `json:"label"`
@@ -56,6 +59,13 @@ type streamManifest struct {
 	AudioLanguage string          `json:"audio_language"`
 	BurnIndex     int             `json:"burn_index"` // image subtitle drawn into the video, -1 for none
 	Subtitles     []subtitleTrack `json:"subtitles"`
+	Fonts         []fontFile      `json:"fonts"` // attached fonts the ASS tracks use
+}
+
+// a font attached to the file, extracted for rendering ASS subtitles
+type fontFile struct {
+	Index int    `json:"index"`
+	File  string `json:"file"`
 }
 
 type languagePreferences struct {
@@ -73,6 +83,7 @@ type audioResponse struct {
 type subtitleResponse struct {
 	Index    int    `json:"index"`
 	URL      string `json:"url,omitempty"` // empty for tracks that can only be burned in
+	AssURL   string `json:"ass_url,omitempty"`
 	Burn     bool   `json:"burn"`
 	Language string `json:"language"`
 	Label    string `json:"label"`
@@ -84,4 +95,5 @@ type streamResponse struct {
 	Audio     []audioResponse    `json:"audio"`
 	Subtitles []subtitleResponse `json:"subtitles"`
 	Burned    int                `json:"burned"` // the subtitle burned into this stream, -1 for none
+	Fonts     []string           `json:"fonts"`  // attached fonts for the ASS tracks
 }
