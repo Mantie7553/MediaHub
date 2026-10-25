@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/Mantie7553/MediaHub/backend/internal/musicfiles"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/auth"
@@ -24,7 +25,7 @@ type Handler struct {
 	db *sql.DB
 
 	mu         sync.Mutex
-	transcodes map[string]*transcode // running transcodes by type-id-a<audio>
+	transcodes map[string]*transcode // transcodes in use by type-id-a<audio>
 	probes     probeCache
 }
 
@@ -38,7 +39,8 @@ var variantRe = regexp.MustCompile(`^a(-1|\d+)$`)
 /*
 Function:	StreamMedia
 Purpose:	Start (or reuse) the transcode of an episode or movie and return signed playlist and
-            subtitle URLs once enough of it exists to play from the optional ?start= position.
+            subtitle URLs once enough of it exists to play from the optional ?start= position,
+            where ffmpeg starts when those segments don't exist yet.
             ?audio= picks an audio stream, otherwise the user's preferred language is used
 Params:
   - w: http response writer to respond to the front end
@@ -79,10 +81,11 @@ func (h *Handler) StreamMedia(w http.ResponseWriter, r *http.Request) {
 		start = 0
 	}
 
-	streams, err := h.probes.get(filePath)
+	probe, err := h.probes.get(filePath)
 	if utils.InternalError(w, err) {
 		return
 	}
+	streams := probe.Streams
 	prefs := h.languagePreferences(auth.GetUser(r).UserID)
 
 	audioIndex := -1
@@ -101,18 +104,40 @@ func (h *Handler) StreamMedia(w http.ResponseWriter, r *http.Request) {
 	key := mediaType + "-" + mediaID + "-" + variant
 	tempDir := filepath.Join(os.Getenv("MEDIA_ROOT"), "temp", key)
 
-	tc, err := h.getOrStartTranscode(key, tempDir, filePath, buildManifest(streams, audioIndex))
+	tc, err := h.getTranscode(key, tempDir, buildManifest(filePath, probe, audioIndex))
 	if utils.InternalError(w, err) {
 		return
 	}
 
-	if err := waitForPlaylist(tc, start); err != nil {
+	if err := waitUntilReady(tc, start); err != nil {
 		logger.Error("transcode %s not ready: %v", key, err)
 		utils.Error(w, http.StatusInternalServerError, "transcode failed to start")
 		return
 	}
 
 	writeStreamURLs(w, r, mediaType, mediaID, variant, tc.manifest, audioTracks(streams), prefs)
+}
+
+/*
+Function:	waitUntilReady
+Purpose:	wait for the segment at the start position and a few after it, so playback doesn't
+            stall straight away. Only the first is required, a slow machine gets what exists
+Params:
+  - tc: the transcode
+  - start: the position (seconds) the player will start from
+*/
+func waitUntilReady(tc *transcode, start float64) error {
+	count := segmentCount(tc.manifest.Duration)
+	first := min(max(int(start/segmentSecs), 0), count-1)
+	deadline := time.Now().Add(readyTimeout)
+	for seg := first; seg < min(first+readySegments, count); seg++ {
+		if err := tc.waitForSegment(seg, deadline); err != nil && seg == first {
+			return err
+		} else if err != nil {
+			break
+		}
+	}
+	return nil
 }
 
 /*
@@ -270,7 +295,8 @@ func (h *Handler) ServeSegment(w http.ResponseWriter, r *http.Request) {
 	variant := chi.URLParam(r, "variant")
 	file := chi.URLParam(r, "file")
 
-	// only playlist, segments and finished subtitles; not stream.json, transcode.log or .tmp files.
+	// only playlist, segments and finished subtitles; not stream.json, transcode.log, ffmpeg's
+	// own playlist or .tmp files.
 	// Types are set here because the system MIME table (Debian's) calls .ts a text file, and the
 	// proxy then compresses every segment
 	contentTypes := map[string]string{
@@ -280,7 +306,8 @@ func (h *Handler) ServeSegment(w http.ResponseWriter, r *http.Request) {
 	}
 	contentType, servable := contentTypes[filepath.Ext(file)]
 	if (mediaType != "episode" && mediaType != "movie") || !utils.SafeFileName(mediaID) ||
-		!variantRe.MatchString(variant) || !utils.SafeFileName(file) || !servable {
+		!variantRe.MatchString(variant) || !utils.SafeFileName(file) || !servable ||
+		(filepath.Ext(file) == ".m3u8" && file != playlistFile) {
 		utils.Error(w, http.StatusBadRequest, "invalid segment path")
 		return
 	}
@@ -293,7 +320,7 @@ func (h *Handler) ServeSegment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// the playlist grows while ffmpeg runs, so rewrite it on every request
+	// signed with the token it was requested with
 	if filepath.Ext(file) == ".m3u8" {
 		content, err := os.ReadFile(filePath)
 		if os.IsNotExist(err) {
@@ -307,6 +334,21 @@ func (h *Handler) ServeSegment(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		w.Write([]byte(signPlaylist(string(content), r.URL.Query().Get(auth.MediaTokenParam))))
 		return
+	}
+
+	// the playlist lists every segment, so the player can ask for one ffmpeg hasn't written
+	if match := segmentNameRe.FindStringSubmatch(file); match != nil && !fileExists(filePath) {
+		tc, ok := h.loadTranscode(mediaType+"-"+mediaID+"-"+variant, tempDir)
+		if !ok {
+			utils.Error(w, http.StatusNotFound, "segment not found")
+			return
+		}
+		seg, _ := strconv.Atoi(match[1])
+		if err := tc.waitForSegment(seg, time.Now().Add(segmentTimeout)); err != nil {
+			logger.Warn("segment %s of %s not ready: %v", file, tempDir, err)
+			utils.Error(w, http.StatusNotFound, "segment not ready")
+			return
+		}
 	}
 
 	// ServeFile keeps a Content-Type that is already set

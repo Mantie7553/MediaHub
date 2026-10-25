@@ -78,7 +78,7 @@ func pick(streams []probeStream, audioPref, subPref string) (audio, subtitle int
 	if a := selectAudio(streams, audioPref); a != nil {
 		audio = a.Index
 	}
-	m := buildManifest(streams, audio)
+	m := buildManifest("in.mkv", probeResult{Streams: streams}, audio)
 	return audio, defaultSubtitle(m.Subtitles, m.AudioLanguage, subPref)
 }
 

@@ -158,10 +158,21 @@ export default function PlayerPage() {
         const video = videoRef.current;
 
         if (Hls.isSupported()) {
-            // the playlist grows while transcoding (EVENT), so tell hls.js where to start,
-            // otherwise it treats it as live and jumps to the newest segment
+            // the playlist lists every segment before ffmpeg writes them. Asking for one it
+            // hasn't reached (a seek ahead) makes the server restart it there and hold the
+            // request open for up to 30s, so wait longer than the default 10s for a first byte
             const start = startAtRef.current
-            const hls = new Hls({ startPosition: start > 0 ? start : 0 })
+            const hls = new Hls({
+                startPosition: start > 0 ? start : 0,
+                fragLoadPolicy: {
+                    default: {
+                        maxTimeToFirstByteMs: 40000,
+                        maxLoadTimeMs: 120000,
+                        timeoutRetry: { maxNumRetry: 2, retryDelayMs: 0, maxRetryDelayMs: 0 },
+                        errorRetry: { maxNumRetry: 6, retryDelayMs: 1000, maxRetryDelayMs: 8000 },
+                    },
+                },
+            })
             // one remint per expiry, cleared once a fragment loads with the new token
             let reminted = false
             let resume = null

@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -40,26 +41,27 @@ var inputOnlyLocal = []string{"-protocol_whitelist", "file"}
 
 /*
 Function:	probeStreams
-Purpose:	list the streams in a media file with ffprobe
+Purpose:	list the streams in a media file and its length with ffprobe
 Params:
   - filePath: the file to inspect
 */
-func probeStreams(filePath string) ([]probeStream, error) {
+func probeStreams(filePath string) (probeResult, error) {
 	args := append([]string{"-v", "error"}, inputOnlyLocal...)
 	out, err := exec.Command("ffprobe", append(args,
-		"-show_entries", "stream=index,codec_type,codec_name:stream_tags=language,title:stream_disposition=default,forced",
+		"-show_entries", "stream=index,codec_type,codec_name:stream_tags=language,title:stream_disposition=default,forced:format=duration",
 		"-of", "json",
 		filePath,
 	)...).Output()
 	if err != nil {
-		return nil, fmt.Errorf("ffprobe: %w", err)
+		return probeResult{}, fmt.Errorf("ffprobe: %w", err)
 	}
 
 	var parsed probeOutput
 	if err := json.Unmarshal(out, &parsed); err != nil {
-		return nil, fmt.Errorf("ffprobe output: %w", err)
+		return probeResult{}, fmt.Errorf("ffprobe output: %w", err)
 	}
-	return parsed.Streams, nil
+	duration, _ := strconv.ParseFloat(parsed.Format.Duration, 64)
+	return probeResult{Streams: parsed.Streams, Duration: duration}, nil
 }
 
 // probe results by file, so picking tracks doesn't run ffprobe on every play
@@ -71,7 +73,7 @@ type probeCache struct {
 type probeCacheEntry struct {
 	size    int64
 	modTime time.Time
-	streams []probeStream
+	result  probeResult
 }
 
 /*
@@ -80,31 +82,31 @@ Purpose:	cached ffprobe result for a file, re-probed if the file changed
 Params:
   - filePath: the file to inspect
 */
-func (c *probeCache) get(filePath string) ([]probeStream, error) {
+func (c *probeCache) get(filePath string) (probeResult, error) {
 	info, err := os.Stat(filePath)
 	if err != nil {
-		return nil, err
+		return probeResult{}, err
 	}
 
 	c.mu.Lock()
 	entry, ok := c.entries[filePath]
 	c.mu.Unlock()
 	if ok && entry.size == info.Size() && entry.modTime.Equal(info.ModTime()) {
-		return entry.streams, nil
+		return entry.result, nil
 	}
 
-	streams, err := probeStreams(filePath)
+	result, err := probeStreams(filePath)
 	if err != nil {
-		return nil, err
+		return probeResult{}, err
 	}
 
 	c.mu.Lock()
 	if c.entries == nil {
 		c.entries = map[string]probeCacheEntry{}
 	}
-	c.entries[filePath] = probeCacheEntry{size: info.Size(), modTime: info.ModTime(), streams: streams}
+	c.entries[filePath] = probeCacheEntry{size: info.Size(), modTime: info.ModTime(), result: result}
 	c.mu.Unlock()
-	return streams, nil
+	return result, nil
 }
 
 /*
@@ -201,12 +203,18 @@ func subtitleTracks(streams []probeStream) []subtitleTrack {
 Function:	buildManifest
 Purpose:	what a transcode with this audio track contains
 Params:
-  - streams: the file's streams from ffprobe
+  - filePath: the source file
+  - probe: the file's streams and length from ffprobe
   - audioIndex: the chosen audio stream, -1 for none
 */
-func buildManifest(streams []probeStream, audioIndex int) streamManifest {
-	manifest := streamManifest{AudioIndex: audioIndex, Subtitles: subtitleTracks(streams)}
-	for _, s := range streams {
+func buildManifest(filePath string, probe probeResult, audioIndex int) streamManifest {
+	manifest := streamManifest{
+		Source:     filePath,
+		Duration:   probe.Duration,
+		AudioIndex: audioIndex,
+		Subtitles:  subtitleTracks(probe.Streams),
+	}
+	for _, s := range probe.Streams {
 		if s.CodecType == "video" && manifest.VideoCodec == "" {
 			manifest.VideoCodec = s.CodecName
 		}

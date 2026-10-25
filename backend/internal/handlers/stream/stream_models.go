@@ -17,6 +17,15 @@ type probeStream struct {
 
 type probeOutput struct {
 	Streams []probeStream `json:"streams"`
+	Format  struct {
+		Duration string `json:"duration"`
+	} `json:"format"`
+}
+
+// what ffprobe says about a media file
+type probeResult struct {
+	Streams  []probeStream
+	Duration float64 // seconds
 }
 
 type audioTrack struct {
@@ -38,6 +47,8 @@ type subtitleTrack struct {
 
 // what a transcode contains, saved as stream.json in the transcode folder
 type streamManifest struct {
+	Source        string          `json:"source"`
+	Duration      float64         `json:"duration"`
 	VideoCodec    string          `json:"video_codec"`
 	AudioIndex    int             `json:"audio_index"`
 	AudioLanguage string          `json:"audio_language"`

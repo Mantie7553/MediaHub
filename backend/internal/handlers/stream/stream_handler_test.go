@@ -59,6 +59,8 @@ func TestServeSegmentRejectsTraversal(t *testing.T) {
 		{"variant not a track", "episode", "1", "x1", "playlist0.ts", http.StatusBadRequest},
 		{"internal file", "episode", "1", "a1", "stream.json", http.StatusBadRequest},
 		{"ffmpeg log", "episode", "1", "a1", "transcode.log", http.StatusBadRequest},
+		{"ffmpeg playlist", "episode", "1", "a1", "ffmpeg.m3u8", http.StatusBadRequest},
+		{"unwritten segment without a transcode", "episode", "1", "a1", "playlist5.ts", http.StatusNotFound},
 	}
 
 	for _, tt := range tests {
