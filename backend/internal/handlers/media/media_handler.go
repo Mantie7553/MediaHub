@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/url"
 	"path/filepath"
@@ -435,6 +436,8 @@ func (h *Handler) MangaProgress(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	auth.MarkActiveToday(h.db, user.UserID)
+
 	// insert the progress
 	_, err := h.db.Exec(
 		`INSERT INTO manga_progress (user_id, chapter_id, media_item_id, last_page_read, completed, updated_at)
@@ -466,6 +469,7 @@ func (h *Handler) UpdateLightNovelProgress(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	auth.MarkActiveToday(h.db, user.UserID)
 	_, err := h.db.Exec(
 		`INSERT INTO light_novel_progress (user_id, volume_id, media_item_id, scroll_position, updated_at)
         VALUES ($1, $2, (SELECT media_item_id FROM light_novel_volumes WHERE id = $2), $3, NOW())
@@ -811,10 +815,19 @@ func (h *Handler) GetEpisodes(w http.ResponseWriter, r *http.Request) {
 	utils.JSON(w, episodes)
 }
 
+/*
+Function:	UpdateEpisodeProgress
+Purpose:	Save the current user's playback position in an episode, and how long they watched
+            since the last save
+Params:
+  - w: http response writer to respond to the front end
+  - r: http request coming from the frontend
+*/
 func (h *Handler) UpdateEpisodeProgress(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		PositionSecs float64 `json:"position_secs"`
 		DurationSecs float64 `json:"duration_secs"`
+		WatchedSecs  float64 `json:"watched_secs"`
 	}
 	user := auth.GetUser(r)
 	episodeId := chi.URLParam(r, "id")
@@ -836,12 +849,18 @@ func (h *Handler) UpdateEpisodeProgress(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	err = h.recordWatching(user.UserID, `SELECT media_item_id FROM episodes WHERE id = $2`, episodeId, req.WatchedSecs)
+	if utils.InternalError(w, err) {
+		return
+	}
+
 	w.WriteHeader(http.StatusNoContent)
 }
 
 /*
 Function:	UpdateMovieProgress
-Purpose:	Save the current user's playback position in a movie
+Purpose:	Save the current user's playback position in a movie, and how long they watched
+            since the last save
 Params:
   - w: http response writer to respond to the front end
   - r: http request coming from the frontend
@@ -850,6 +869,7 @@ func (h *Handler) UpdateMovieProgress(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		PositionSecs float64 `json:"position_secs"`
 		DurationSecs float64 `json:"duration_secs"`
+		WatchedSecs  float64 `json:"watched_secs"`
 	}
 	user := auth.GetUser(r)
 	movieId := chi.URLParam(r, "id")
@@ -874,7 +894,54 @@ func (h *Handler) UpdateMovieProgress(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	err = h.recordWatching(user.UserID, `SELECT media_item_id FROM movie_metadata WHERE media_item_id = $2`, movieId, req.WatchedSecs)
+	if utils.InternalError(w, err) {
+		return
+	}
+
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// the most watching one progress save can add. The player saves every few seconds, so more
+// is a client counting wrong (or lying) rather than watching
+const maxWatchedPerSave = 30
+
+/*
+Function:	watchedSeconds
+Purpose:	how much of a progress save's watched_secs to count: nothing for a bad value, and no
+            more than maxWatchedPerSave
+Params:
+  - secs: the seconds the player says were watched since its last save
+*/
+func watchedSeconds(secs float64) float64 {
+	if math.IsNaN(secs) || secs <= 0 {
+		return 0
+	}
+	return math.Min(secs, maxWatchedPerSave)
+}
+
+/*
+Function:	recordWatching
+Purpose:	add time watched to the title's total for today, for Insights, and mark the user active
+Params:
+  - userID: the user watching
+  - titleQuery: SQL selecting the media_item_id of what's watched, from its id as $2
+  - id: the episode or movie id
+  - watched: seconds watched since the last save
+*/
+func (h *Handler) recordWatching(userID, titleQuery, id string, watched float64) error {
+	auth.MarkActiveToday(h.db, userID)
+	secs := watchedSeconds(watched)
+	if secs == 0 {
+		return nil
+	}
+	_, err := h.db.Exec(
+		`INSERT INTO watch_time (user_id, media_item_id, day, seconds)
+		SELECT $1, media_item_id, CURRENT_DATE, $3 FROM (`+titleQuery+`) title
+		ON CONFLICT (user_id, media_item_id, day) DO UPDATE SET seconds = watch_time.seconds + EXCLUDED.seconds`,
+		userID, id, secs,
+	)
+	return err
 }
 
 func (h *Handler) MarkChapterRead(w http.ResponseWriter, r *http.Request) {

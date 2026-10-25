@@ -19,9 +19,9 @@
 
 	header {
 		# what the page may load: its own scripts only, so injected markup can't run code.
-		# Images come from AniList and YouTube too, fonts from Google, and video, audio and
-		# manga pages use blob: URLs
-		Content-Security-Policy "default-src 'self'; script-src 'self'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; media-src 'self' blob:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+		# WebAssembly is allowed for the ASS subtitle renderer. Images come from AniList and
+		# YouTube too, fonts from Google, and video, audio and manga pages use blob: URLs
+		Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; media-src 'self' blob:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
 		X-Content-Type-Options "nosniff"
 		X-Frame-Options "DENY"
 		# media tokens ride in URLs, so other sites are never told which page linked to them

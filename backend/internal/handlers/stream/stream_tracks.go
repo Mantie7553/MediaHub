@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -20,10 +22,21 @@ const (
 	subtitlesOff = "off"
 )
 
-// subtitle codecs ffmpeg can turn into WebVTT; image based ones (PGS, VobSub) can't be
+// subtitle codecs ffmpeg can turn into WebVTT
 var textSubtitleCodecs = map[string]bool{
 	"ass": true, "ssa": true, "subrip": true, "srt": true,
 	"mov_text": true, "webvtt": true, "text": true,
+}
+
+// subtitle codecs kept as they are for rendering in the browser, with their styling and positions
+var assSubtitleCodecs = map[string]bool{"ass": true, "ssa": true}
+
+// font files an ASS track can use, by extension
+var fontExtensions = map[string]bool{".ttf": true, ".otf": true, ".ttc": true, ".woff": true, ".woff2": true}
+
+// image based subtitles, which can't become WebVTT but can be burned into the video
+var imageSubtitleCodecs = map[string]bool{
+	"hdmv_pgs_subtitle": true, "dvd_subtitle": true, "dvb_subtitle": true,
 }
 
 var (
@@ -40,26 +53,27 @@ var inputOnlyLocal = []string{"-protocol_whitelist", "file"}
 
 /*
 Function:	probeStreams
-Purpose:	list the streams in a media file with ffprobe
+Purpose:	list the streams in a media file and its length with ffprobe
 Params:
   - filePath: the file to inspect
 */
-func probeStreams(filePath string) ([]probeStream, error) {
+func probeStreams(filePath string) (probeResult, error) {
 	args := append([]string{"-v", "error"}, inputOnlyLocal...)
 	out, err := exec.Command("ffprobe", append(args,
-		"-show_entries", "stream=index,codec_type,codec_name:stream_tags=language,title:stream_disposition=default,forced",
+		"-show_entries", "stream=index,codec_type,codec_name:stream_tags=language,title,filename,mimetype:stream_disposition=default,forced:format=duration",
 		"-of", "json",
 		filePath,
 	)...).Output()
 	if err != nil {
-		return nil, fmt.Errorf("ffprobe: %w", err)
+		return probeResult{}, fmt.Errorf("ffprobe: %w", err)
 	}
 
 	var parsed probeOutput
 	if err := json.Unmarshal(out, &parsed); err != nil {
-		return nil, fmt.Errorf("ffprobe output: %w", err)
+		return probeResult{}, fmt.Errorf("ffprobe output: %w", err)
 	}
-	return parsed.Streams, nil
+	duration, _ := strconv.ParseFloat(parsed.Format.Duration, 64)
+	return probeResult{Streams: parsed.Streams, Duration: duration}, nil
 }
 
 // probe results by file, so picking tracks doesn't run ffprobe on every play
@@ -71,7 +85,7 @@ type probeCache struct {
 type probeCacheEntry struct {
 	size    int64
 	modTime time.Time
-	streams []probeStream
+	result  probeResult
 }
 
 /*
@@ -80,31 +94,31 @@ Purpose:	cached ffprobe result for a file, re-probed if the file changed
 Params:
   - filePath: the file to inspect
 */
-func (c *probeCache) get(filePath string) ([]probeStream, error) {
+func (c *probeCache) get(filePath string) (probeResult, error) {
 	info, err := os.Stat(filePath)
 	if err != nil {
-		return nil, err
+		return probeResult{}, err
 	}
 
 	c.mu.Lock()
 	entry, ok := c.entries[filePath]
 	c.mu.Unlock()
 	if ok && entry.size == info.Size() && entry.modTime.Equal(info.ModTime()) {
-		return entry.streams, nil
+		return entry.result, nil
 	}
 
-	streams, err := probeStreams(filePath)
+	result, err := probeStreams(filePath)
 	if err != nil {
-		return nil, err
+		return probeResult{}, err
 	}
 
 	c.mu.Lock()
 	if c.entries == nil {
 		c.entries = map[string]probeCacheEntry{}
 	}
-	c.entries[filePath] = probeCacheEntry{size: info.Size(), modTime: info.ModTime(), streams: streams}
+	c.entries[filePath] = probeCacheEntry{size: info.Size(), modTime: info.ModTime(), result: result}
 	c.mu.Unlock()
-	return streams, nil
+	return result, nil
 }
 
 /*
@@ -174,19 +188,30 @@ func selectAudio(streams []probeStream, preferred string) *probeStream {
 
 /*
 Function:	subtitleTracks
-Purpose:	the text subtitle tracks to extract, with what's needed to choose a default later
+Purpose:	the subtitle tracks the player can show, text ones to extract and image ones to burn
+            in, with what's needed to choose a default later
 Params:
   - streams: the file's streams from ffprobe
 */
 func subtitleTracks(streams []probeStream) []subtitleTrack {
 	tracks := []subtitleTrack{}
 	for _, s := range streams {
-		if s.CodecType != "subtitle" || !textSubtitleCodecs[s.CodecName] {
+		image := imageSubtitleCodecs[s.CodecName]
+		if s.CodecType != "subtitle" || (!textSubtitleCodecs[s.CodecName] && !image) {
 			continue
+		}
+		file, assFile := "", ""
+		if !image {
+			file = fmt.Sprintf("subs_%d.vtt", s.Index)
+		}
+		if assSubtitleCodecs[s.CodecName] {
+			assFile = fmt.Sprintf("subs_%d.ass", s.Index)
 		}
 		tracks = append(tracks, subtitleTrack{
 			Index:       s.Index,
-			File:        fmt.Sprintf("subs_%d.vtt", s.Index),
+			File:        file,
+			AssFile:     assFile,
+			Image:       image,
 			Language:    s.Tags.Language,
 			Label:       trackLabel(s),
 			Title:       s.Tags.Title,
@@ -198,15 +223,60 @@ func subtitleTracks(streams []probeStream) []subtitleTrack {
 }
 
 /*
-Function:	buildManifest
-Purpose:	what a transcode with this audio track contains
+Function:	fontFiles
+Purpose:	the fonts attached to a file, which ASS subtitles are styled with. Only extracted
+            when there is an ASS track to use them
 Params:
   - streams: the file's streams from ffprobe
-  - audioIndex: the chosen audio stream, -1 for none
+  - subs: the file's subtitle tracks
 */
-func buildManifest(streams []probeStream, audioIndex int) streamManifest {
-	manifest := streamManifest{AudioIndex: audioIndex, Subtitles: subtitleTracks(streams)}
+func fontFiles(streams []probeStream, subs []subtitleTrack) []fontFile {
+	fonts := []fontFile{}
+	hasASS := false
+	for _, s := range subs {
+		hasASS = hasASS || s.AssFile != ""
+	}
+	if !hasASS {
+		return fonts
+	}
+
 	for _, s := range streams {
+		if s.CodecType != "attachment" {
+			continue
+		}
+		ext := strings.ToLower(filepath.Ext(s.Tags.Filename))
+		if !fontExtensions[ext] {
+			// a font with an odd name: the renderer reads the format from the file itself
+			mime := strings.ToLower(s.Tags.Mimetype)
+			if !strings.Contains(mime, "font") && !strings.Contains(mime, "opentype") {
+				continue
+			}
+			ext = ".ttf"
+		}
+		fonts = append(fonts, fontFile{Index: s.Index, File: fmt.Sprintf("font_%d%s", s.Index, ext)})
+	}
+	return fonts
+}
+
+/*
+Function:	buildManifest
+Purpose:	what a transcode with this audio track and burned in subtitle contains
+Params:
+  - filePath: the source file
+  - probe: the file's streams and length from ffprobe
+  - audioIndex: the chosen audio stream, -1 for none
+  - burnIndex: the image subtitle to burn in, -1 for none
+*/
+func buildManifest(filePath string, probe probeResult, audioIndex, burnIndex int) streamManifest {
+	manifest := streamManifest{
+		Source:     filePath,
+		Duration:   probe.Duration,
+		AudioIndex: audioIndex,
+		BurnIndex:  burnIndex,
+		Subtitles:  subtitleTracks(probe.Streams),
+	}
+	manifest.Fonts = fontFiles(probe.Streams, manifest.Subtitles)
+	for _, s := range probe.Streams {
 		if s.CodecType == "video" && manifest.VideoCodec == "" {
 			manifest.VideoCodec = s.CodecName
 		}
@@ -215,6 +285,22 @@ func buildManifest(streams []probeStream, audioIndex int) streamManifest {
 		}
 	}
 	return manifest
+}
+
+/*
+Function:	imageSubtitle
+Purpose:	whether index is an image subtitle track that can be burned in
+Params:
+  - tracks: the subtitle tracks
+  - index: the stream index
+*/
+func imageSubtitle(tracks []subtitleTrack, index int) bool {
+	for _, t := range tracks {
+		if t.Index == index && t.Image {
+			return true
+		}
+	}
+	return false
 }
 
 /*
@@ -232,9 +318,10 @@ func matchesLanguage(language, preferred string) bool {
 Function:	defaultSubtitle
 Purpose:	pick the subtitle track to show. If the audio is already in the preferred subtitle
             language only a signs/songs track is shown, otherwise full dialogue, avoiding
-            signs-only, SDH and dubtitle tracks. Returns the stream index, or -1 for none
+            signs-only, SDH and dubtitle tracks. Text beats an image track, which has to be
+            burned in. Returns the stream index, or -1 for none
 Params:
-  - tracks: the extracted subtitle tracks
+  - tracks: the subtitle tracks
   - audioLanguage: language of the chosen audio track
   - preferred: the preferred subtitle language, or "off"
 */
@@ -265,6 +352,9 @@ func defaultSubtitle(tracks []subtitleTrack, audioLanguage, preferred string) in
 		}
 		if lessUsefulRe.MatchString(t.Title) {
 			score -= 20
+		}
+		if t.Image {
+			score -= 30
 		}
 		if t.FileDefault {
 			score += 5

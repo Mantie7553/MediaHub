@@ -16,6 +16,7 @@
     "daisyui": "^5.5.19",
     "dompurify": "^3.4.17",
     "hls.js": "^1.6.16",
+    "jassub": "2.5.18",
     "lucide-react": "^1.17.0",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",

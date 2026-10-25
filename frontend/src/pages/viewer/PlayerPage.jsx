@@ -7,6 +7,9 @@ import { toast } from "../../stores/useToastStore"
 import { exitViewer, switchViewer } from "../../utils/navigation"
 import { keyForFocused } from "../../utils/keys"
 import useDocumentTitle from "../../hooks/useDocumentTitle"
+import useAssRenderer from "../../hooks/useAssRenderer"
+import { subtitleMode } from "../../utils/subtitles"
+import { watchedBetween } from "../../utils/watchTime"
 import { ArrowLeft, Languages, SkipBack, SkipForward, X } from "lucide-react"
 
 // how long the next episode waits after one ends, and how far the arrow keys skip
@@ -21,13 +24,24 @@ export default function PlayerPage() {
     const [playlistUrl, setPlaylistUrl] = useState(null);
     // [{ index, label, language, selected }]
     const [audioTracks, setAudioTracks] = useState([]);
-    // [{ url, label, language }]
+    // [{ index, url, assUrl, burn, label, language }], url is null for image tracks that can
+    // only be burned in, assUrl is set for ASS tracks that can be shown with their styling
     const [subtitles, setSubtitles] = useState([]);
     // subtitle url -> downloaded file (object URL) once it exists
     const [subtitleFiles, setSubtitleFiles] = useState({});
+    // ASS url -> the file's text once downloaded, and the ones the renderer failed on
+    const [assFiles, setAssFiles] = useState({});
+    const [assFailed, setAssFailed] = useState({});
+    // URLs of the fonts attached to the video, for ASS
+    const [fonts, setFonts] = useState([]);
+    // the <video> itself is fullscreen (its own button), so nothing can be drawn over it
+    const [videoFullscreen, setVideoFullscreen] = useState(false);
     // index into subtitles, -1 for off
     const [selectedSubtitle, setSelectedSubtitle] = useState(-1);
-    const [switchingAudio, setSwitchingAudio] = useState(false);
+    // stream index of the subtitle burned into the current stream, -1 for none
+    const [burned, setBurned] = useState(-1);
+    // what's being switched while a new stream starts, e.g. "Switching audio…"
+    const [switching, setSwitching] = useState("");
     const [prefsMessage, setPrefsMessage] = useState("");
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -77,21 +91,29 @@ export default function PlayerPage() {
 
     // returns signed playlist/subtitle URLs, the media token in them expires after ~2 hours.
     // start makes the server wait until the transcode reaches that point, audio picks the
-    // track (otherwise the user's preferred language). keepSubtitle keeps the current choice
-    function fetchStream(start = 0, audio = null, keepSubtitle = undefined) {
+    // track (otherwise the user's preferred language). keepSubtitle keeps the current choice.
+    // burn is the image subtitle to burn into the video (-1 none), otherwise the server burns
+    // one in when the user's preferences pick it
+    function fetchStream(start = 0, audio = null, keepSubtitle = undefined, burn = undefined) {
         const params = {}
         if (start > 0) params.start = Math.floor(start)
         if (audio !== null) params.audio = audio
+        if (burn !== undefined) params.burn = burn
 
         return api.get(`/stream/media/${type}/${id}`, { params })
             .then(res => {
                 const tracks = (res.data.subtitles ?? []).map(t => ({
-                    url: `${baseURL}${t.url}`,
+                    index: t.index,
+                    url: t.url ? `${baseURL}${t.url}` : null,
+                    assUrl: t.ass_url ? `${baseURL}${t.ass_url}` : null,
+                    burn: t.burn,
                     label: t.label,
                     language: t.language,
                 }))
                 setAudioTracks(res.data.audio ?? [])
                 setSubtitles(tracks)
+                setBurned(res.data.burned ?? -1)
+                setFonts((res.data.fonts ?? []).map(f => `${baseURL}${f}`))
 
                 if (keepSubtitle === undefined) {
                     setSelectedSubtitle((res.data.subtitles ?? []).findIndex(t => t.default))
@@ -107,13 +129,14 @@ export default function PlayerPage() {
     }
 
     // the current choices, for the token remint handler which is set up once per playlist
-    const choicesRef = useRef({ audio: null, subtitle: null })
+    const choicesRef = useRef({ audio: null, subtitle: null, burn: -1 })
     useEffect(() => {
         choicesRef.current = {
             audio: audioTracks.find(a => a.selected)?.index ?? null,
             subtitle: selectedSubtitle >= 0 ? subtitles[selectedSubtitle]?.label ?? null : null,
+            burn: burned,
         }
-    }, [audioTracks, subtitles, selectedSubtitle])
+    }, [audioTracks, subtitles, selectedSubtitle, burned])
 
     useEffect(() => {
         fetchStream(initialPosition)
@@ -158,10 +181,21 @@ export default function PlayerPage() {
         const video = videoRef.current;
 
         if (Hls.isSupported()) {
-            // the playlist grows while transcoding (EVENT), so tell hls.js where to start,
-            // otherwise it treats it as live and jumps to the newest segment
+            // the playlist lists every segment before ffmpeg writes them. Asking for one it
+            // hasn't reached (a seek ahead) makes the server restart it there and hold the
+            // request open for up to 30s, so wait longer than the default 10s for a first byte
             const start = startAtRef.current
-            const hls = new Hls({ startPosition: start > 0 ? start : 0 })
+            const hls = new Hls({
+                startPosition: start > 0 ? start : 0,
+                fragLoadPolicy: {
+                    default: {
+                        maxTimeToFirstByteMs: 40000,
+                        maxLoadTimeMs: 120000,
+                        timeoutRetry: { maxNumRetry: 2, retryDelayMs: 0, maxRetryDelayMs: 0 },
+                        errorRetry: { maxNumRetry: 6, retryDelayMs: 1000, maxRetryDelayMs: 8000 },
+                    },
+                },
+            })
             // one remint per expiry, cleared once a fragment loads with the new token
             let reminted = false
             let resume = null
@@ -171,7 +205,7 @@ export default function PlayerPage() {
             hls.attachMedia(video)
             hls.on(Hls.Events.MANIFEST_PARSED, () => {
                 ignoreTrackChangesRef.current = false
-                setSwitchingAudio(false)
+                setSwitching("")
                 // reloaded with a fresh token, put playback back where it was
                 if (resume) {
                     video.currentTime = resume.position
@@ -194,8 +228,8 @@ export default function PlayerPage() {
                 }
                 reminted = true
                 resume = { position: video.currentTime, playing: !video.paused }
-                const { audio, subtitle } = choicesRef.current
-                fetchStream(video.currentTime, audio, subtitle)
+                const { audio, subtitle, burn } = choicesRef.current
+                fetchStream(video.currentTime, audio, subtitle, burn)
                     .then(url => {
                         if (!destroyed) hls.loadSource(url)
                     })
@@ -212,26 +246,51 @@ export default function PlayerPage() {
     }, [playlistUrl])
 
     /**
-     * Restart playback with another audio track, from the current position.
-     * Each audio track is its own transcode on the server
+     * Restart playback from the current position with another audio track or burned in
+     * subtitle. Each combination is its own transcode on the server. Returns whether it worked
      */
-    function switchAudio(index) {
+    function restartStream(audio, burn, keepSubtitle, message) {
         const video = videoRef.current
-        if (!video) return
+        if (!video) return Promise.resolve(false)
         startAtRef.current = video.currentTime
         autoplayRef.current = !video.paused
         ignoreTrackChangesRef.current = true
-        setSwitchingAudio(true)
+        setSwitching(message)
         setPrefsMessage("")
 
-        fetchStream(video.currentTime, index, currentSubtitleLabel())
-            .then(setPlaylistUrl)
-            .catch(err => {
-                // the current audio keeps playing, so this doesn't need to stop playback
-                setSwitchingAudio(false)
-                ignoreTrackChangesRef.current = false
-                toast.error(err, "Could not switch the audio track")
+        return fetchStream(video.currentTime, audio, keepSubtitle, burn)
+            .then(url => {
+                setPlaylistUrl(url)
+                return true
             })
+            .catch(err => {
+                // the current stream keeps playing, so this doesn't need to stop playback
+                setSwitching("")
+                ignoreTrackChangesRef.current = false
+                toast.error(err, message === "Switching audio…" ? "Could not switch the audio track" : "Could not change the subtitles")
+                return false
+            })
+    }
+
+    function switchAudio(index) {
+        restartStream(index, burned, currentSubtitleLabel(), "Switching audio…")
+    }
+
+    /**
+     * Show a subtitle track (-1 for off). Text tracks switch straight away, an image track
+     * has to be burned into the video, so going to or from one restarts the stream
+     */
+    function chooseSubtitle(i) {
+        const previous = selectedSubtitle
+        const track = subtitles[i]
+        const burn = track?.burn ? track.index : -1
+        setSelectedSubtitle(i)
+        setPrefsMessage("")
+        if (burn === burned) return
+
+        const audio = audioTracks.find(a => a.selected)?.index ?? null
+        restartStream(audio, burn, track?.label ?? null, "Switching subtitles…")
+            .then(ok => { if (!ok) setSelectedSubtitle(previous) })
     }
 
     /**
@@ -257,28 +316,34 @@ export default function PlayerPage() {
 
     // subtitle files are written a few seconds after the playlist is ready on a first play.
     // Download them here, retrying until they exist, and only render a <track> once its file
-    // is here: a <track> that fails to load never retries, even if it gets a new src later
+    // is here: a <track> that fails to load never retries, even if it gets a new src later.
+    // ASS files are kept as text for the renderer
     useEffect(() => {
         const controller = new AbortController()
         const created = []
 
-        subtitles.forEach(t => {
-            (async () => {
-                for (let attempt = 0; attempt < 30 && !controller.signal.aborted; attempt++) {
-                    try {
-                        const res = await fetch(t.url, { signal: controller.signal })
-                        if (res.ok) {
-                            const blobUrl = URL.createObjectURL(new Blob([await res.text()], { type: "text/vtt" }))
-                            created.push(blobUrl)
-                            setSubtitleFiles(files => ({ ...files, [t.url]: blobUrl }))
-                            return
-                        }
-                    } catch {
-                        if (controller.signal.aborted) return
+        async function download(url, done) {
+            for (let attempt = 0; attempt < 30 && !controller.signal.aborted; attempt++) {
+                try {
+                    const res = await fetch(url, { signal: controller.signal })
+                    if (res.ok) {
+                        done(await res.text())
+                        return
                     }
-                    await new Promise(r => setTimeout(r, 2000))
+                } catch {
+                    if (controller.signal.aborted) return
                 }
-            })()
+                await new Promise(r => setTimeout(r, 2000))
+            }
+        }
+
+        subtitles.forEach(t => {
+            if (t.url) download(t.url, text => {
+                const blobUrl = URL.createObjectURL(new Blob([text], { type: "text/vtt" }))
+                created.push(blobUrl)
+                setSubtitleFiles(files => ({ ...files, [t.url]: blobUrl }))
+            })
+            if (t.assUrl) download(t.assUrl, text => setAssFiles(files => ({ ...files, [t.assUrl]: text })))
         })
 
         return () => {
@@ -287,19 +352,39 @@ export default function PlayerPage() {
         }
     }, [subtitles])
 
-    // show only the selected subtitle track. <track> elements only exist for downloaded files,
-    // so match them to the menu by url rather than position
+    // how the chosen track is shown: burned in, rendered from its ASS file, or as a <track>
+    const selectedTrack = subtitles[selectedSubtitle] ?? null
+    const mode = subtitleMode(selectedTrack, {
+        assReady: !!assFiles[selectedTrack?.assUrl],
+        assFailed: !!assFailed[selectedTrack?.assUrl],
+        videoFullscreen,
+    })
+    const assCanvasRef = useRef(null)
+    const assContent = mode === "ass" ? assFiles[selectedTrack.assUrl] : null
+    useAssRenderer(videoRef, assCanvasRef, assContent, fonts, err => {
+        console.warn("ASS subtitles could not be shown, using plain ones", err)
+        setAssFailed(failed => ({ ...failed, [selectedTrack?.assUrl]: true }))
+    })
+
+    useEffect(() => {
+        const onChange = () => setVideoFullscreen(!!videoRef.current && document.fullscreenElement === videoRef.current)
+        document.addEventListener("fullscreenchange", onChange)
+        return () => document.removeEventListener("fullscreenchange", onChange)
+    }, [])
+
+    // show only the selected subtitle track, when it's shown as a <track>. <track> elements only
+    // exist for downloaded files, so match them to the menu by url rather than position
     function applySubtitleSelection() {
         const video = videoRef.current
         if (!video) return
-        const selectedUrl = subtitles[selectedSubtitle]?.url
+        const selectedUrl = mode === "vtt" ? subtitles[selectedSubtitle]?.url : null
         video.querySelectorAll("track").forEach(el => {
-            const mode = el.dataset.url === selectedUrl ? "showing" : "disabled"
-            if (el.track.mode !== mode) el.track.mode = mode
+            const trackMode = el.dataset.url === selectedUrl ? "showing" : "disabled"
+            if (el.track.mode !== trackMode) el.track.mode = trackMode
         })
     }
 
-    useEffect(applySubtitleSelection, [subtitles, subtitleFiles, selectedSubtitle])
+    useEffect(applySubtitleSelection, [subtitles, subtitleFiles, selectedSubtitle, mode])
 
     // keep the menu in sync when the browser's own captions button is used. The browser also
     // turns tracks on by itself as they're added, so only a single different track (or none)
@@ -310,6 +395,12 @@ export default function PlayerPage() {
         const textTracks = video.textTracks
         function onChange() {
             if (ignoreTrackChangesRef.current) return
+            // a burned in or ASS track isn't one of the browser's, so its captions menu can't
+            // tell what's showing: keep the menu's choice
+            if (mode === "burn" || mode === "ass") {
+                applySubtitleSelection()
+                return
+            }
             const elements = Array.from(video.querySelectorAll("track"))
             const showing = elements.filter(el => el.track.mode === "showing")
             const selectedUrl = subtitles[selectedSubtitle]?.url
@@ -319,46 +410,68 @@ export default function PlayerPage() {
                 // the chosen track is still downloading
                 applySubtitleSelection()
             } else if (showing.length === 1 && showing[0] !== selectedElement) {
-                setSelectedSubtitle(subtitles.findIndex(t => t.url === showing[0].dataset.url))
+                chooseSubtitle(subtitles.findIndex(t => t.url === showing[0].dataset.url))
             } else if (showing.length === 0 && selectedElement) {
-                setSelectedSubtitle(-1)
+                chooseSubtitle(-1)
             } else if (showing.length > 1) {
                 applySubtitleSelection()
             }
         }
         textTracks.addEventListener("change", onChange)
         return () => textTracks.removeEventListener("change", onChange)
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- applySubtitleSelection reads the same state listed here
-    }, [loading, subtitles, subtitleFiles, selectedSubtitle])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- applySubtitleSelection and chooseSubtitle read the same state listed here
+    }, [loading, subtitles, subtitleFiles, selectedSubtitle, burned, audioTracks, mode])
 
-    // save progress every 5 seconds and on unmount
+    // save progress every 5 seconds, on pause, when the page is hidden or closed, and on
+    // unmount, with the seconds actually watched since the last save (for Insights)
     useEffect(() => {
+        const video = videoRef.current
+        let last = null
+        let watched = 0
+
+        function onTimeUpdate() {
+            if (!video.paused && !video.seeking) watched += watchedBetween(last, video.currentTime)
+            last = video.currentTime
+        }
+
         function updateRefs() {
-            const video = videoRef.current
             if (video) {
                 positionRef.current = video.currentTime
                 durationRef.current = video.duration || durationRef.current
             }
         }
 
-        function saveProgress() {
+        // keepalive lets the request finish while the page is closing
+        function saveProgress(keepalive = false) {
+            updateRefs()
             if (positionRef.current <= 0) return
             const endpoint = type === "movie" ? `/movies/${id}/progress` : `/episodes/${id}/progress`
+            const sent = watched
+            watched = 0
             api.put(endpoint, {
                 position_secs: positionRef.current,
                 duration_secs: durationRef.current,
-            }).catch(() => {})
+                watched_secs: sent,
+            }, keepalive ? { adapter: "fetch", fetchOptions: { keepalive: true } } : undefined)
+                .catch(() => { watched += sent })
         }
 
-        saveIntervalRef.current = setInterval(() => {
-            updateRefs()
-            saveProgress()
-        }, 5000)
+        const onPause = () => saveProgress()
+        const onVisibility = () => { if (document.visibilityState === "hidden") saveProgress(true) }
+        const onPageHide = () => saveProgress(true)
+        video?.addEventListener("timeupdate", onTimeUpdate)
+        video?.addEventListener("pause", onPause)
+        document.addEventListener("visibilitychange", onVisibility)
+        window.addEventListener("pagehide", onPageHide)
+        saveIntervalRef.current = setInterval(saveProgress, 5000)
 
         return () => {
             clearInterval(saveIntervalRef.current)
-            updateRefs()
-            saveProgress()
+            video?.removeEventListener("timeupdate", onTimeUpdate)
+            video?.removeEventListener("pause", onPause)
+            document.removeEventListener("visibilitychange", onVisibility)
+            window.removeEventListener("pagehide", onPageHide)
+            saveProgress(true)
         }
     }, [type, id])
 
@@ -485,7 +598,7 @@ export default function PlayerPage() {
                             <select
                                 className="select select-sm w-full"
                                 value={selectedAudio?.index ?? ""}
-                                disabled={audioTracks.length < 2 || switchingAudio}
+                                disabled={audioTracks.length < 2 || switching !== ""}
                                 onChange={e => switchAudio(Number(e.target.value))}
                             >
                                 {audioTracks.length === 0 && <option value="">No audio</option>}
@@ -493,26 +606,27 @@ export default function PlayerPage() {
                                     <option key={a.index} value={a.index}>{a.label}</option>
                                 ))}
                             </select>
-                            {switchingAudio && <span className="text-xs text-base-content/60 flex items-center gap-2">
-                                <span className="loading loading-spinner loading-xs"></span> Switching audio…
-                            </span>}
                         </label>
                         <label className="flex flex-col gap-1.5">
                             <span className="text-xs font-medium uppercase tracking-wider text-base-content/50">Subtitles</span>
                             <select
                                 className="select select-sm w-full"
                                 value={selectedSubtitle}
-                                onChange={e => { setSelectedSubtitle(Number(e.target.value)); setPrefsMessage("") }}
+                                disabled={switching !== ""}
+                                onChange={e => chooseSubtitle(Number(e.target.value))}
                             >
                                 <option value={-1}>Off</option>
                                 {subtitles.map((t, i) => (
-                                    <option key={t.url} value={i}>{t.label}</option>
+                                    <option key={t.index} value={i}>{t.burn ? `${t.label} (burned in)` : t.label}</option>
                                 ))}
                             </select>
                             {subtitles.length === 0 && (
-                                <span className="text-xs text-base-content/60">This video has no text subtitles</span>
+                                <span className="text-xs text-base-content/60">This video has no subtitles</span>
                             )}
                         </label>
+                        {switching && <span className="text-xs text-base-content/60 flex items-center gap-2">
+                            <span className="loading loading-spinner loading-xs"></span> {switching}
+                        </span>}
                         <button className="btn btn-sm btn-primary" onClick={saveAsDefault}>
                             Use these languages by default
                         </button>
@@ -548,7 +662,7 @@ export default function PlayerPage() {
                 crossOrigin="anonymous"
                 className={`w-full h-full max-h-full object-contain ${loading ? "invisible" : ""}`}
             >
-                {subtitles.filter(t => subtitleFiles[t.url]).map(t => (
+                {subtitles.filter(t => t.url && subtitleFiles[t.url]).map(t => (
                     <track
                         key={t.url}
                         data-url={t.url}
@@ -559,6 +673,8 @@ export default function PlayerPage() {
                     />
                 ))}
             </video>
+            {/* a new canvas for each file, a canvas can only be given to one renderer */}
+            {assContent && <canvas key={selectedTrack.assUrl} ref={assCanvasRef} className="absolute pointer-events-none" aria-hidden="true"/>}
             {countdown !== null && nextEpisode && (
                 <div className="absolute z-20 right-3 sm:right-6 bottom-16 sm:bottom-20 left-3 sm:left-auto sm:w-80 surface-raised text-base-content p-4 flex items-center gap-4 animate-fade-up" role="status">
                     <div className="radial-progress text-primary shrink-0 text-sm font-semibold tabular-nums"
