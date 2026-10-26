@@ -193,6 +193,7 @@ func (s *Server) routes() {
 
 			// Media streaming endpoints, these mint the media tokens for the byte routes
 			r.Get("/stream/media/{type}/{id}", streamHandler.StreamMedia)
+			r.Get("/stream/skip/{type}/{id}", streamHandler.SkipTimes)
 			r.Get("/stream/music/{id}/url", streamHandler.SignTrackURL)
 
 			// Media Handler Endpoints

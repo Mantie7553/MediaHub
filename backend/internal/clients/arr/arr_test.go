@@ -116,3 +116,36 @@ func TestRemoveOneEpisode(t *testing.T) {
 		t.Error("a failed unmonitor must be an error")
 	}
 }
+
+func TestSeasonMalMap(t *testing.T) {
+	season := func(n int) *int { return &n }
+	e := func(tvdb, s, mal int) fribbEntry {
+		entry := fribbEntry{TvdbID: tvdb, MalID: mal}
+		if s >= 0 {
+			entry.Season.Tvdb = season(s)
+		}
+		return entry
+	}
+	got := seasonMalMap([]fribbEntry{
+		e(72025, 1, 290),
+		e(72025, 2, 396),
+		e(72025, 0, 1124), // specials, several entries
+		e(72025, 0, 1125),
+		e(80000, 1, 10), // a split cour, two entries in one season
+		e(80000, 1, 11),
+		e(90000, 1, 20), // listed twice for the same entry
+		e(90000, 1, 20),
+		e(95000, -1, 30), // no season
+		e(0, 1, 40),
+		e(96000, 1, 0),
+	})
+	want := map[TvdbSeason]int{{72025, 1}: 290, {72025, 2}: 396, {90000, 1}: 20}
+	if len(got) != len(want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+	for k, v := range want {
+		if got[k] != v {
+			t.Errorf("%v = %d, want %d", k, got[k], v)
+		}
+	}
+}

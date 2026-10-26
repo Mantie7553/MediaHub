@@ -10,11 +10,16 @@ import useDocumentTitle from "../../hooks/useDocumentTitle"
 import useAssRenderer from "../../hooks/useAssRenderer"
 import { subtitleMode } from "../../utils/subtitles"
 import { watchedBetween } from "../../utils/watchTime"
-import { ArrowLeft, Languages, SkipBack, SkipForward, X } from "lucide-react"
+import { ArrowLeft, FastForward, Languages, SkipBack, SkipForward, X } from "lucide-react"
 
 // how long the next episode waits after one ends, and how far the arrow keys skip
 const UP_NEXT_SECS = 5
 const SKIP_SECS = 10
+// a skipped part ending this close to the end of the video skips to the end, so up next starts
+const SKIP_TO_END_SECS = 2
+// what the skip button and the auto skip message call each part
+const SKIP_NAMES = { op: "opening", ed: "ending", recap: "recap", preview: "preview" }
+const NO_SEGMENTS = []
 
 export default function PlayerPage() {
     const location = useLocation();
@@ -72,6 +77,15 @@ export default function PlayerPage() {
             document.removeEventListener("keydown", onKeyDown)
         }
     }, [languagesOpen])
+    // openings, endings, recaps and previews: [{ type, start, end }], for the video they're of
+    const [skipTimes, setSkipTimes] = useState({ for: null, segments: NO_SEGMENTS });
+    const skipSegments = skipTimes.for === id ? skipTimes.segments : NO_SEGMENTS;
+    // the one playing now, as an index into the segments it was found in
+    const [activeSkip, setActiveSkip] = useState({ segments: null, index: -1 });
+    const skippable = activeSkip.segments === skipSegments ? skipSegments[activeSkip.index] ?? null : null;
+    // the user's preference to skip them without asking
+    const [autoSkip, setAutoSkip] = useState(false);
+
     const initialPosition = location.state?.position ?? 0;
     const animeId = location.state?.animeId ?? null;
     const episodeList = location.state?.episodes ?? [];
@@ -145,6 +159,21 @@ export default function PlayerPage() {
             .finally(() => setLoading(false))
     // eslint-disable-next-line react-hooks/exhaustive-deps -- fetches once per title and retry, the start position is only for the first load
     }, [id, attempt])
+
+    useEffect(() => {
+        api.get("/me/preferences")
+            .then(res => setAutoSkip(!!res.data.auto_skip))
+            .catch(() => {})
+    }, [])
+
+    // the parts to offer to skip. A video without any (or the request failing) just has no button
+    useEffect(() => {
+        let cancelled = false
+        api.get(`/stream/skip/${type}/${id}`)
+            .then(res => { if (!cancelled) setSkipTimes({ for: id, segments: res.data.segments ?? [] }) })
+            .catch(() => {})
+        return () => { cancelled = true }
+    }, [type, id])
 
     function retry() {
         setError(null)
@@ -512,10 +541,49 @@ export default function PlayerPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- each second of the countdown sets the next one going
     }, [countdown])
 
+    // jump past a part of the video, to the very end when only a moment would be left
+    function skipPast(segment) {
+        const video = videoRef.current
+        if (!video) return
+        const duration = video.duration
+        video.currentTime = duration && segment.end >= duration - SKIP_TO_END_SECS ? duration : segment.end
+    }
+
+    // follow which part is playing for the skip button. With auto skip on each part is skipped
+    // once per video, so going back into one on purpose plays it
+    useEffect(() => {
+        const video = videoRef.current
+        if (!video || skipSegments.length === 0) return
+        const skipped = new Set()
+        let current = -1
+        function onTimeUpdate() {
+            const t = video.currentTime
+            // nothing is worth skipping in the last second of a part
+            const i = skipSegments.findIndex(seg => t >= seg.start && t < seg.end - 1)
+            if (i >= 0 && autoSkip && !skipped.has(i) && !video.paused) {
+                skipped.add(i)
+                skipPast(skipSegments[i])
+                toast.success(`Skipped the ${SKIP_NAMES[skipSegments[i].type]}`)
+                return
+            }
+            if (i !== current) {
+                current = i
+                setActiveSkip({ segments: skipSegments, index: i })
+            }
+        }
+        video.addEventListener("timeupdate", onTimeUpdate)
+        return () => video.removeEventListener("timeupdate", onTimeUpdate)
+    }, [skipSegments, autoSkip])
+
+    // for the S key, whose handler is set up once per episode
+    const skippableRef = useRef(null)
+    useEffect(() => { skippableRef.current = skippable }, [skippable])
+
     const playingEpisode = episodeList[currentIndex]
     useDocumentTitle(playingEpisode ? playingEpisode.title ?? `Episode ${playingEpisode.episode_number}` : null)
 
-    // Space or K plays and pauses, the arrows skip, F is fullscreen, M mutes, Shift+N is the next episode
+    // Space or K plays and pauses, the arrows skip, F is fullscreen, M mutes, S skips the opening
+    // or ending playing now, Shift+N is the next episode
     const playerRef = useRef(null)
     useEffect(() => {
         function onKeyDown(e) {
@@ -533,6 +601,8 @@ export default function PlayerPage() {
                 else playerRef.current?.requestFullscreen?.().catch(() => {})
             } else if (key === "m") {
                 video.muted = !video.muted
+            } else if (key === "s" && !e.shiftKey && skippableRef.current) {
+                skipPast(skippableRef.current)
             } else if (key === "n" && e.shiftKey && nextEpisode) {
                 goToEpisode(nextEpisode)
             } else {
@@ -675,6 +745,14 @@ export default function PlayerPage() {
             </video>
             {/* a new canvas for each file, a canvas can only be given to one renderer */}
             {assContent && <canvas key={selectedTrack.assUrl} ref={assCanvasRef} className="absolute pointer-events-none" aria-hidden="true"/>}
+            {skippable && !loading && countdown === null && (
+                <button
+                    className="absolute z-20 right-3 sm:right-6 bottom-16 sm:bottom-20 btn border-white/20 bg-black/60 hover:bg-black/80 text-white backdrop-blur gap-2 animate-fade-up"
+                    onClick={() => skipPast(skippable)}
+                >
+                    <FastForward size={16}/> Skip {SKIP_NAMES[skippable.type]}
+                </button>
+            )}
             {countdown !== null && nextEpisode && (
                 <div className="absolute z-20 right-3 sm:right-6 bottom-16 sm:bottom-20 left-3 sm:left-auto sm:w-80 surface-raised text-base-content p-4 flex items-center gap-4 animate-fade-up" role="status">
                     <div className="radial-progress text-primary shrink-0 text-sm font-semibold tabular-nums"

@@ -1,6 +1,10 @@
 package stream
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/Mantie7553/MediaHub/backend/internal/clients/aniskip"
+)
 
 // s builds a probeStream: codec type, codec, language, title, default, forced
 func s(index int, codecType, codec, lang, title string, def, forced int) probeStream {
@@ -214,6 +218,46 @@ func TestTrackLabel(t *testing.T) {
 	for _, tt := range tests {
 		if got := trackLabel(tt.stream); got != tt.want {
 			t.Errorf("trackLabel(%q, %q) = %q, want %q", tt.stream.Tags.Language, tt.stream.Tags.Title, got, tt.want)
+		}
+	}
+}
+
+func TestChapterSegments(t *testing.T) {
+	c := func(start, end, title string) probeChapter {
+		ch := probeChapter{StartTime: start, EndTime: end}
+		ch.Tags.Title = title
+		return ch
+	}
+	chapters := []probeChapter{
+		c("0.000000", "60.000000", "Prologue"),
+		c("60.000000", "150.000000", "Opening"),
+		c("150.000000", "700.000000", "Part A"),
+		c("700.000000", "1300.000000", "Operation Start"),
+		c("1300.000000", "1390.000000", "ED"),
+		c("1390.000000", "1420.000000", "Next Episode Preview"),
+		c("1420.000000", "1420.000000", "Credits"),
+		c("abc", "10", "OP"),
+		c("1.5", "20", ""),
+	}
+	got := chapterSegments(chapters)
+	want := []aniskip.Segment{{"op", 60, 150}, {"ed", 1300, 1390}, {"preview", 1390, 1420}}
+	if len(got) != len(want) {
+		t.Fatalf("got %+v, want %+v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("segment %d = %+v, want %+v", i, got[i], want[i])
+		}
+	}
+
+	for _, title := range []string{"OP", "op1", "Intro", "Opening Song", " opening"} {
+		if segs := chapterSegments([]probeChapter{c("0", "90", title)}); len(segs) != 1 || segs[0].Type != "op" {
+			t.Errorf("%q = %+v, want an opening", title, segs)
+		}
+	}
+	for _, title := range []string{"Ending", "Outro", "Credits", "ED2"} {
+		if segs := chapterSegments([]probeChapter{c("0", "90", title)}); len(segs) != 1 || segs[0].Type != "ed" {
+			t.Errorf("%q = %+v, want an ending", title, segs)
 		}
 	}
 }
