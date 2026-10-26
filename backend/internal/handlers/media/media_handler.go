@@ -818,7 +818,7 @@ func (h *Handler) GetEpisodes(w http.ResponseWriter, r *http.Request) {
 /*
 Function:	UpdateEpisodeProgress
 Purpose:	Save the current user's playback position in an episode, and how long they watched
-            since the last save
+            since the last save. Reaching the end marks the episode watched
 Params:
   - w: http response writer to respond to the front end
   - r: http request coming from the frontend
@@ -847,6 +847,20 @@ func (h *Handler) UpdateEpisodeProgress(w http.ResponseWriter, r *http.Request) 
 
 	if utils.InternalError(w, err) {
 		return
+	}
+
+	// as if the box was ticked; one already ticked keeps when it was
+	if reachedEnd(req.PositionSecs, req.DurationSecs) {
+		_, err = h.db.Exec(
+			`INSERT INTO user_anime_progress (user_id, episode_id, watched, watched_at)
+			VALUES ($1, $2, true, NOW())
+			ON CONFLICT (user_id, episode_id) DO UPDATE SET watched = true, watched_at = NOW()
+			WHERE user_anime_progress.watched IS NOT TRUE`,
+			user.UserID, episodeId,
+		)
+		if utils.InternalError(w, err) {
+			return
+		}
 	}
 
 	err = h.recordWatching(user.UserID, `SELECT media_item_id FROM episodes WHERE id = $2`, episodeId, req.WatchedSecs)
@@ -900,6 +914,20 @@ func (h *Handler) UpdateMovieProgress(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// how close to the end of an episode counts as having watched it
+const endedWithinSecs = 10
+
+/*
+Function:	reachedEnd
+Purpose:	whether a saved position is in the last few seconds of the video
+Params:
+  - position: the playback position in seconds
+  - duration: the video's length in seconds, 0 when the player didn't know it
+*/
+func reachedEnd(position, duration float64) bool {
+	return duration > 0 && position > 0 && position >= duration-endedWithinSecs
 }
 
 // the most watching one progress save can add. The player saves every few seconds, so more

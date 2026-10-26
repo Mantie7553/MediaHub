@@ -97,3 +97,25 @@ func TestWatchedSeconds(t *testing.T) {
 		}
 	}
 }
+
+func TestReachedEnd(t *testing.T) {
+	tests := []struct {
+		position, duration float64
+		want               bool
+	}{
+		{1420, 1420, true},
+		{1412, 1420, true},
+		{1410, 1420, true},
+		{1409, 1420, false},
+		{600, 1420, false},
+		{0, 0, false},
+		{100, 0, false},
+		{0, 5, false},
+		{math.NaN(), 1420, false},
+	}
+	for _, tt := range tests {
+		if got := reachedEnd(tt.position, tt.duration); got != tt.want {
+			t.Errorf("reachedEnd(%v, %v) = %v, want %v", tt.position, tt.duration, got, tt.want)
+		}
+	}
+}
