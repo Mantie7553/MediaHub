@@ -21,7 +21,7 @@ import NotFound from "../../components/states/NotFound"
 import { DetailsSkeleton } from "../../components/states/Skeletons"
 import { deleteCollection, featureNow, moveInCollection, onCollectionsChanged, removeFromCollection, saveCopy, submitForFeaturing, updateCollection, withdrawSubmission } from "../../services/collectionsService"
 import { getRole } from "../../utils/auth"
-import { SMART_PLAYLISTS, applyMove, dropTarget, moveTarget } from "../../utils/collections"
+import { SMART_PLAYLISTS, applyMove, dropTarget, itemTitle, moveTarget } from "../../utils/collections"
 import { PlayButton, QueueModeButtons } from "../../components/details/PlaybackControls"
 
 // what each kind of entry is called on its own line
@@ -81,7 +81,7 @@ export default function CollectionPage() {
     function remove(entry) {
         setEntries(entries.filter(e => e.entry_id !== entry.entry_id))
         removeFromCollection(id, entry.entry_id)
-            .then(() => { toast.success(`Removed ${entry.title}`); reload(true) })
+            .then(() => { toast.success(`Removed ${itemTitle(entry)}`); reload(true) })
             .catch(err => { toast.error(err, "Could not remove it"); reload(true) })
     }
 
@@ -312,6 +312,7 @@ function EntryCard({ entry, userContentMap, onListChange }) {
         item={{
             id: entry.id, type: entry.type, title: entry.title, artist: entry.artist,
             cover_image_url: entry.cover_image_url, release_date: entry.release_date, external_source: entry.external_source,
+            season_number: entry.season_number,
         }}/>
 }
 
@@ -343,7 +344,9 @@ function ArrangeList({ entries, onMove, onRemove }) {
                         : <Cover src={e.cover_image_url} source={e.external_source} alt="" className="size-11 shrink-0 rounded-md object-cover"/>}
                     <span className="flex-1 min-w-0">
                         <span className="block truncate text-sm font-medium">{e.title}</span>
-                        <span className="block truncate text-xs text-base-content/50">{[typeLabels[e.type] ?? e.type, e.artist].filter(Boolean).join(" · ")}</span>
+                        <span className="block truncate text-xs text-base-content/50">
+                            {[typeLabels[e.type] ?? e.type, e.season_number != null && `Season ${e.season_number}`, e.artist].filter(Boolean).join(" · ")}
+                        </span>
                     </span>
                     <span className="flex items-center gap-0.5 shrink-0">
                         <button className="btn btn-ghost btn-sm btn-square" disabled={i === 0} onClick={() => onMove(i, moveTarget(entries, i, "up"))} aria-label={`Move ${e.title} up`}>

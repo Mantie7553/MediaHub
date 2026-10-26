@@ -23,9 +23,10 @@ function changed(res) {
  * The user's playlists and collections, playlists starting with the two that fill themselves
  * @param {string} kind "playlist", "collection", or nothing for both
  * @param {string} contains an item id; the ones already holding it come back with contains set
+ * @param {number} season with contains, an anime's season: only the ones holding that season
  */
-export function listCollections(kind, contains) {
-    return api.get("/me/collections", { params: { kind: kind || undefined, contains: contains || undefined } })
+export function listCollections(kind, contains, season) {
+    return api.get("/me/collections", { params: { kind: kind || undefined, contains: contains || undefined, season: season ?? undefined } })
 }
 
 /**

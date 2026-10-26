@@ -79,8 +79,8 @@ library's own, so the copy points at the same ones; nested playlists are copied 
 */
 func copyEntries(tx querier, srcID, dstID string, to copyTarget) error {
 	if _, err := tx.Exec(`
-		INSERT INTO collection_items (collection_id, media_item_id, album_id, position, added_by, added_at)
-		SELECT $2, media_item_id, album_id, position, added_by, added_at
+		INSERT INTO collection_items (collection_id, media_item_id, album_id, season_number, position, added_by, added_at)
+		SELECT $2, media_item_id, album_id, season_number, position, added_by, added_at
 		FROM collection_items WHERE collection_id = $1 AND child_collection_id IS NULL`,
 		srcID, dstID); err != nil {
 		return err

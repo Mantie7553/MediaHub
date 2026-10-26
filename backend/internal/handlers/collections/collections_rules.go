@@ -29,7 +29,31 @@ var (
 	errNestedCollection = errors.New("a collection can't go inside another collection")
 	errSelf             = errors.New("a collection can't go inside itself")
 	errSmartNested      = errors.New("the playlists that fill themselves from your list can't go in a collection")
+	errSeasonOfWhat     = errors.New("only an anime's seasons can be added on their own")
+	errWholeHeld        = errors.New("the whole anime is already in this collection; take it out to add its seasons one by one")
+	errSeasonsHeld      = errors.New("some of this anime's seasons are already in this collection; take them out to add the whole anime")
 )
+
+/*
+Function:	seasonConflict
+Purpose:	A collection holds an anime whole or as some of its seasons, never both, so a watch
+order doesn't show the same episodes twice
+Params:
+  - adding: the season being added, or nil for the whole anime
+  - hasWhole: the collection already holds the whole anime
+  - hasSeasons: it already holds at least one of its seasons
+
+Returns:	nil, or why not
+*/
+func seasonConflict(adding *int, hasWhole, hasSeasons bool) error {
+	if adding != nil && hasWhole {
+		return errWholeHeld
+	}
+	if adding == nil && hasSeasons {
+		return errSeasonsHeld
+	}
+	return nil
+}
 
 /*
 Function:	canHold

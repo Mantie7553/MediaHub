@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { addBody, applyMove, canHold, dropTarget, itemKind, moveTarget, shuffled } from "../src/utils/collections"
+import { addBody, applyMove, canHold, dropTarget, itemKind, itemTitle, moveTarget, shuffled } from "../src/utils/collections"
 
 const entries = ["a", "b", "c", "d"].map(id => ({ entry_id: id }))
 const order = list => list.map(e => e.entry_id).join("")
@@ -31,6 +31,16 @@ describe("what goes where", () => {
         expect(addBody({ kind: "playlist", id: "pl" })).toEqual({ collection_id: "pl" })
         expect(addBody({ media_type: "anime", media_item_id: "m", id: "entry" })).toEqual({ media_item_id: "m" })
         expect(addBody({ type: "music_track", id: "t" })).toEqual({ media_item_id: "t" })
+    })
+
+    it("sends one season of an anime on its own", () => {
+        expect(addBody({ type: "anime", id: "m", season_number: 2 })).toEqual({ media_item_id: "m", season_number: 2 })
+        expect(addBody({ type: "anime", id: "m", season_number: null })).toEqual({ media_item_id: "m" })
+    })
+
+    it("names a season after its anime", () => {
+        expect(itemTitle({ title: "Rascal", season_number: 1 })).toBe("Rascal — Season 1")
+        expect(itemTitle({ media_title: "Rascal" })).toBe("Rascal")
     })
 })
 

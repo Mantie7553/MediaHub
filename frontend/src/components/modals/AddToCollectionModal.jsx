@@ -4,7 +4,7 @@ import { Check, Plus } from "lucide-react";
 import { CollectionCover } from "../cards";
 import TextField from "../TextField";
 import { addToCollection, createCollection } from "../../services/collectionsService";
-import { addBody, canHold, itemKind } from "../../utils/collections";
+import { addBody, canHold, itemKind, itemTitle } from "../../utils/collections";
 import { toast } from "../../stores/useToastStore";
 import { errorMessage } from "../../utils/errors";
 
@@ -12,8 +12,8 @@ import { errorMessage } from "../../utils/errors";
  * Pick the playlists or collections to add something to, or make a new one for it. Only the
  * ones that can take it are offered, and the ones that already have it are ticked
  * @param {object} dialogRef ref for the <dialog>
- * @param {object} item what's being added, as for utils/collections itemKind and addBody, with
- *  a title (or media_title, or name)
+ * @param {object} item what's being added, as for utils/collections itemKind, addBody and
+ *  itemTitle
  * @param {object[]|null} options the user's playlists and collections, null while they load
  * @param {any} loadError why they couldn't be loaded
  * @param {function} onAdded called after something was added, to reload what shows it. Pages
@@ -27,7 +27,7 @@ export default function AddToCollectionModal({ dialogRef, item, options, loadErr
 
     if (!item) return null;
     const kind = itemKind(item);
-    const title = item.title ?? item.media_title ?? item.name;
+    const title = itemTitle(item);
     const kinds = ["playlist", "collection"].filter(k => canHold(k, kind));
     const shown = (options ?? []).filter(c => !c.smart && kinds.includes(c.kind) && c.id !== item.id);
 

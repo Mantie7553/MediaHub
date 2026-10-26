@@ -51,14 +51,15 @@ func coversOf(collectionID, s string) string {
 }
 
 // the user's own playlists and collections, newest change first (featured copies belong to
-// nobody, so they never show here). $2 is a kind or ”, and $3 an
-// item id to mark the ones that hold it, or ”
+// nobody, so they never show here). $2 is a kind or ”, $3 an
+// item id to mark the ones that hold it, or ”, and $4 the season of it, or ” for the whole thing
 var summariesQuery = `
 SELECT c.id, c.kind::text, c.name, c.description, c.updated_at,
 	(SELECT COUNT(*) FROM collection_items x WHERE x.collection_id = c.id),
 	` + coversOf("c.id", "c") + `,
 	($3 <> '' AND EXISTS (SELECT 1 FROM collection_items x WHERE x.collection_id = c.id
-		AND $3 IN (x.media_item_id::text, x.album_id::text, x.child_collection_id::text)))
+		AND $3 IN (x.media_item_id::text, x.album_id::text, x.child_collection_id::text)
+		AND COALESCE(x.season_number::text, '') = $4))
 FROM collections c
 WHERE c.owner_id = $1 AND ($2 = '' OR c.kind::text = $2)
 ORDER BY c.updated_at DESC`
@@ -73,8 +74,11 @@ SELECT ci.id,
 	` + entryCover("") + `,
 	mi.release_date, mi.external_source::text,
 	mm.duration_secs, COALESCE(mm.file_path IS NOT NULL, false),
-	mm.album_id::text, ta.title,
+	mm.album_id::text, ta.title, ci.season_number,
 	CASE
+		WHEN ci.season_number IS NOT NULL THEN
+			(SELECT COUNT(*) FROM episodes x WHERE x.media_item_id = ci.media_item_id
+				AND x.season_number = ci.season_number AND x.file_path IS NOT NULL)
 		WHEN ci.album_id IS NOT NULL THEN
 			(SELECT COUNT(*) FROM music_metadata x WHERE x.album_id = ci.album_id AND x.file_path IS NOT NULL)
 		WHEN ci.child_collection_id IS NOT NULL THEN
@@ -155,7 +159,7 @@ func loadEntries(db querier, collectionID string) ([]Entry, error) {
 		var covers []string
 		if err := rows.Scan(&e.EntryID, &e.Type, &e.ID, &e.Title, &e.Artist, &e.CoverImageURL,
 			&e.ReleaseDate, &e.ExternalSource, &e.DurationSecs, &e.Available, &e.AlbumID, &e.AlbumTitle,
-			&count, pq.Array(&covers)); err != nil {
+			&e.SeasonNumber, &count, pq.Array(&covers)); err != nil {
 			return nil, err
 		}
 		if count.Valid {
