@@ -29,13 +29,26 @@ export function canHold(kind, item) {
 
 /**
  * The body for adding an item, naming it the way the server expects
- * @param {object} item as for itemKind, with its id (media_item_id or id)
+ * @param {object} item as for itemKind, with its id (media_item_id or id), and season_number for
+ *  just one season of an anime
  */
 export function addBody(item) {
     const kind = itemKind(item)
     if (kind === "album") return { album_id: item.album_id ?? item.id }
     if (kind === "playlist" || kind === "collection") return { collection_id: item.id }
-    return { media_item_id: item.media_item_id ?? item.id }
+    const body = { media_item_id: item.media_item_id ?? item.id }
+    if (item.season_number != null) body.season_number = item.season_number
+    return body
+}
+
+/**
+ * What an item is called in the "Add to…" picker and on its entry's row: a season goes by its
+ * anime's title and the season
+ * @param {object} item with a title (or media_title, or name), and season_number for a season
+ */
+export function itemTitle(item) {
+    const title = item.title ?? item.media_title ?? item.name
+    return item.season_number != null ? `${title} — Season ${item.season_number}` : title
 }
 
 /**

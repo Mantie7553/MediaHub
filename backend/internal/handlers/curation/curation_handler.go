@@ -412,9 +412,6 @@ func (h *Handler) EditAlbum(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// largest cover image accepted, well above a high resolution poster scan
-const maxCoverBytes = 10 << 20
-
 /*
 Function:	UploadCover
 Purpose:	Admin: replace a title's cover (anime, movie, manga, light novel or track; albums
@@ -439,7 +436,7 @@ func (h *Handler) UploadCover(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data, ok := readImage(w, r)
+	data, ok := covers.ReadUpload(w, r)
 	if !ok {
 		return
 	}
@@ -468,41 +465,6 @@ func (h *Handler) UploadCover(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	utils.JSON(w, map[string]string{"cover_image_url": coverURL})
-}
-
-/*
-Function:	readImage
-Purpose:	read the "file" of a multipart upload and check it is an image a browser shows.
-Responds with the problem and returns false when it isn't
-*/
-func readImage(w http.ResponseWriter, r *http.Request) ([]byte, bool) {
-	r.Body = http.MaxBytesReader(w, r.Body, maxCoverBytes+(1<<20))
-	if err := r.ParseMultipartForm(maxCoverBytes); err != nil {
-		utils.Error(w, http.StatusRequestEntityTooLarge, "the image is too large or the upload was cut off")
-		return nil, false
-	}
-	defer r.MultipartForm.RemoveAll()
-
-	file, _, err := r.FormFile("file")
-	if err != nil {
-		utils.Error(w, http.StatusBadRequest, "no image in the upload")
-		return nil, false
-	}
-	defer file.Close()
-
-	data, err := io.ReadAll(io.LimitReader(file, maxCoverBytes+1))
-	if utils.InternalError(w, err) {
-		return nil, false
-	}
-	if len(data) > maxCoverBytes {
-		utils.Error(w, http.StatusRequestEntityTooLarge, "the image is too large")
-		return nil, false
-	}
-	if musicfiles.ImageType(data) == "" {
-		utils.Error(w, http.StatusBadRequest, "covers must be JPEG, PNG, WebP or GIF images")
-		return nil, false
-	}
-	return data, true
 }
 
 /*

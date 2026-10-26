@@ -121,11 +121,13 @@ Purpose:	The user's playlists and collections. Playlists start with the two comp
 Query:
   - kind: "playlist", "collection", or nothing for both
   - contains: an item id; the ones already holding it are marked, for the "Add to…" picker
+  - season: with contains, an anime's season; only the ones holding that season are marked
 */
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	user := auth.GetUser(r)
 	kind := r.URL.Query().Get("kind")
 	contains := r.URL.Query().Get("contains")
+	season := r.URL.Query().Get("season")
 	if kind != "" && kind != kindPlaylist && kind != kindCollection {
 		utils.Error(w, http.StatusBadRequest, "kind is playlist or collection")
 		return
@@ -142,7 +144,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	rows, err := h.db.Query(summariesQuery, user.UserID, kind, contains)
+	rows, err := h.db.Query(summariesQuery, user.UserID, kind, contains, season)
 	if utils.InternalError(w, err) {
 		return
 	}
@@ -239,9 +241,10 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 		}
 		var updated time.Time
 		err = h.db.QueryRow(
-			`SELECT c.id, c.kind::text, c.name, c.description, c.updated_at, `+coversOf("c.id", "c")+`
+			`SELECT c.id, c.kind::text, c.name, c.description, c.updated_at, `+coversOrImage("c", "c")+`,
+				c.image_id IS NOT NULL
 			FROM collections c WHERE c.id = $1`, id,
-		).Scan(&detail.ID, &detail.Kind, &detail.Name, &detail.Description, &updated, pq.Array(&detail.Covers))
+		).Scan(&detail.ID, &detail.Kind, &detail.Name, &detail.Description, &updated, pq.Array(&detail.Covers), &detail.HasImage)
 		if utils.InternalError(w, err) {
 			return
 		}
@@ -381,9 +384,14 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	images, err := imagesOf(h.db, id)
+	if utils.InternalError(w, err) {
+		return
+	}
 	_, err = h.db.Exec(`DELETE FROM collections WHERE id = $1`, id)
 	if utils.InternalError(w, err) {
 		return
 	}
+	removeUnusedImages(h.db, images...)
 	w.WriteHeader(http.StatusNoContent)
 }

@@ -71,7 +71,9 @@ export default function Card({item, userContentMap={}, onListChange, fluid=false
         body = <div role="button" tabIndex={0} className="block cursor-pointer outline-none" onClick={playTrack}
             onKeyDown={e => e.key === "Enter" && e.target === e.currentTarget && playTrack()}>{card}</div>
     } else if (id) {
-        body = <Link to={`${path}${id}`} state={{ from: window.location.pathname }} className="block outline-none">
+        // a collection's season entry opens on that season
+        const season = item.season_number != null ? `?season=${item.season_number}` : ""
+        body = <Link to={`${path}${id}${season}`} state={{ from: window.location.pathname }} className="block outline-none">
             {card}
         </Link>
     } else {
@@ -94,7 +96,8 @@ function mediaInfo(item) {
             const season = item.active_season ? `S${item.active_season}` : null
             const total = item.season_total
             const episodes = item.season_watched ?? null
-            meta = episodes !== null
+            meta = item.season_number != null ? `Season ${item.season_number}`
+                : episodes !== null
                 ? [season, `E${episodes}${total ? ` / ${total}` : ""}`].filter(Boolean).join(" · ")
                 : (item.release_date ? Format.year(item.release_date) : null)
             progressPct = total ? Math.round((episodes / total) * 100) : 0
@@ -137,7 +140,7 @@ function ActionButtons({item, userEntry, onListChange, onDeleted}) {
     // list entries for albums carry album_id; anything else in the library has a media id
     const collectable = item.album_id
         ? { album_id: item.album_id, type: "album", title: item.media_title ?? item.title }
-        : mediaId && { id: mediaId, type: item.type ?? item.media_type, title: item.media_title ?? item.title };
+        : mediaId && { id: mediaId, type: item.type ?? item.media_type, title: item.media_title ?? item.title, season_number: item.season_number };
 
     function handleOpenModal(e) {
         e.stopPropagation();

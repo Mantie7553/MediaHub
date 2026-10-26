@@ -30,8 +30,8 @@ export default function useCollectionPicker(onAdded) {
         setOptions(null)
         setLoadError(null)
         setOpened(attempt)
-        const contains = Object.values(addBody(next))[0]
-        listCollections(undefined, contains)
+        const { season_number: season, ...ids } = addBody(next)
+        listCollections(undefined, Object.values(ids)[0], season)
             .then(res => { if (latestRef.current === attempt) setOptions(res.data ?? []) })
             .catch(err => { if (latestRef.current === attempt) setLoadError(err) })
     }

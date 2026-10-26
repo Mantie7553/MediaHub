@@ -19,7 +19,7 @@ SELECT $1, mm.media_item_id, $4 + (row_number() OVER (ORDER BY mm.track_number N
 FROM music_metadata mm
 JOIN media_items mi ON mi.id = mm.media_item_id
 WHERE mm.album_id = $2 AND mm.file_path IS NOT NULL
-ON CONFLICT (collection_id, media_item_id) WHERE media_item_id IS NOT NULL DO NOTHING`
+ON CONFLICT (collection_id, media_item_id) WHERE media_item_id IS NOT NULL AND season_number IS NULL DO NOTHING`
 
 /*
 Function:	itemKind
@@ -120,6 +120,20 @@ func (h *Handler) AddItem(w http.ResponseWriter, r *http.Request) {
 		utils.Error(w, http.StatusBadRequest, holdMessage(c.kind, err))
 		return
 	}
+	if req.SeasonNumber != nil && kind != "anime" {
+		utils.Error(w, http.StatusBadRequest, errSeasonOfWhat.Error())
+		return
+	}
+	if kind == "anime" {
+		problem, status, err := checkSeason(tx, id, itemID, req.SeasonNumber)
+		if utils.InternalError(w, err) {
+			return
+		}
+		if problem != nil {
+			utils.Error(w, status, problem.Error())
+			return
+		}
+	}
 
 	var last int64
 	if utils.InternalError(w, tx.QueryRow(`SELECT COALESCE(MAX(position), 0) FROM collection_items WHERE collection_id = $1`, id).Scan(&last)) {
@@ -139,12 +153,23 @@ func (h *Handler) AddItem(w http.ResponseWriter, r *http.Request) {
 		added, _ := res.RowsAffected()
 		result = addResponse{Added: int(added), Already: total - int(added)}
 	} else {
-		res, err := tx.Exec(
-			`INSERT INTO collection_items (collection_id, `+column+`, position, added_by)
+		query := `INSERT INTO collection_items (collection_id, ` + column + `, position, added_by)
 			VALUES ($1, $2, $3, $4)
-			ON CONFLICT (collection_id, `+column+`) WHERE `+column+` IS NOT NULL DO NOTHING`,
-			id, itemID, last+positionStep, user.UserID,
-		)
+			ON CONFLICT (collection_id, ` + column + `) WHERE ` + column + ` IS NOT NULL DO NOTHING`
+		args := []any{id, itemID, last + positionStep, user.UserID}
+		switch {
+		case req.SeasonNumber != nil:
+			query = `INSERT INTO collection_items (collection_id, media_item_id, season_number, position, added_by)
+				VALUES ($1, $2, $5, $3, $4)
+				ON CONFLICT (collection_id, media_item_id, season_number) WHERE season_number IS NOT NULL DO NOTHING`
+			args = append(args, *req.SeasonNumber)
+		case column == "media_item_id":
+			// the whole title, which has its own index apart from its seasons
+			query = `INSERT INTO collection_items (collection_id, media_item_id, position, added_by)
+				VALUES ($1, $2, $3, $4)
+				ON CONFLICT (collection_id, media_item_id) WHERE media_item_id IS NOT NULL AND season_number IS NULL DO NOTHING`
+		}
+		res, err := tx.Exec(query, args...)
 		if utils.InternalError(w, err) {
 			return
 		}
@@ -161,6 +186,36 @@ func (h *Handler) AddItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	utils.JSON(w, result)
+}
+
+/*
+Function:	checkSeason
+Purpose:	Before an anime, or one season of it, goes into a collection: the season has to be in
+the library, and the collection can't end up with both the whole anime and some of its seasons
+Returns:	why not and the status to answer with, or a nil problem
+*/
+func checkSeason(db querier, collectionID, animeID string, season *int) (problem error, status int, err error) {
+	if season != nil {
+		var exists bool
+		if err := db.QueryRow(`SELECT EXISTS (SELECT 1 FROM episodes WHERE media_item_id = $1 AND season_number = $2)`,
+			animeID, *season).Scan(&exists); err != nil {
+			return nil, 0, err
+		}
+		if !exists {
+			return errors.New("that season isn't in the library"), http.StatusNotFound, nil
+		}
+	}
+	var hasWhole, hasSeasons bool
+	if err := db.QueryRow(`
+		SELECT COALESCE(bool_or(season_number IS NULL), false), COALESCE(bool_or(season_number IS NOT NULL), false)
+		FROM collection_items WHERE collection_id = $1 AND media_item_id = $2`,
+		collectionID, animeID).Scan(&hasWhole, &hasSeasons); err != nil {
+		return nil, 0, err
+	}
+	if problem := seasonConflict(season, hasWhole, hasSeasons); problem != nil {
+		return problem, http.StatusConflict, nil
+	}
+	return nil, 0, nil
 }
 
 // what to tell someone adding the wrong kind of thing

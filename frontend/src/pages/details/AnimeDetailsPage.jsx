@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import api from "../../services/api";
 import ErrorState from "../../components/states/ErrorState";
 import NotFound from "../../components/states/NotFound";
@@ -25,6 +25,8 @@ import { getRole } from "../../utils/auth";
 
 export default function AnimeDetailsPage() {
     const { id } = useParams();
+    // a collection's season entry links here with the season to open on
+    const [searchParams] = useSearchParams();
     const navigate = useNavigate();
     const { userContentMap, refresh } = useUserContent();
     const userEntry = userContentMap[id];
@@ -145,7 +147,8 @@ export default function AnimeDetailsPage() {
             ? { label: "Watch again", run: () => watch(episodes[0], 0) }
             : null
 
-    const season = pickedSeason ?? String(nextEpisode?.season_number ?? seasonNumbers[0])
+    const linkedSeason = searchParams.get("season")
+    const season = pickedSeason ?? (seasons[linkedSeason] ? linkedSeason : String(nextEpisode?.season_number ?? seasonNumbers[0]))
     const seasonEpisodes = seasons[season] ?? []
 
     return (
@@ -208,6 +211,8 @@ export default function AnimeDetailsPage() {
                     actions={multiSeason && <ActionMenu label={`Season ${season} actions`} size="sm">
                         <ActionMenuItem icon={CheckCheck} label={`Mark season ${season} watched`} onClick={() => markSeason(season, seasonEpisodes, true)}/>
                         <ActionMenuItem icon={RotateCcw} label={`Mark season ${season} unwatched`} onClick={() => markSeason(season, seasonEpisodes, false)}/>
+                        <ActionMenuItem icon={ListPlus} label={`Add season ${season} to a collection…`}
+                            onClick={() => picker.open({ id, type: anime.type, title: anime.title, season_number: Number(season) })}/>
                     </ActionMenu>}
                 >
                     {seasonEpisodes.map(ep => {

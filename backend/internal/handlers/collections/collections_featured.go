@@ -29,7 +29,7 @@ const maxNoteLength = 500
 var featuredQuery = `
 SELECT c.id, c.kind::text, c.name, c.description, c.updated_at,
 	(SELECT COUNT(*) FROM collection_items x WHERE x.collection_id = c.id),
-	` + coversOf("c.id", "c") + `
+	` + coversOrImage("c", "c") + `
 FROM collections c
 WHERE c.featured_at IS NOT NULL
 ORDER BY c.featured_at DESC`
@@ -39,7 +39,7 @@ var pendingSubmissionsQuery = `
 SELECT s.id, s.note, s.submitted_at, u.username,
 	c.id, c.kind::text, c.name, c.description,
 	(SELECT COUNT(*) FROM collection_items x WHERE x.collection_id = c.id),
-	` + coversOf("c.id", "c") + `,
+	` + coversOrImage("c", "c") + `,
 	f.id, f.name
 FROM collection_submissions s
 JOIN collections c ON c.id = s.collection_id
@@ -304,6 +304,11 @@ func (h *Handler) Approve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// the featured copy's images, which it may let go of when it's updated
+	images, err := imagesOf(tx, collectionID)
+	if utils.InternalError(w, err) {
+		return
+	}
 	featuredID, err := feature(tx, collectionID, copyTarget{featured: true, createdBy: ownerID, featuredBy: user.UserID})
 	if utils.InternalError(w, err) {
 		return
@@ -316,6 +321,7 @@ func (h *Handler) Approve(w http.ResponseWriter, r *http.Request) {
 	if utils.InternalError(w, tx.Commit()) {
 		return
 	}
+	removeUnusedImages(h.db, images...)
 	utils.JSON(w, map[string]string{"featured_id": featuredID})
 }
 
@@ -384,6 +390,10 @@ func (h *Handler) Feature(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	images, err := imagesOf(tx, id)
+	if utils.InternalError(w, err) {
+		return
+	}
 	featuredID, err := feature(tx, id, copyTarget{featured: true, createdBy: &user.UserID, featuredBy: user.UserID})
 	if utils.InternalError(w, err) {
 		return
@@ -396,5 +406,6 @@ func (h *Handler) Feature(w http.ResponseWriter, r *http.Request) {
 	if utils.InternalError(w, tx.Commit()) {
 		return
 	}
+	removeUnusedImages(h.db, images...)
 	utils.JSON(w, map[string]string{"featured_id": featuredID})
 }

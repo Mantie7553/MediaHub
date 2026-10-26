@@ -34,13 +34,13 @@ func newCopy(tx querier, srcID string, to copyTarget) (string, error) {
 	var err error
 	if to.featured {
 		err = tx.QueryRow(`
-			INSERT INTO collections (owner_id, kind, name, description, visibility, source_collection_id, created_by, featured_by, featured_at)
-			SELECT NULL, kind, name, description, 'featured', id, $2, $3, NOW() FROM collections WHERE id = $1
+			INSERT INTO collections (owner_id, kind, name, description, image_id, visibility, source_collection_id, created_by, featured_by, featured_at)
+			SELECT NULL, kind, name, description, image_id, 'featured', id, $2, $3, NOW() FROM collections WHERE id = $1
 			RETURNING id`, srcID, to.createdBy, to.featuredBy).Scan(&id)
 	} else {
 		err = tx.QueryRow(`
-			INSERT INTO collections (owner_id, kind, name, description)
-			SELECT $2, kind, name, description FROM collections WHERE id = $1
+			INSERT INTO collections (owner_id, kind, name, description, image_id)
+			SELECT $2, kind, name, description, image_id FROM collections WHERE id = $1
 			RETURNING id`, srcID, to.ownerID).Scan(&id)
 	}
 	if err != nil {
@@ -63,7 +63,7 @@ func replaceFeatured(tx querier, featuredID, srcID string, to copyTarget) error 
 		return err
 	}
 	if _, err := tx.Exec(`
-		UPDATE collections f SET name = s.name, description = s.description, created_by = $3,
+		UPDATE collections f SET name = s.name, description = s.description, image_id = s.image_id, created_by = $3,
 			featured_by = $4, updated_at = NOW()
 		FROM collections s WHERE f.id = $1 AND s.id = $2`,
 		featuredID, srcID, to.createdBy, to.featuredBy); err != nil {
@@ -79,8 +79,8 @@ library's own, so the copy points at the same ones; nested playlists are copied 
 */
 func copyEntries(tx querier, srcID, dstID string, to copyTarget) error {
 	if _, err := tx.Exec(`
-		INSERT INTO collection_items (collection_id, media_item_id, album_id, position, added_by, added_at)
-		SELECT $2, media_item_id, album_id, position, added_by, added_at
+		INSERT INTO collection_items (collection_id, media_item_id, album_id, season_number, position, added_by, added_at)
+		SELECT $2, media_item_id, album_id, season_number, position, added_by, added_at
 		FROM collection_items WHERE collection_id = $1 AND child_collection_id IS NULL`,
 		srcID, dstID); err != nil {
 		return err
@@ -136,13 +136,13 @@ func copyChild(tx querier, childID, parentCopyID string, to copyTarget) (string,
 	var err error
 	if to.featured {
 		err = tx.QueryRow(`
-			INSERT INTO collections (owner_id, kind, name, description, visibility, created_by, part_of)
-			SELECT NULL, kind, name, description, 'featured', $2, $3 FROM collections WHERE id = $1
+			INSERT INTO collections (owner_id, kind, name, description, image_id, visibility, created_by, part_of)
+			SELECT NULL, kind, name, description, image_id, 'featured', $2, $3 FROM collections WHERE id = $1
 			RETURNING id`, childID, to.createdBy, parentCopyID).Scan(&id)
 	} else {
 		err = tx.QueryRow(`
-			INSERT INTO collections (owner_id, kind, name, description)
-			SELECT $2, kind, name, description FROM collections WHERE id = $1
+			INSERT INTO collections (owner_id, kind, name, description, image_id)
+			SELECT $2, kind, name, description, image_id FROM collections WHERE id = $1
 			RETURNING id`, childID, to.ownerID).Scan(&id)
 	}
 	if err != nil {

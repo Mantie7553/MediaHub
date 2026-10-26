@@ -146,3 +146,47 @@ func TestNamesAreTrimmedAndLimited(t *testing.T) {
 		t.Error("101 characters should be refused, counting characters not bytes")
 	}
 }
+
+func TestACollectionHoldsAnAnimeWholeOrBySeason(t *testing.T) {
+	two := 2
+	tests := []struct {
+		name                 string
+		adding               *int
+		hasWhole, hasSeasons bool
+		want                 error
+	}{
+		{"whole into an empty one", nil, false, false, nil},
+		{"season into an empty one", &two, false, false, nil},
+		{"another season", &two, false, true, nil},
+		{"season next to the whole anime", &two, true, false, errWholeHeld},
+		{"whole anime next to its seasons", nil, false, true, errSeasonsHeld},
+		{"whole anime again", nil, true, false, nil},
+	}
+	for _, tt := range tests {
+		if got := seasonConflict(tt.adding, tt.hasWhole, tt.hasSeasons); !errors.Is(got, tt.want) {
+			t.Errorf("%s: got %v, want %v", tt.name, got, tt.want)
+		}
+	}
+}
+
+func TestOnlyAdminsSetImagesOfTheirOwnOrFeatured(t *testing.T) {
+	admin := &auth.UserContext{UserID: "a", Role: "admin"}
+	user := &auth.UserContext{UserID: "u", Role: "user"}
+	tests := []struct {
+		name string
+		c    stored
+		user *auth.UserContext
+		want bool
+	}{
+		{"admin's own", stored{access: access{ownerID: "a"}}, admin, true},
+		{"featured, by an admin", stored{access: access{featured: true}}, admin, true},
+		{"someone else's, in review", stored{access: access{ownerID: "u", inReview: true}}, admin, false},
+		{"a user's own", stored{access: access{ownerID: "u"}}, user, false},
+		{"featured, by a user", stored{access: access{featured: true}}, user, false},
+	}
+	for _, tt := range tests {
+		if got := canSetImage(tt.c, tt.user); got != tt.want {
+			t.Errorf("%s: got %v, want %v", tt.name, got, tt.want)
+		}
+	}
+}

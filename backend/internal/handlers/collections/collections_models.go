@@ -27,6 +27,8 @@ type Detail struct {
 	Featured bool `json:"featured"`
 	// a submission to feature it is waiting for an admin
 	InReview bool `json:"in_review"`
+	// an admin uploaded an image for it, which shows as its only cover
+	HasImage bool `json:"has_image"`
 	// for the owner: their latest request to feature it, and the featured copy of it if
 	// there is one, so a new request reads as an update to that
 	Submission     *SubmissionState `json:"submission"`
@@ -63,7 +65,10 @@ type Entry struct {
 	Available    bool    `json:"available"`
 	AlbumID      *string `json:"album_id"`
 	AlbumTitle   *string `json:"album_title"`
-	// albums (their downloaded tracks) and nested playlists (their entries)
+	// one season of an anime, rather than the whole show
+	SeasonNumber *int `json:"season_number"`
+	// albums (their downloaded tracks), nested playlists (their entries) and seasons (their
+	// downloaded episodes)
 	ItemCount *int `json:"item_count"`
 	// nested playlists
 	Covers []string `json:"covers,omitempty"`
@@ -85,6 +90,8 @@ type addRequest struct {
 	MediaItemID  string `json:"media_item_id"`
 	AlbumID      string `json:"album_id"`
 	CollectionID string `json:"collection_id"`
+	// with an anime's media_item_id: just that season of it
+	SeasonNumber *int `json:"season_number"`
 }
 
 type addResponse struct {

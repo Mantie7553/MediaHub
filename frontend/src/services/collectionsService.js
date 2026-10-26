@@ -23,9 +23,10 @@ function changed(res) {
  * The user's playlists and collections, playlists starting with the two that fill themselves
  * @param {string} kind "playlist", "collection", or nothing for both
  * @param {string} contains an item id; the ones already holding it come back with contains set
+ * @param {number} season with contains, an anime's season: only the ones holding that season
  */
-export function listCollections(kind, contains) {
-    return api.get("/me/collections", { params: { kind: kind || undefined, contains: contains || undefined } })
+export function listCollections(kind, contains, season) {
+    return api.get("/me/collections", { params: { kind: kind || undefined, contains: contains || undefined, season: season ?? undefined } })
 }
 
 /**
@@ -117,4 +118,23 @@ export function rejectSubmission(submissionId, note) {
  */
 export function featureNow(id) {
     return api.post(`/admin/collections/${id}/feature`)
+}
+
+/**
+ * Admins: give one of their own, or a featured one, an image that shows instead of the mosaic
+ * @param {string} id the playlist or collection
+ * @param {File} file a JPEG, PNG, WebP or GIF
+ * @returns the response, with data.cover_image_url signed for <img>
+ */
+export function setCollectionImage(id, file) {
+    const form = new FormData()
+    form.append("file", file)
+    return api.put(`/admin/collections/${id}/image`, form).then(changed)
+}
+
+/**
+ * Admins: take a playlist's or collection's image away, back to the mosaic
+ */
+export function removeCollectionImage(id) {
+    return api.delete(`/admin/collections/${id}/image`).then(changed)
 }
