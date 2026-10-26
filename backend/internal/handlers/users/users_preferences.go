@@ -17,6 +17,8 @@ type preferences struct {
 	AudioLanguage string `json:"audio_language"`
 	// a language code, or "off"
 	SubtitleLanguage string `json:"subtitle_language"`
+	// skip openings and endings without asking; left out of an update keeps it as it is
+	AutoSkip *bool `json:"auto_skip,omitempty"`
 }
 
 /*
@@ -34,17 +36,17 @@ func validPreferences(p preferences) bool {
 
 /*
 Function:	GetPreferences
-Purpose:	Get the current user's playback language preferences
+Purpose:	Get the current user's playback preferences: languages and auto skip
 Params:
   - w: http response writer to respond to the front end
   - r: http request coming from the frontend
 */
 func (h *Handler) GetPreferences(w http.ResponseWriter, r *http.Request) {
-	var p preferences
+	p := preferences{AutoSkip: new(bool)}
 	err := h.db.QueryRow(
-		`SELECT preferred_audio_language, preferred_subtitle_language FROM users WHERE id = $1`,
+		`SELECT preferred_audio_language, preferred_subtitle_language, auto_skip FROM users WHERE id = $1`,
 		auth.GetUser(r).UserID,
-	).Scan(&p.AudioLanguage, &p.SubtitleLanguage)
+	).Scan(&p.AudioLanguage, &p.SubtitleLanguage, p.AutoSkip)
 	if utils.InternalError(w, err) {
 		return
 	}
@@ -53,7 +55,7 @@ func (h *Handler) GetPreferences(w http.ResponseWriter, r *http.Request) {
 
 /*
 Function:	UpdatePreferences
-Purpose:	Save the current user's playback language preferences
+Purpose:	Save the current user's playback preferences, auto skip only when it's given
 Params:
   - w: http response writer to respond to the front end
   - r: http request coming from the frontend
@@ -69,12 +71,17 @@ func (h *Handler) UpdatePreferences(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err := h.db.Exec(
-		`UPDATE users SET preferred_audio_language = $1, preferred_subtitle_language = $2, updated_at = NOW() WHERE id = $3`,
-		p.AudioLanguage, p.SubtitleLanguage, auth.GetUser(r).UserID,
-	)
+	// a nil AutoSkip is NULL, keeping the saved one
+	saved := new(bool)
+	err := h.db.QueryRow(
+		`UPDATE users SET preferred_audio_language = $1, preferred_subtitle_language = $2,
+		auto_skip = COALESCE($3, auto_skip), updated_at = NOW() WHERE id = $4
+		RETURNING auto_skip`,
+		p.AudioLanguage, p.SubtitleLanguage, p.AutoSkip, auth.GetUser(r).UserID,
+	).Scan(saved)
 	if utils.InternalError(w, err) {
 		return
 	}
+	p.AutoSkip = saved
 	utils.JSON(w, p)
 }

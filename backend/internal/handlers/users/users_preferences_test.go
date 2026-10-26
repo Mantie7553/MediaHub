@@ -7,15 +7,15 @@ func TestValidPreferences(t *testing.T) {
 		p  preferences
 		ok bool
 	}{
-		{preferences{"jpn", "eng"}, true},
-		{preferences{"default", "off"}, true},
-		{preferences{"eng", "off"}, true},
-		{preferences{"", "eng"}, false},
-		{preferences{"jpn", ""}, false},
-		{preferences{"off", "eng"}, false},
-		{preferences{"jpn", "default"}, false},
-		{preferences{"JPN", "eng"}, false},
-		{preferences{"japanese", "eng"}, false},
+		{preferences{"jpn", "eng", nil}, true},
+		{preferences{"default", "off", nil}, true},
+		{preferences{"eng", "off", nil}, true},
+		{preferences{"", "eng", nil}, false},
+		{preferences{"jpn", "", nil}, false},
+		{preferences{"off", "eng", nil}, false},
+		{preferences{"jpn", "default", nil}, false},
+		{preferences{"JPN", "eng", nil}, false},
+		{preferences{"japanese", "eng", nil}, false},
 	}
 	for _, tt := range tests {
 		if got := validPreferences(tt.p); got != tt.ok {

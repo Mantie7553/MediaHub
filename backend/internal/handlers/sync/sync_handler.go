@@ -47,7 +47,7 @@ func (h *Handler) syncSonarr() error {
 		return err
 	}
 
-	tvdbToAnilist, _, err := arr.FetchAnimeMaps()
+	tvdbToAnilist, _, seasonToMal, err := arr.FetchAnimeMaps()
 	if err != nil {
 		logger.Error("failed to fetch fribb anime-list map: %s", err.Error())
 		tvdbToAnilist = map[int]int{}
@@ -220,8 +220,43 @@ func (h *Handler) syncSonarr() error {
 				logger.Error("failed to update or insert episode %d: %s", ep.ID, err.Error())
 			}
 		}
+
+		h.saveSeasonMal(mediaItemID, s.TvdbID, episodes, seasonToMal)
 	}
 	return nil
+}
+
+/*
+Function:	saveSeasonMal
+Purpose:	save the MyAnimeList entry of each of the series' seasons, used to look up skip times
+Params:
+  - mediaItemID: the series
+  - tvdbID: the series' TVDB id
+  - episodes: the series' episodes from Sonarr
+  - seasonToMal: TVDB season to MyAnimeList id, from Fribb's list
+*/
+func (h *Handler) saveSeasonMal(mediaItemID string, tvdbID int, episodes []arr.SonarrEpisode, seasonToMal map[arr.TvdbSeason]int) {
+	if tvdbID <= 0 {
+		return
+	}
+	seen := map[int]bool{}
+	for _, ep := range episodes {
+		if seen[ep.SeasonNumber] {
+			continue
+		}
+		seen[ep.SeasonNumber] = true
+		malID, ok := seasonToMal[arr.TvdbSeason{TvdbID: tvdbID, Season: ep.SeasonNumber}]
+		if !ok {
+			continue
+		}
+		if _, err := h.db.Exec(
+			`INSERT INTO anime_season_mal (media_item_id, season_number, mal_id) VALUES ($1, $2, $3)
+			ON CONFLICT (media_item_id, season_number) DO UPDATE SET mal_id = EXCLUDED.mal_id`,
+			mediaItemID, ep.SeasonNumber, malID,
+		); err != nil {
+			logger.Error("failed to save MyAnimeList id of season %d of %s: %s", ep.SeasonNumber, mediaItemID, err.Error())
+		}
+	}
 }
 
 func (h *Handler) syncRadarr() error {
@@ -230,7 +265,7 @@ func (h *Handler) syncRadarr() error {
 		return err
 	}
 
-	_, tmdbToAnilist, err := arr.FetchAnimeMaps()
+	_, tmdbToAnilist, _, err := arr.FetchAnimeMaps()
 	if err != nil {
 		logger.Error("failed to fetch fribb anime-list map: %s", err.Error())
 		tmdbToAnilist = map[int]int{}

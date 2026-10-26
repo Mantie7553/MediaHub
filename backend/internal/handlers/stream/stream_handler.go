@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Mantie7553/MediaHub/backend/internal/clients/aniskip"
 	"github.com/Mantie7553/MediaHub/backend/internal/musicfiles"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/auth"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/logger"
@@ -22,7 +23,8 @@ import (
 )
 
 type Handler struct {
-	db *sql.DB
+	db      *sql.DB
+	aniskip *aniskip.AniSkipClient
 
 	mu         sync.Mutex
 	transcodes map[string]*transcode // transcodes in use by type-id-a<audio>
@@ -30,7 +32,7 @@ type Handler struct {
 }
 
 func NewHandler(db *sql.DB) *Handler {
-	return &Handler{db: db, transcodes: map[string]*transcode{}}
+	return &Handler{db: db, aniskip: aniskip.NewAniSkipClient(), transcodes: map[string]*transcode{}}
 }
 
 // one transcode folder per media, audio track and burned in subtitle, e.g. a2 or a2-b5
@@ -51,30 +53,8 @@ Params:
 func (h *Handler) StreamMedia(w http.ResponseWriter, r *http.Request) {
 	mediaType := chi.URLParam(r, "type")
 	mediaID := chi.URLParam(r, "id")
-	var filePath string
-	var err error
-
-	switch mediaType {
-	case "episode":
-		err = h.db.QueryRow(
-			`SELECT file_path FROM episodes WHERE id = $1`,
-			mediaID,
-		).Scan(&filePath)
-	case "movie":
-		err = h.db.QueryRow(
-			`SELECT file_path FROM movie_metadata WHERE media_item_id = $1`,
-			mediaID,
-		).Scan(&filePath)
-	default:
-		utils.Error(w, http.StatusBadRequest, "invalid media type")
-		return
-	}
-
-	if err == sql.ErrNoRows {
-		utils.Error(w, http.StatusNotFound, "episode not found")
-		return
-	}
-	if utils.InternalError(w, err) {
+	filePath, ok := h.videoFile(w, mediaType, mediaID)
+	if !ok {
 		return
 	}
 
@@ -133,6 +113,43 @@ func (h *Handler) StreamMedia(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeStreamURLs(w, r, mediaType, mediaID, variant, tc.manifest, audioTracks(streams), prefs)
+}
+
+/*
+Function:	videoFile
+Purpose:	the file of an episode or movie, responding with an error when there isn't one
+Params:
+  - w: http response writer, for the error
+  - mediaType: episode or movie
+  - mediaID: the id of the episode or movie
+*/
+func (h *Handler) videoFile(w http.ResponseWriter, mediaType, mediaID string) (string, bool) {
+	var filePath string
+	var err error
+	switch mediaType {
+	case "episode":
+		err = h.db.QueryRow(
+			`SELECT file_path FROM episodes WHERE id = $1`,
+			mediaID,
+		).Scan(&filePath)
+	case "movie":
+		err = h.db.QueryRow(
+			`SELECT file_path FROM movie_metadata WHERE media_item_id = $1`,
+			mediaID,
+		).Scan(&filePath)
+	default:
+		utils.Error(w, http.StatusBadRequest, "invalid media type")
+		return "", false
+	}
+
+	if err == sql.ErrNoRows {
+		utils.Error(w, http.StatusNotFound, mediaType+" not found")
+		return "", false
+	}
+	if utils.InternalError(w, err) {
+		return "", false
+	}
+	return filePath, true
 }
 
 /*

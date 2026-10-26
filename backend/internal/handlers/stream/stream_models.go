@@ -1,5 +1,7 @@
 package stream
 
+import "github.com/Mantie7553/MediaHub/backend/internal/clients/aniskip"
+
 // one stream from ffprobe -show_streams
 type probeStream struct {
 	Index       int    `json:"index"`
@@ -17,9 +19,19 @@ type probeStream struct {
 	} `json:"tags"`
 }
 
+// one chapter from ffprobe -show_chapters
+type probeChapter struct {
+	StartTime string `json:"start_time"`
+	EndTime   string `json:"end_time"`
+	Tags      struct {
+		Title string `json:"title"`
+	} `json:"tags"`
+}
+
 type probeOutput struct {
-	Streams []probeStream `json:"streams"`
-	Format  struct {
+	Streams  []probeStream  `json:"streams"`
+	Chapters []probeChapter `json:"chapters"`
+	Format   struct {
 		Duration string `json:"duration"`
 	} `json:"format"`
 }
@@ -27,6 +39,7 @@ type probeOutput struct {
 // what ffprobe says about a media file
 type probeResult struct {
 	Streams  []probeStream
+	Chapters []probeChapter
 	Duration float64 // seconds
 }
 
@@ -96,4 +109,9 @@ type streamResponse struct {
 	Subtitles []subtitleResponse `json:"subtitles"`
 	Burned    int                `json:"burned"` // the subtitle burned into this stream, -1 for none
 	Fonts     []string           `json:"fonts"`  // attached fonts for the ASS tracks
+}
+
+type skipResponse struct {
+	Segments []aniskip.Segment `json:"segments"`
+	Source   string            `json:"source,omitempty"` // chapters or aniskip
 }

@@ -53,14 +53,14 @@ var inputOnlyLocal = []string{"-protocol_whitelist", "file"}
 
 /*
 Function:	probeStreams
-Purpose:	list the streams in a media file and its length with ffprobe
+Purpose:	list the streams and chapters in a media file and its length with ffprobe
 Params:
   - filePath: the file to inspect
 */
 func probeStreams(filePath string) (probeResult, error) {
 	args := append([]string{"-v", "error"}, inputOnlyLocal...)
 	out, err := exec.Command("ffprobe", append(args,
-		"-show_entries", "stream=index,codec_type,codec_name:stream_tags=language,title,filename,mimetype:stream_disposition=default,forced:format=duration",
+		"-show_entries", "stream=index,codec_type,codec_name:stream_tags=language,title,filename,mimetype:stream_disposition=default,forced:format=duration:chapter=start_time,end_time:chapter_tags=title",
 		"-of", "json",
 		filePath,
 	)...).Output()
@@ -73,7 +73,7 @@ func probeStreams(filePath string) (probeResult, error) {
 		return probeResult{}, fmt.Errorf("ffprobe output: %w", err)
 	}
 	duration, _ := strconv.ParseFloat(parsed.Format.Duration, 64)
-	return probeResult{Streams: parsed.Streams, Duration: duration}, nil
+	return probeResult{Streams: parsed.Streams, Chapters: parsed.Chapters, Duration: duration}, nil
 }
 
 // probe results by file, so picking tracks doesn't run ffprobe on every play
