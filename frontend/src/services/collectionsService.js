@@ -119,3 +119,22 @@ export function rejectSubmission(submissionId, note) {
 export function featureNow(id) {
     return api.post(`/admin/collections/${id}/feature`)
 }
+
+/**
+ * Admins: give one of their own, or a featured one, an image that shows instead of the mosaic
+ * @param {string} id the playlist or collection
+ * @param {File} file a JPEG, PNG, WebP or GIF
+ * @returns the response, with data.cover_image_url signed for <img>
+ */
+export function setCollectionImage(id, file) {
+    const form = new FormData()
+    form.append("file", file)
+    return api.put(`/admin/collections/${id}/image`, form).then(changed)
+}
+
+/**
+ * Admins: take a playlist's or collection's image away, back to the mosaic
+ */
+export function removeCollectionImage(id) {
+    return api.delete(`/admin/collections/${id}/image`).then(changed)
+}

@@ -168,3 +168,25 @@ func TestACollectionHoldsAnAnimeWholeOrBySeason(t *testing.T) {
 		}
 	}
 }
+
+func TestOnlyAdminsSetImagesOfTheirOwnOrFeatured(t *testing.T) {
+	admin := &auth.UserContext{UserID: "a", Role: "admin"}
+	user := &auth.UserContext{UserID: "u", Role: "user"}
+	tests := []struct {
+		name string
+		c    stored
+		user *auth.UserContext
+		want bool
+	}{
+		{"admin's own", stored{access: access{ownerID: "a"}}, admin, true},
+		{"featured, by an admin", stored{access: access{featured: true}}, admin, true},
+		{"someone else's, in review", stored{access: access{ownerID: "u", inReview: true}}, admin, false},
+		{"a user's own", stored{access: access{ownerID: "u"}}, user, false},
+		{"featured, by a user", stored{access: access{featured: true}}, user, false},
+	}
+	for _, tt := range tests {
+		if got := canSetImage(tt.c, tt.user); got != tt.want {
+			t.Errorf("%s: got %v, want %v", tt.name, got, tt.want)
+		}
+	}
+}

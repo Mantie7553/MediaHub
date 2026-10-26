@@ -27,6 +27,8 @@ type Detail struct {
 	Featured bool `json:"featured"`
 	// a submission to feature it is waiting for an admin
 	InReview bool `json:"in_review"`
+	// an admin uploaded an image for it, which shows as its only cover
+	HasImage bool `json:"has_image"`
 	// for the owner: their latest request to feature it, and the featured copy of it if
 	// there is one, so a new request reads as an update to that
 	Submission     *SubmissionState `json:"submission"`

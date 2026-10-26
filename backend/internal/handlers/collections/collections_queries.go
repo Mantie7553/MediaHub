@@ -50,13 +50,20 @@ func coversOf(collectionID, s string) string {
 	WHERE cover IS NOT NULL ORDER BY first LIMIT 4)`
 }
 
+// collection {alias}'s covers: the image an admin uploaded for it (at the URL covers.URL gives
+// it), or else up to 4 from the start of it
+func coversOrImage(alias, s string) string {
+	return `CASE WHEN ` + alias + `.image_id IS NOT NULL THEN ARRAY['/api/media/' || ` + alias + `.image_id || '/cover']
+		ELSE ` + coversOf(alias+".id", s) + ` END`
+}
+
 // the user's own playlists and collections, newest change first (featured copies belong to
 // nobody, so they never show here). $2 is a kind or ”, $3 an
 // item id to mark the ones that hold it, or ”, and $4 the season of it, or ” for the whole thing
 var summariesQuery = `
 SELECT c.id, c.kind::text, c.name, c.description, c.updated_at,
 	(SELECT COUNT(*) FROM collection_items x WHERE x.collection_id = c.id),
-	` + coversOf("c.id", "c") + `,
+	` + coversOrImage("c", "c") + `,
 	($3 <> '' AND EXISTS (SELECT 1 FROM collection_items x WHERE x.collection_id = c.id
 		AND $3 IN (x.media_item_id::text, x.album_id::text, x.child_collection_id::text)
 		AND COALESCE(x.season_number::text, '') = $4))
@@ -84,7 +91,7 @@ SELECT ci.id,
 		WHEN ci.child_collection_id IS NOT NULL THEN
 			(SELECT COUNT(*) FROM collection_items x WHERE x.collection_id = ci.child_collection_id)
 	END,
-	CASE WHEN ci.child_collection_id IS NOT NULL THEN ` + coversOf("ci.child_collection_id", "n") + ` END
+	CASE WHEN ci.child_collection_id IS NOT NULL THEN ` + coversOrImage("cc", "n") + ` END
 FROM collection_items ci` + entryJoins("") + `
 LEFT JOIN collections cc ON cc.id = ci.child_collection_id
 WHERE ci.collection_id = $1

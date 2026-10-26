@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import { Link, useNavigate, useParams } from "react-router-dom"
-import { ArrowDown, ArrowUp, ArrowUpToLine, Check, Clock, Copy, GripVertical, ListPlus, PencilLine, Send, SlidersHorizontal, Sparkles, Trash2, X } from "lucide-react"
+import { ArrowDown, ArrowUp, ArrowUpToLine, Check, Clock, Copy, GripVertical, ImageMinus, ImagePlus, ListPlus, PencilLine, Send, SlidersHorizontal, Sparkles, Trash2, X } from "lucide-react"
 import useApi from "../../hooks/useApi"
 import useCollectionPicker from "../../hooks/useCollectionPicker"
 import { useUserContent } from "../../hooks"
@@ -19,7 +19,7 @@ import EmptyState from "../../components/states/EmptyState"
 import ErrorState from "../../components/states/ErrorState"
 import NotFound from "../../components/states/NotFound"
 import { DetailsSkeleton } from "../../components/states/Skeletons"
-import { deleteCollection, featureNow, moveInCollection, onCollectionsChanged, removeFromCollection, saveCopy, submitForFeaturing, updateCollection, withdrawSubmission } from "../../services/collectionsService"
+import { deleteCollection, featureNow, moveInCollection, onCollectionsChanged, removeCollectionImage, removeFromCollection, saveCopy, setCollectionImage, submitForFeaturing, updateCollection, withdrawSubmission } from "../../services/collectionsService"
 import { getRole } from "../../utils/auth"
 import { SMART_PLAYLISTS, applyMove, dropTarget, itemTitle, moveTarget } from "../../utils/collections"
 import { PlayButton, QueueModeButtons } from "../../components/details/PlaybackControls"
@@ -46,6 +46,7 @@ export default function CollectionPage() {
     const renameRef = useRef(null)
     const deleteRef = useRef(null)
     const takeDownRef = useRef(null)
+    const imageRef = useRef(null)
     const [arranging, setArranging] = useState(false)
     const [copying, setCopying] = useState(false)
     // the cards on a collection's page have their own picker, which can add to this one
@@ -69,6 +70,8 @@ export default function CollectionPage() {
     const noun = isPlaylist ? "playlist" : "collection"
     const canEdit = data.can_edit
     const featured = data.featured
+    // admins look after the images of their own and of the featured ones
+    const canSetImage = getRole() === "admin" && !data.smart && (canEdit || featured)
 
     function move(index, after) {
         if (after === undefined) return
@@ -93,6 +96,21 @@ export default function CollectionPage() {
         return deleteCollection(id)
             .then(() => { toast.success(featured ? `Took down ${data.name}` : `Deleted ${data.name}`); navigate("/", { replace: true }) })
             .catch(err => { toast.error(err, `Could not delete the ${noun}`); throw err })
+    }
+
+    function pickImage(e) {
+        const file = e.target.files?.[0]
+        e.target.value = ""
+        if (!file) return
+        setCollectionImage(id, file)
+            .then(() => { toast.success("Image saved"); reload(true) })
+            .catch(err => toast.error(err, "Could not save the image"))
+    }
+
+    function removeImage() {
+        removeCollectionImage(id)
+            .then(() => { toast.success("Image removed"); reload(true) })
+            .catch(err => toast.error(err, "Could not remove the image"))
     }
 
     function copyToMine() {
@@ -147,6 +165,10 @@ export default function CollectionPage() {
                     {isPlaylist && featured && <ActionMenuItem icon={Copy} label="Save a copy to my playlists" onClick={copyToMine}/>}
                     {isPlaylist && !data.smart && <ActionMenuItem icon={ListPlus} label="Add to a collection…"
                         onClick={() => picker.open({ id, kind: "playlist", title: data.name })}/>}
+                    {canSetImage && <>
+                        <ActionMenuItem icon={ImagePlus} label={data.has_image ? "Change image…" : "Upload image…"} onClick={() => imageRef.current.click()}/>
+                        {data.has_image && <ActionMenuItem icon={ImageMinus} label="Remove image" onClick={removeImage}/>}
+                    </>}
                     {data.can_delete && featured && <ActionMenuItem icon={Trash2} label="Take down…" danger onClick={() => takeDownRef.current.showModal()}/>}
                     {canEdit && <>
                         <ActionMenuItem icon={PencilLine} label={`Rename ${noun}…`} onClick={() => renameRef.current.showModal()}/>
@@ -205,6 +227,7 @@ export default function CollectionPage() {
                 "The original it was made from isn't touched, so it can be submitted again.",
             ]}
             onConfirm={destroy}/>}
+        {canSetImage && <input ref={imageRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" onChange={pickImage}/>}
         {picker.modal}
     </div>
 }

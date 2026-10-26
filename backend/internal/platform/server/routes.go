@@ -325,6 +325,9 @@ func (s *Server) routes() {
 			r.Post("/admin/collection-submissions/{id}/approve", collectionsHandler.Approve)
 			r.Post("/admin/collection-submissions/{id}/reject", collectionsHandler.Reject)
 			r.Post("/admin/collections/{id}/feature", collectionsHandler.Feature)
+			// an image of its own for a playlist or collection, instead of the mosaic
+			r.Put("/admin/collections/{id}/image", collectionsHandler.SetImage)
+			r.Delete("/admin/collections/{id}/image", collectionsHandler.RemoveImage)
 
 			// Invite Handler endpoints
 			r.Get("/admin/invites", invitesHandler.GetAll)

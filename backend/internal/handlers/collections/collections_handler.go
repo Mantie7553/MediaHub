@@ -241,9 +241,10 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 		}
 		var updated time.Time
 		err = h.db.QueryRow(
-			`SELECT c.id, c.kind::text, c.name, c.description, c.updated_at, `+coversOf("c.id", "c")+`
+			`SELECT c.id, c.kind::text, c.name, c.description, c.updated_at, `+coversOrImage("c", "c")+`,
+				c.image_id IS NOT NULL
 			FROM collections c WHERE c.id = $1`, id,
-		).Scan(&detail.ID, &detail.Kind, &detail.Name, &detail.Description, &updated, pq.Array(&detail.Covers))
+		).Scan(&detail.ID, &detail.Kind, &detail.Name, &detail.Description, &updated, pq.Array(&detail.Covers), &detail.HasImage)
 		if utils.InternalError(w, err) {
 			return
 		}
@@ -383,9 +384,14 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	images, err := imagesOf(h.db, id)
+	if utils.InternalError(w, err) {
+		return
+	}
 	_, err = h.db.Exec(`DELETE FROM collections WHERE id = $1`, id)
 	if utils.InternalError(w, err) {
 		return
 	}
+	removeUnusedImages(h.db, images...)
 	w.WriteHeader(http.StatusNoContent)
 }

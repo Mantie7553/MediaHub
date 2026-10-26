@@ -1,6 +1,7 @@
 /*
 Package covers holds the cover images admins upload for a title, kept in MEDIA_ROOT/Covers
-under the media item's id. Album covers aren't kept here: they are the cover.jpg in the
+under the media item's id, and the images they upload for a playlist or collection, under an
+image id of their own. Album covers aren't kept here: they are the cover.jpg in the
 album's folder (see musicfiles)
 */
 package covers
