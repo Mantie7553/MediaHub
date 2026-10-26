@@ -240,7 +240,11 @@ func TestChapterSegments(t *testing.T) {
 		c("1.5", "20", ""),
 	}
 	got := chapterSegments(chapters)
-	want := []aniskip.Segment{{"op", 60, 150}, {"ed", 1300, 1390}, {"preview", 1390, 1420}}
+	want := []aniskip.Segment{
+		{Type: "op", Start: 60, End: 150},
+		{Type: "ed", Start: 1300, End: 1390},
+		{Type: "preview", Start: 1390, End: 1420},
+	}
 	if len(got) != len(want) {
 		t.Fatalf("got %+v, want %+v", got, want)
 	}
