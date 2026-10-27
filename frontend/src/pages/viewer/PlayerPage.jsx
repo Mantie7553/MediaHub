@@ -10,11 +10,18 @@ import useDocumentTitle from "../../hooks/useDocumentTitle"
 import useAssRenderer from "../../hooks/useAssRenderer"
 import { subtitleMode } from "../../utils/subtitles"
 import { watchedBetween } from "../../utils/watchTime"
-import { ArrowLeft, FastForward, Languages, SkipBack, SkipForward, X } from "lucide-react"
+import { pictureRect, subtitleLift } from "../../utils/player"
+import useVideoState from "../../hooks/useVideoState"
+import usePlayerChrome from "../../hooks/usePlayerChrome"
+import SeekBar from "../../components/player/SeekBar"
+import PlayerControls, { CenterControls } from "../../components/player/PlayerControls"
+import SubtitleOverlay from "../../components/player/SubtitleOverlay"
+import { ArrowLeft, FastForward, Settings, X } from "lucide-react"
 
-// how long the next episode waits after one ends, and how far the arrow keys skip
+// how long the next episode waits after one ends, and how far the arrow keys and skip buttons go
 const UP_NEXT_SECS = 5
 const SKIP_SECS = 10
+const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2]
 // a skipped part ending this close to the end of the video skips to the end, so up next starts
 const SKIP_TO_END_SECS = 2
 // what the skip button and the auto skip message call each part
@@ -26,6 +33,7 @@ export default function PlayerPage() {
     const navigate = useNavigate();
     const { type, id } = useParams();
     const videoRef = useRef(null);
+    const playerRef = useRef(null);
     const [playlistUrl, setPlaylistUrl] = useState(null);
     // [{ index, label, language, selected }]
     const [audioTracks, setAudioTracks] = useState([]);
@@ -39,8 +47,14 @@ export default function PlayerPage() {
     const [assFailed, setAssFailed] = useState({});
     // URLs of the fonts attached to the video, for ASS
     const [fonts, setFonts] = useState([]);
-    // the <video> itself is fullscreen (its own button), so nothing can be drawn over it
+    // the <video> itself is fullscreen (iPhones, which can't fullscreen anything else), so
+    // nothing can be drawn over it
     const [videoFullscreen, setVideoFullscreen] = useState(false);
+    // the video is in its own picture-in-picture window, where the page can't draw either
+    const [pictureInPicture, setPictureInPicture] = useState(false);
+    const videoAlone = videoFullscreen || pictureInPicture;
+    // the whole player is fullscreen, with its controls and everything over the video
+    const [playerFullscreen, setPlayerFullscreen] = useState(false);
     // index into subtitles, -1 for off
     const [selectedSubtitle, setSelectedSubtitle] = useState(-1);
     // stream index of the subtitle burned into the current stream, -1 for none
@@ -174,6 +188,11 @@ export default function PlayerPage() {
             .catch(() => {})
         return () => { cancelled = true }
     }, [type, id])
+
+    // the video stays mounted under the error, it shouldn't keep playing there
+    useEffect(() => {
+        if (error) videoRef.current?.pause()
+    }, [error])
 
     function retry() {
         setError(null)
@@ -386,7 +405,7 @@ export default function PlayerPage() {
     const mode = subtitleMode(selectedTrack, {
         assReady: !!assFiles[selectedTrack?.assUrl],
         assFailed: !!assFailed[selectedTrack?.assUrl],
-        videoFullscreen,
+        videoFullscreen: videoAlone,
     })
     const assCanvasRef = useRef(null)
     const assContent = mode === "ass" ? assFiles[selectedTrack.assUrl] : null
@@ -396,28 +415,60 @@ export default function PlayerPage() {
     })
 
     useEffect(() => {
-        const onChange = () => setVideoFullscreen(!!videoRef.current && document.fullscreenElement === videoRef.current)
+        const video = videoRef.current
+        const onChange = () => setPlayerFullscreen(!!playerRef.current && document.fullscreenElement === playerRef.current)
+        const onBegin = () => setVideoFullscreen(true)
+        const onEnd = () => setVideoFullscreen(false)
+        const onEnterPip = () => setPictureInPicture(true)
+        const onLeavePip = () => setPictureInPicture(false)
+        // Safari's own picture-in-picture (its button, or leaving the app on an iPhone)
+        const onPresentation = () => setPictureInPicture(video.webkitPresentationMode === "picture-in-picture")
         document.addEventListener("fullscreenchange", onChange)
-        return () => document.removeEventListener("fullscreenchange", onChange)
+        video?.addEventListener("webkitbeginfullscreen", onBegin)
+        video?.addEventListener("webkitendfullscreen", onEnd)
+        video?.addEventListener("enterpictureinpicture", onEnterPip)
+        video?.addEventListener("leavepictureinpicture", onLeavePip)
+        video?.addEventListener("webkitpresentationmodechanged", onPresentation)
+        return () => {
+            document.removeEventListener("fullscreenchange", onChange)
+            video?.removeEventListener("webkitbeginfullscreen", onBegin)
+            video?.removeEventListener("webkitendfullscreen", onEnd)
+            video?.removeEventListener("enterpictureinpicture", onEnterPip)
+            video?.removeEventListener("leavepictureinpicture", onLeavePip)
+            video?.removeEventListener("webkitpresentationmodechanged", onPresentation)
+        }
     }, [])
 
-    // show only the selected subtitle track, when it's shown as a <track>. <track> elements only
-    // exist for downloaded files, so match them to the menu by url rather than position
+    // fullscreen the whole player so the controls, subtitles, skip and up next stay. iPhones
+    // can only fullscreen the video, which hands it to their own player
+    function toggleFullscreen() {
+        const video = videoRef.current
+        if (document.fullscreenElement) document.exitFullscreen().catch(() => {})
+        else if (playerRef.current?.requestFullscreen) playerRef.current.requestFullscreen().catch(() => {})
+        else video?.webkitEnterFullscreen?.()
+    }
+
+    // show only the selected subtitle track, when it's shown as a <track>. The player draws it
+    // itself (SubtitleOverlay), so it's "hidden" rather than "showing", except when the video is
+    // somewhere the page can't draw (the iPhone player, picture in picture), where the browser
+    // shows it. <track> elements only exist for downloaded files, so match them to the menu by
+    // url rather than position
     function applySubtitleSelection() {
         const video = videoRef.current
         if (!video) return
         const selectedUrl = mode === "vtt" ? subtitles[selectedSubtitle]?.url : null
+        const on = videoAlone ? "showing" : "hidden"
         video.querySelectorAll("track").forEach(el => {
-            const trackMode = el.dataset.url === selectedUrl ? "showing" : "disabled"
+            const trackMode = el.dataset.url === selectedUrl ? on : "disabled"
             if (el.track.mode !== trackMode) el.track.mode = trackMode
         })
     }
 
-    useEffect(applySubtitleSelection, [subtitles, subtitleFiles, selectedSubtitle, mode])
+    useEffect(applySubtitleSelection, [subtitles, subtitleFiles, selectedSubtitle, mode, videoAlone])
 
-    // keep the menu in sync when the browser's own captions button is used. The browser also
-    // turns tracks on by itself as they're added, so only a single different track (or none)
-    // counts as the user's choice; anything else puts the menu's choice back
+    // the browser turns tracks on by itself as they're added: put the menu's choice back. While
+    // the iPhone player has the video its captions menu can be used, so keep the menu in sync
+    // with it there: only a single different track (or none) counts as the user's choice
     useEffect(() => {
         const video = videoRef.current
         if (!video) return
@@ -426,7 +477,7 @@ export default function PlayerPage() {
             if (ignoreTrackChangesRef.current) return
             // a burned in or ASS track isn't one of the browser's, so its captions menu can't
             // tell what's showing: keep the menu's choice
-            if (mode === "burn" || mode === "ass") {
+            if (!videoFullscreen || mode === "burn" || mode === "ass") {
                 applySubtitleSelection()
                 return
             }
@@ -449,7 +500,7 @@ export default function PlayerPage() {
         textTracks.addEventListener("change", onChange)
         return () => textTracks.removeEventListener("change", onChange)
     // eslint-disable-next-line react-hooks/exhaustive-deps -- applySubtitleSelection and chooseSubtitle read the same state listed here
-    }, [loading, subtitles, subtitleFiles, selectedSubtitle, burned, audioTracks, mode])
+    }, [loading, subtitles, subtitleFiles, selectedSubtitle, burned, audioTracks, mode, videoFullscreen, videoAlone])
 
     // save progress every 5 seconds, on pause, when the page is hidden or closed, and on
     // unmount, with the seconds actually watched since the last save (for Insights)
@@ -582,23 +633,47 @@ export default function PlayerPage() {
     const playingEpisode = episodeList[currentIndex]
     useDocumentTitle(playingEpisode ? playingEpisode.title ?? `Episode ${playingEpisode.episode_number}` : null)
 
+    const videoState = useVideoState(videoRef)
+    // the seek bar is being dragged, or a mouse is over the controls: they stay up meanwhile
+    const [scrubbing, setScrubbing] = useState(false)
+    const [overControls, setOverControls] = useState(false)
+    const chrome = usePlayerChrome(loading || videoState.paused || languagesOpen || scrubbing || overControls)
+    const { show: showChrome, hide: hideChrome } = chrome
+
+    // pausing brings the controls back
+    useEffect(() => {
+        const video = videoRef.current
+        video?.addEventListener("pause", showChrome)
+        return () => video?.removeEventListener("pause", showChrome)
+    }, [showChrome])
+
+    function togglePlay() {
+        const video = videoRef.current
+        if (!video) return
+        if (video.paused) video.play().catch(() => {})
+        else video.pause()
+    }
+
+    function seekBy(secs) {
+        const video = videoRef.current
+        if (!video) return
+        const to = video.currentTime + secs
+        video.currentTime = Math.min(Math.max(to, 0), video.duration || to)
+    }
+
     // Space or K plays and pauses, the arrows skip, F is fullscreen, M mutes, S skips the opening
-    // or ending playing now, Shift+N is the next episode
-    const playerRef = useRef(null)
+    // or ending playing now, Shift+N is the next episode. Each brings the controls up
     useEffect(() => {
         function onKeyDown(e) {
             const video = videoRef.current
             if (!video || keyForFocused(e)) return
             const key = e.key.length === 1 ? e.key.toLowerCase() : e.key
             if (key === " " || key === "k") {
-                if (video.paused) video.play().catch(() => {})
-                else video.pause()
+                togglePlay()
             } else if (key === "ArrowLeft" || key === "ArrowRight") {
-                const to = video.currentTime + (key === "ArrowLeft" ? -SKIP_SECS : SKIP_SECS)
-                video.currentTime = Math.min(Math.max(to, 0), video.duration || to)
+                seekBy(key === "ArrowLeft" ? -SKIP_SECS : SKIP_SECS)
             } else if (key === "f") {
-                if (document.fullscreenElement) document.exitFullscreen().catch(() => {})
-                else playerRef.current?.requestFullscreen?.().catch(() => {})
+                toggleFullscreen()
             } else if (key === "m") {
                 video.muted = !video.muted
             } else if (key === "s" && !e.shiftKey && skippableRef.current) {
@@ -609,170 +684,310 @@ export default function PlayerPage() {
                 return
             }
             e.preventDefault()
+            showChrome()
         }
         document.addEventListener("keydown", onKeyDown)
         return () => document.removeEventListener("keydown", onKeyDown)
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- goToEpisode only needs the episode it's given
-    }, [nextEpisode])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- goToEpisode only needs the episode it's given, the others read refs
+    }, [nextEpisode, showChrome])
 
-    if (error) return <div className="min-h-dvh bg-base-100">
-        <ErrorState error={error} title="Couldn't play this video" onRetry={retry} showBack />
-    </div>
+    // the player's size and the bottom controls' height, to keep subtitles clear of the controls
+    const bottomBarRef = useRef(null)
+    const [box, setBox] = useState({ width: 0, height: 0 })
+    const [barHeight, setBarHeight] = useState(0)
+    useEffect(() => {
+        const video = videoRef.current
+        const bar = bottomBarRef.current
+        if (!video || !bar) return
+        const observer = new ResizeObserver(() => {
+            setBox({ width: video.clientWidth, height: video.clientHeight })
+            setBarHeight(bar.offsetHeight)
+        })
+        observer.observe(video)
+        observer.observe(bar)
+        return () => observer.disconnect()
+    }, [])
+
+    // a tap on the video shows the controls or, when they're up, hides them. A mouse click plays
+    // and pauses instead, as moving the mouse already shows them. Taps on the controls are theirs,
+    // and a tap that closes the settings menu does only that
+    const menuOpenAtPressRef = useRef(false)
+    function onPlayerPointerDown(e) {
+        menuOpenAtPressRef.current = languagesOpen
+        if (e.target.closest("[data-controls]")) showChrome()
+    }
+    function onPlayerPointerUp(e) {
+        if (e.target.closest("[data-controls]") || menuOpenAtPressRef.current || e.button !== 0) return
+        if (e.pointerType === "mouse") {
+            if (!loading) togglePlay()
+        } else if (chrome.visible) hideChrome()
+        else showChrome()
+    }
+    function onPlayerPointerMove(e) {
+        if (e.pointerType === "mouse") showChrome()
+    }
+    function onPlayerDoubleClick(e) {
+        if (!e.target.closest("[data-controls]")) toggleFullscreen()
+    }
+    // a mouse over the controls keeps them up
+    const controlsHover = {
+        onPointerEnter: e => { if (e.pointerType === "mouse") setOverControls(true) },
+        onPointerLeave: e => { if (e.pointerType === "mouse") setOverControls(false) },
+    }
 
     const selectedAudio = audioTracks.find(a => a.selected)
     const currentEpisode = episodeList[currentIndex]
+    const fullscreen = playerFullscreen || videoFullscreen
+    // picture in picture is for phones and tablets only, the browser's own one is turned off on
+    // a computer (Chrome and Edge show no subtitles in its window)
+    const touchScreen = window.matchMedia("(pointer: coarse)").matches
+    // while loading only the top bar shows, so Back can always be reached
+    const controlsUp = chrome.visible && !loading && !error
+    const picture = pictureRect(box, videoState.videoWidth, videoState.videoHeight)
+    const lift = controlsUp ? subtitleLift(barHeight, box, videoState.videoWidth, videoState.videoHeight) : 0
+    // skip and up next sit just above the bottom controls while they're up
+    const overlayBottom = controlsUp ? barHeight + 12 : 24
+
+    const actions = {
+        togglePlay,
+        skip: seekBy,
+        prev: prevEpisode ? () => goToEpisode(prevEpisode) : null,
+        next: nextEpisode ? () => goToEpisode(nextEpisode) : null,
+        toggleMute() {
+            const video = videoRef.current
+            if (!video) return
+            if (video.muted && video.volume === 0) video.volume = 0.5
+            video.muted = !video.muted
+        },
+        setVolume(volume) {
+            const video = videoRef.current
+            if (!video) return
+            video.volume = volume
+            video.muted = volume === 0
+        },
+        toggleFullscreen,
+        togglePictureInPicture() {
+            if (document.pictureInPictureElement) document.exitPictureInPicture().catch(() => {})
+            else videoRef.current?.requestPictureInPicture?.().catch(() => {})
+        },
+    }
+
+    // the default rate too, so a new stream (another audio track) keeps the speed
+    function setSpeed(rate) {
+        const video = videoRef.current
+        if (!video) return
+        video.defaultPlaybackRate = rate
+        video.playbackRate = rate
+    }
 
     return (
-    <div ref={playerRef} className="flex flex-col h-dvh bg-black text-white">
-        <header className="relative z-20 flex items-center gap-2 px-2 sm:px-4 pt-[env(safe-area-inset-top)] h-[calc(3.5rem+env(safe-area-inset-top))] bg-linear-to-b from-black/90 to-black/60 backdrop-blur border-b border-white/5">
-            <button className="btn btn-ghost btn-sm gap-1.5 text-white hover:bg-white/10" onClick={exit} aria-label="Back">
-                <ArrowLeft size={18}/> <span className="hidden sm:inline">Back</span>
-            </button>
-            <div className="flex-1 min-w-0 text-center">
-                {currentEpisode && <>
-                    <p className="text-sm font-medium truncate">{currentEpisode.title ?? `Episode ${currentEpisode.episode_number}`}</p>
-                    <p className="text-xs text-white/50 tabular-nums">
-                        {currentEpisode.season_number ? `Season ${currentEpisode.season_number} · ` : ""}Episode {currentEpisode.episode_number}
+    <div
+        ref={playerRef}
+        className={`relative h-dvh overflow-hidden bg-black text-white select-none ${!chrome.visible && !loading ? "cursor-none" : ""}`}
+        onPointerDown={onPlayerPointerDown}
+        onPointerUp={onPlayerPointerUp}
+        onPointerMove={onPlayerPointerMove}
+        onDoubleClick={onPlayerDoubleClick}
+    >
+        {/* the video element stays mounted while loading and on an error, so hls.js and the
+            listeners always have it */}
+        <video
+            ref={videoRef}
+            playsInline
+            disablePictureInPicture={!touchScreen}
+            crossOrigin="anonymous"
+            className={`absolute inset-0 w-full h-full object-contain ${loading ? "invisible" : ""}`}
+        >
+            {subtitles.filter(t => t.url && subtitleFiles[t.url]).map(t => (
+                <track
+                    key={t.url}
+                    data-url={t.url}
+                    kind="subtitles"
+                    src={subtitleFiles[t.url]}
+                    srcLang={t.language || "und"}
+                    label={t.label}
+                />
+            ))}
+        </video>
+        {/* a new canvas for each file, a canvas can only be given to one renderer. The wrapper
+            moves it up with the controls without touching how the renderer places it */}
+        {assContent && <div className="absolute inset-0 pointer-events-none transition-transform duration-200 ease-out" style={{ transform: `translateY(${-lift}px)` }}>
+            <canvas key={selectedTrack.assUrl} ref={assCanvasRef} className="absolute pointer-events-none" aria-hidden="true"/>
+        </div>}
+        {mode === "vtt" && !videoAlone && (
+            <SubtitleOverlay
+                videoRef={videoRef}
+                trackUrl={selectedTrack?.url ?? null}
+                trackReady={!!subtitleFiles[selectedTrack?.url]}
+                picture={picture}
+                lift={lift}
+            />
+        )}
+        {loading && (
+            <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 text-center px-6" role="status">
+                <span className="loading loading-ring loading-lg text-primary"></span>
+                <p className="font-medium">Preparing the video…</p>
+                {slowLoad === loadKey && (
+                    <p className="text-sm text-white/60 max-w-sm animate-fade-in">
+                        The first play of a video takes a little longer while the server gets it ready.
                     </p>
-                </>}
+                )}
             </div>
-            <div className="flex items-center gap-1">
-                {episodeList.length > 0 && <button
-                    className="btn btn-ghost btn-sm btn-square text-white hover:bg-white/10"
-                    disabled={!prevEpisode}
-                    onClick={() => prevEpisode && goToEpisode(prevEpisode)}
-                    aria-label="Previous episode"
-                >
-                    <SkipBack size={18}/>
-                </button>}
-                {episodeList.length > 0 && <button
-                    className="btn btn-ghost btn-sm text-white hover:bg-white/10 gap-1.5"
-                    disabled={!nextEpisode}
-                    onClick={() => nextEpisode && goToEpisode(nextEpisode)}
-                    aria-label="Next episode"
-                >
-                    <span className="hidden sm:inline">Next</span> <SkipForward size={18}/>
-                </button>}
-                <div className="relative" ref={languagesRef}>
-                    <button
-                        className={`btn btn-ghost btn-sm gap-1.5 text-white hover:bg-white/10 ${languagesOpen ? "bg-white/10" : ""}`}
-                        aria-label="Audio and subtitles"
-                        aria-expanded={languagesOpen}
-                        onClick={() => setLanguagesOpen(!languagesOpen)}
-                    >
-                        <Languages size={18}/> <span className="hidden md:inline">Languages</span>
-                    </button>
-                    {languagesOpen && <div className="absolute right-0 top-full surface-raised text-base-content z-30 mt-2 w-[min(20rem,calc(100vw-1rem))] p-4 flex flex-col gap-4 animate-fade-in">
-                        <label className="flex flex-col gap-1.5">
-                            <span className="text-xs font-medium uppercase tracking-wider text-base-content/50">Audio</span>
-                            <select
-                                className="select select-sm w-full"
-                                value={selectedAudio?.index ?? ""}
-                                disabled={audioTracks.length < 2 || switching !== ""}
-                                onChange={e => switchAudio(Number(e.target.value))}
-                            >
-                                {audioTracks.length === 0 && <option value="">No audio</option>}
-                                {audioTracks.map(a => (
-                                    <option key={a.index} value={a.index}>{a.label}</option>
-                                ))}
-                            </select>
-                        </label>
-                        <label className="flex flex-col gap-1.5">
-                            <span className="text-xs font-medium uppercase tracking-wider text-base-content/50">Subtitles</span>
-                            <select
-                                className="select select-sm w-full"
-                                value={selectedSubtitle}
-                                disabled={switching !== ""}
-                                onChange={e => chooseSubtitle(Number(e.target.value))}
-                            >
-                                <option value={-1}>Off</option>
-                                {subtitles.map((t, i) => (
-                                    <option key={t.index} value={i}>{t.burn ? `${t.label} (burned in)` : t.label}</option>
-                                ))}
-                            </select>
-                            {subtitles.length === 0 && (
-                                <span className="text-xs text-base-content/60">This video has no subtitles</span>
-                            )}
-                        </label>
-                        {switching && <span className="text-xs text-base-content/60 flex items-center gap-2">
-                            <span className="loading loading-spinner loading-xs"></span> {switching}
-                        </span>}
-                        <button className="btn btn-sm btn-primary" onClick={saveAsDefault}>
-                            Use these languages by default
-                        </button>
-                        {prefsMessage && <span className="text-xs text-base-content/70">{prefsMessage}</span>}
-                    </div>}
+        )}
+        {!loading && buffering && (
+            <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none" role="status" aria-label="Buffering">
+                <span className="grid size-20 place-items-center rounded-full bg-black/50 backdrop-blur">
+                    <span className="loading loading-spinner loading-lg"></span>
+                </span>
+            </div>
+        )}
+        {/* phones get the play and skip buttons in the middle, where a thumb reaches them */}
+        <div className="sm:hidden absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
+            <div
+                data-controls
+                className={`transition-opacity duration-200 ${controlsUp && !buffering ? "opacity-100 pointer-events-auto" : "opacity-0"}`}
+                aria-hidden={!controlsUp}
+            >
+                <CenterControls video={videoState} skipSecs={SKIP_SECS} actions={actions} hasEpisodes={episodeList.length > 0}/>
+            </div>
+        </div>
+        <header className={`absolute inset-x-0 top-0 z-20 pointer-events-none bg-linear-to-b from-black/80 via-black/40 to-transparent pb-8 pt-[env(safe-area-inset-top)] transition-all duration-200 ease-out ${chrome.visible || loading ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-2"}`}>
+            <div data-controls {...controlsHover} className={`flex items-center gap-2 h-14 px-2 sm:px-4 ${chrome.visible || loading ? "pointer-events-auto" : ""}`}>
+                <button className="btn btn-ghost btn-sm gap-1.5 text-white hover:bg-white/10 border-0 shrink-0" onClick={exit} aria-label="Back">
+                    <ArrowLeft size={18}/> <span className="hidden sm:inline">Back</span>
+                </button>
+                <div className="flex-1 min-w-0 text-center [text-shadow:0_1px_3px_rgb(0_0_0/0.6)]">
+                    {currentEpisode && <>
+                        <p className="text-sm font-medium truncate">{currentEpisode.title ?? `Episode ${currentEpisode.episode_number}`}</p>
+                        <p className="text-xs text-white/60 tabular-nums">
+                            {currentEpisode.season_number ? `Season ${currentEpisode.season_number} · ` : ""}Episode {currentEpisode.episode_number}
+                        </p>
+                    </>}
                 </div>
+                {/* as wide as Back, so the title stays centred */}
+                <div className="w-8 sm:w-20 shrink-0"></div>
             </div>
         </header>
-        <div className="relative flex flex-1 min-h-0 items-center justify-center">
-            {/* the video element stays mounted while loading so hls.js always has it to attach to */}
-            {loading && (
-                <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 text-center px-6" role="status">
-                    <span className="loading loading-ring loading-lg text-primary"></span>
-                    <p className="font-medium">Preparing the video…</p>
-                    {slowLoad === loadKey && (
-                        <p className="text-sm text-white/60 max-w-sm animate-fade-in">
-                            The first play of a video takes a little longer while the server gets it ready.
-                        </p>
-                    )}
-                </div>
-            )}
-            {!loading && buffering && (
-                <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none" role="status" aria-label="Buffering">
-                    <span className="grid size-20 place-items-center rounded-full bg-black/50 backdrop-blur">
-                        <span className="loading loading-spinner loading-lg"></span>
-                    </span>
-                </div>
-            )}
-            <video
-                ref={videoRef}
-                controls
-                playsInline
-                crossOrigin="anonymous"
-                className={`w-full h-full max-h-full object-contain ${loading ? "invisible" : ""}`}
+        {skippable && !loading && countdown === null && (
+            <button
+                data-controls
+                className="absolute z-20 right-3 sm:right-6 btn border-white/20 bg-black/60 hover:bg-black/80 text-white backdrop-blur gap-2 animate-fade-up transition-[bottom] duration-200 ease-out"
+                style={{ bottom: overlayBottom }}
+                onClick={() => skipPast(skippable)}
             >
-                {subtitles.filter(t => t.url && subtitleFiles[t.url]).map(t => (
-                    <track
-                        key={t.url}
-                        data-url={t.url}
-                        kind="subtitles"
-                        src={subtitleFiles[t.url]}
-                        srcLang={t.language || "und"}
-                        label={t.label}
-                    />
-                ))}
-            </video>
-            {/* a new canvas for each file, a canvas can only be given to one renderer */}
-            {assContent && <canvas key={selectedTrack.assUrl} ref={assCanvasRef} className="absolute pointer-events-none" aria-hidden="true"/>}
-            {skippable && !loading && countdown === null && (
-                <button
-                    className="absolute z-20 right-3 sm:right-6 bottom-16 sm:bottom-20 btn border-white/20 bg-black/60 hover:bg-black/80 text-white backdrop-blur gap-2 animate-fade-up"
-                    onClick={() => skipPast(skippable)}
-                >
-                    <FastForward size={16}/> Skip {SKIP_NAMES[skippable.type]}
-                </button>
-            )}
-            {countdown !== null && nextEpisode && (
-                <div className="absolute z-20 right-3 sm:right-6 bottom-16 sm:bottom-20 left-3 sm:left-auto sm:w-80 surface-raised text-base-content p-4 flex items-center gap-4 animate-fade-up" role="status">
-                    <div className="radial-progress text-primary shrink-0 text-sm font-semibold tabular-nums"
-                        style={{ "--value": (countdown / UP_NEXT_SECS) * 100, "--size": "3rem", "--thickness": "3px" }}
-                        aria-label={`Next episode in ${countdown} seconds`}>
-                        {countdown}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                        <p className="text-xs font-medium uppercase tracking-wider text-primary">Up next</p>
-                        <p className="text-sm font-medium truncate">
-                            Episode {nextEpisode.episode_number}{nextEpisode.title ? ` · ${nextEpisode.title}` : ""}
-                        </p>
-                        <button className="btn btn-primary btn-sm mt-2" onClick={() => goToEpisode(nextEpisode)}>Play now</button>
-                    </div>
-                    <button className="btn btn-ghost btn-sm btn-circle self-start" onClick={() => setUpNext(null)} aria-label="Cancel next episode">
-                        <X size={16}/>
-                    </button>
+                <FastForward size={16}/> Skip {SKIP_NAMES[skippable.type]}
+            </button>
+        )}
+        {countdown !== null && nextEpisode && (
+            <div
+                data-controls
+                className="absolute z-20 right-3 sm:right-6 left-3 sm:left-auto sm:w-80 surface-raised text-base-content p-4 flex items-center gap-4 animate-fade-up transition-[bottom] duration-200 ease-out"
+                style={{ bottom: overlayBottom }}
+                role="status"
+            >
+                <div className="radial-progress text-primary shrink-0 text-sm font-semibold tabular-nums"
+                    style={{ "--value": (countdown / UP_NEXT_SECS) * 100, "--size": "3rem", "--thickness": "3px" }}
+                    aria-label={`Next episode in ${countdown} seconds`}>
+                    {countdown}
                 </div>
-            )}
+                <div className="min-w-0 flex-1">
+                    <p className="text-xs font-medium uppercase tracking-wider text-primary">Up next</p>
+                    <p className="text-sm font-medium truncate">
+                        Episode {nextEpisode.episode_number}{nextEpisode.title ? ` · ${nextEpisode.title}` : ""}
+                    </p>
+                    <button className="btn btn-primary btn-sm mt-2" onClick={() => goToEpisode(nextEpisode)}>Play now</button>
+                </div>
+                <button className="btn btn-ghost btn-sm btn-circle self-start" onClick={() => setUpNext(null)} aria-label="Cancel next episode">
+                    <X size={16}/>
+                </button>
+            </div>
+        )}
+        {/* burned in subtitles are part of the picture and can't move, so the shade is lighter over them */}
+        <div className={`absolute inset-x-0 bottom-0 z-20 pointer-events-none bg-linear-to-t ${mode === "burn" ? "from-black/55 via-black/20" : "from-black/85 via-black/45"} to-transparent pt-12 transition-all duration-200 ease-out ${controlsUp ? "opacity-100 translate-y-0" : "opacity-0 translate-y-2"}`}>
+            <div
+                ref={bottomBarRef}
+                data-controls
+                {...controlsHover}
+                className={`flex flex-col px-3 sm:px-5 pb-[max(0.5rem,env(safe-area-inset-bottom))] ${controlsUp ? "pointer-events-auto" : ""}`}
+            >
+                <SeekBar
+                    currentTime={videoState.currentTime}
+                    duration={videoState.duration}
+                    buffered={videoState.buffered}
+                    segments={skipSegments}
+                    onSeek={t => { if (videoRef.current) videoRef.current.currentTime = t }}
+                    onScrubbing={setScrubbing}
+                />
+                <PlayerControls video={videoState} skipSecs={SKIP_SECS} actions={actions} hasEpisodes={episodeList.length > 0} fullscreen={fullscreen}>
+                    <div className="relative" ref={languagesRef}>
+                        <button
+                            className={`btn btn-ghost btn-sm btn-square text-white hover:bg-white/10 border-0 ${languagesOpen ? "bg-white/10" : ""}`}
+                            aria-label="Audio, subtitles and speed"
+                            aria-expanded={languagesOpen}
+                            onClick={() => setLanguagesOpen(!languagesOpen)}
+                        >
+                            <Settings size={18} className={`transition-transform duration-300 ${languagesOpen ? "rotate-45" : ""}`}/>
+                        </button>
+                        {languagesOpen && <div className="absolute right-0 bottom-full mb-3 surface-raised text-base-content z-30 w-[min(20rem,calc(100vw-1.5rem))] max-h-[calc(100dvh-8rem)] overflow-y-auto p-4 flex flex-col gap-4 animate-fade-in select-text">
+                            <label className="flex flex-col gap-1.5">
+                                <span className="text-xs font-medium uppercase tracking-wider text-base-content/50">Audio</span>
+                                <select
+                                    className="select select-sm w-full"
+                                    value={selectedAudio?.index ?? ""}
+                                    disabled={audioTracks.length < 2 || switching !== ""}
+                                    onChange={e => switchAudio(Number(e.target.value))}
+                                >
+                                    {audioTracks.length === 0 && <option value="">No audio</option>}
+                                    {audioTracks.map(a => (
+                                        <option key={a.index} value={a.index}>{a.label}</option>
+                                    ))}
+                                </select>
+                            </label>
+                            <label className="flex flex-col gap-1.5">
+                                <span className="text-xs font-medium uppercase tracking-wider text-base-content/50">Subtitles</span>
+                                <select
+                                    className="select select-sm w-full"
+                                    value={selectedSubtitle}
+                                    disabled={switching !== ""}
+                                    onChange={e => chooseSubtitle(Number(e.target.value))}
+                                >
+                                    <option value={-1}>Off</option>
+                                    {subtitles.map((t, i) => (
+                                        <option key={t.index} value={i}>{t.burn ? `${t.label} (burned in)` : t.label}</option>
+                                    ))}
+                                </select>
+                                {subtitles.length === 0 && (
+                                    <span className="text-xs text-base-content/60">This video has no subtitles</span>
+                                )}
+                            </label>
+                            {switching && <span className="text-xs text-base-content/60 flex items-center gap-2">
+                                <span className="loading loading-spinner loading-xs"></span> {switching}
+                            </span>}
+                            <button className="btn btn-sm btn-primary" onClick={saveAsDefault}>
+                                Use these languages by default
+                            </button>
+                            {prefsMessage && <span className="text-xs text-base-content/70">{prefsMessage}</span>}
+                            <label className="flex flex-col gap-1.5 border-t border-white/5 pt-4">
+                                <span className="text-xs font-medium uppercase tracking-wider text-base-content/50">Speed</span>
+                                <select
+                                    className="select select-sm w-full"
+                                    value={videoState.rate}
+                                    onChange={e => setSpeed(Number(e.target.value))}
+                                >
+                                    {!SPEEDS.includes(videoState.rate) && <option value={videoState.rate}>{videoState.rate}×</option>}
+                                    {SPEEDS.map(s => <option key={s} value={s}>{s === 1 ? "Normal" : `${s}×`}</option>)}
+                                </select>
+                            </label>
+                        </div>}
+                    </div>
+                </PlayerControls>
+            </div>
         </div>
+        {error && (
+            <div data-controls className="absolute inset-0 z-40 overflow-y-auto bg-base-100 text-base-content select-text">
+                <ErrorState error={error} title="Couldn't play this video" onRetry={retry} showBack />
+            </div>
+        )}
     </div>
 )
 }
