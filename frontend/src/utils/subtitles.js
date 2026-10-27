@@ -1,9 +1,10 @@
 /**
  * How the chosen subtitle track is shown: "burn" when the server draws it into the video,
- * "ass" when its ASS file is rendered over the video with its styling, otherwise "vtt" through
- * the browser's own captions. ASS falls back to WebVTT until its file has downloaded, when the
- * renderer failed, and while the video element itself is fullscreen, as nothing can be drawn
- * over it then
+ * "ass" when its ASS file is rendered over the video with its styling, otherwise "vtt" as text
+ * (drawn by the player, or by the browser while the video element itself is fullscreen). ASS
+ * falls back to WebVTT until its file has downloaded, when the renderer failed, and while the
+ * video element itself is fullscreen (iPhones) or in picture in picture, as nothing can be
+ * drawn over it then
  * @param {object|null} track the chosen track ({ url, assUrl, burn }), null for off
  * @param {object} options
  * @param {boolean} options.assReady the track's ASS file has downloaded
