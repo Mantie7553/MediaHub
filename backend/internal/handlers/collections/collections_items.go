@@ -41,13 +41,13 @@ func itemKind(db querier, req addRequest, user *auth.UserContext) (kind, column,
 	switch {
 	case req.MediaItemID != "":
 		id, column = req.MediaItemID, "media_item_id"
-		if !isUUID(id) {
+		if !utils.IsUUID(id) {
 			return "", "", "", errNotFound
 		}
 		err = db.QueryRow(`SELECT type::text FROM media_items WHERE id = $1`, id).Scan(&kind)
 	case req.AlbumID != "":
 		id, column, kind = req.AlbumID, "album_id", "album"
-		if !isUUID(id) {
+		if !utils.IsUUID(id) {
 			return "", "", "", errNotFound
 		}
 		err = db.QueryRow(`SELECT id FROM albums WHERE id = $1`, id).Scan(&id)
@@ -246,7 +246,7 @@ func (h *Handler) RemoveItem(w http.ResponseWriter, r *http.Request) {
 	if refuseEdit(w, id, c, err, user.UserID) {
 		return
 	}
-	if !isUUID(entryID) {
+	if !utils.IsUUID(entryID) {
 		utils.Error(w, http.StatusNotFound, "not found")
 		return
 	}
@@ -332,7 +332,7 @@ func (h *Handler) MoveItem(w http.ResponseWriter, r *http.Request) {
 	if refuseEdit(w, id, c, err, user.UserID) {
 		return
 	}
-	if !isUUID(entryID) || (req.After != nil && (!isUUID(*req.After) || *req.After == entryID)) {
+	if !utils.IsUUID(entryID) || (req.After != nil && (!utils.IsUUID(*req.After) || *req.After == entryID)) {
 		utils.Error(w, http.StatusNotFound, "not found")
 		return
 	}

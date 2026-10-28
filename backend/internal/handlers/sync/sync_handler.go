@@ -126,8 +126,8 @@ func (h *Handler) syncSonarr() error {
 			if aniResult.StartDate.Year != nil {
 				date := fmt.Sprintf("%04d-%02d-%02d",
 					*aniResult.StartDate.Year,
-					utils.SafeMonth(aniResult.StartDate.Month),
-					utils.SafeDay(aniResult.StartDate.Day),
+					utils.DerefOr(aniResult.StartDate.Month, 1),
+					utils.DerefOr(aniResult.StartDate.Day, 1),
 				)
 				h.db.Exec(
 					`UPDATE media_items SET `+locks.Keep(locks.ReleaseDate, "release_date", "$1")+` WHERE id = $2`,
@@ -586,8 +586,8 @@ func (h *Handler) syncLightNovels() error {
 			if lightNovel.StartDate.Year != nil {
 				date := fmt.Sprintf("%04d-%02d-%02d",
 					*lightNovel.StartDate.Year,
-					utils.SafeMonth(lightNovel.StartDate.Month),
-					utils.SafeDay(lightNovel.StartDate.Day),
+					utils.DerefOr(lightNovel.StartDate.Month, 1),
+					utils.DerefOr(lightNovel.StartDate.Day, 1),
 				)
 				startDate = &date
 			}
@@ -607,8 +607,8 @@ func (h *Handler) syncLightNovels() error {
 			if lightNovel.StartDate.Year != nil {
 				date := fmt.Sprintf("%04d-%02d-%02d",
 					*lightNovel.StartDate.Year,
-					utils.SafeMonth(lightNovel.StartDate.Month),
-					utils.SafeDay(lightNovel.StartDate.Day),
+					utils.DerefOr(lightNovel.StartDate.Month, 1),
+					utils.DerefOr(lightNovel.StartDate.Day, 1),
 				)
 				releaseDate = &date
 			}

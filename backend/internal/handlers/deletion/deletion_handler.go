@@ -371,9 +371,3 @@ func (h *Handler) strings(query string, args ...any) ([]string, error) {
 	}
 	return out, rows.Err()
 }
-
-// likePrefix escapes LIKE wildcards in a path and matches everything under it
-func likePrefix(path string) string {
-	r := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
-	return r.Replace(path) + "%"
-}

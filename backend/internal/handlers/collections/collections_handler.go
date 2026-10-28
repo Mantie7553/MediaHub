@@ -27,8 +27,6 @@ func NewHandler(db *sql.DB) *Handler {
 // the most a description can hold
 const maxDescriptionLength = 1000
 
-var isUUID = utils.IsUUID
-
 // what the handlers need to know about a stored collection before acting on it
 type stored struct {
 	id   string
@@ -46,7 +44,7 @@ Returns:	errNotFound when it doesn't exist or isn't theirs to see
 */
 func load(db querier, id string, user *auth.UserContext, lock bool) (stored, error) {
 	c := stored{id: id}
-	if !isUUID(id) {
+	if !utils.IsUUID(id) {
 		return c, errNotFound
 	}
 	query := `SELECT c.kind::text, COALESCE(c.owner_id::text, ''), c.visibility = 'featured', c.part_of IS NOT NULL,

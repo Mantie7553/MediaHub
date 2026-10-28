@@ -82,18 +82,15 @@ func NullInt(i *int) *int {
 	return i
 }
 
-func SafeMonth(m *int) int {
-	if m == nil {
-		return 1
+/*
+Function:	DerefOr
+Purpose:	the value p points at, or def when p is nil
+*/
+func DerefOr(p *int, def int) int {
+	if p == nil {
+		return def
 	}
-	return *m
-}
-
-func SafeDay(d *int) int {
-	if d == nil {
-		return 1
-	}
-	return *d
+	return *p
 }
 
 /*

@@ -12,7 +12,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"strconv"
-	"strings"
 )
 
 // "Volume 3", "volume_3", how the library sync has always found a volume's number
@@ -54,11 +53,6 @@ func Renumber(fileName string, number int) string {
 		return fileName
 	}
 	return fileName[:loc[2]] + strconv.Itoa(number) + fileName[loc[3]:]
-}
-
-// IsEPUB reports whether a file name is an EPUB
-func IsEPUB(name string) bool {
-	return strings.EqualFold(filepath.Ext(name), ".epub")
 }
 
 /*

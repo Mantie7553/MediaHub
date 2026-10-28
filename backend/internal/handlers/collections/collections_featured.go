@@ -278,7 +278,7 @@ Returns:	{ featured_id }
 func (h *Handler) Approve(w http.ResponseWriter, r *http.Request) {
 	user := auth.GetUser(r)
 	submissionID := chi.URLParam(r, "id")
-	if !isUUID(submissionID) {
+	if !utils.IsUUID(submissionID) {
 		utils.Error(w, http.StatusNotFound, "not found")
 		return
 	}
@@ -334,7 +334,7 @@ Body:		{ note? }
 func (h *Handler) Reject(w http.ResponseWriter, r *http.Request) {
 	user := auth.GetUser(r)
 	submissionID := chi.URLParam(r, "id")
-	if !isUUID(submissionID) {
+	if !utils.IsUUID(submissionID) {
 		utils.Error(w, http.StatusNotFound, "not found")
 		return
 	}

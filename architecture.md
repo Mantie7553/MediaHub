@@ -37,7 +37,7 @@ backend/
                            search, stream, sync, users, webhooks, music, manga,
                            curation, deletion)
     clients/               Wrappers for external APIs (anilist, arr, mangadex,
-                           musicbrainz, ytdlp)
+                           ytdlp)
     downloader/            Routes approved requests to a download tool and runs
                            yt-dlp and MangaDex jobs
     mangafiles/            Manga chapter files: reading chapter numbers from file
@@ -207,7 +207,6 @@ Admins can fix what the metadata sources get wrong from each details page (*Edit
 | qBittorrent | Torrent client behind Sonarr and Radarr | MediaHub never talks to it directly |
 | yt-dlp | Music search and downloads | Run as a subprocess. Progress is read from its output |
 | ffmpeg | HLS transcoding and subtitle extraction | Uses AMD hardware encoding (`h264_amf`) |
-| MusicBrainz | Music metadata | Client exists but is not wired into any handler yet |
 
 ## Design Decisions
 
