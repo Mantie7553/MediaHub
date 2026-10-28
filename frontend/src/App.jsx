@@ -6,13 +6,13 @@ import LoginPage from './pages/login/LoginPage'
 import ProtectedRoute from './components/layout/ProtectedRoute'
 import SettingsPage from './pages/settings/SettingsPage'
 import Discover from './pages/discover/Discover'
-import { 
+import {
   AlbumDetailsPage, CollectionPage,
-  AnimeDetailsPage, LightNovelDetailsPage, 
-  MangaDetailsPage, MovieDetailsPage 
+  AnimeDetailsPage, LightNovelDetailsPage,
+  MangaDetailsPage, MovieDetailsPage
 } from './pages/details'
 import { LightNovelReader, MangaReader, PlayerPage } from './pages/viewer'
-import UserManagementPage from './pages/Management/UserManagementPage'
+import UserManagementPage from './pages/management/UserManagementPage'
 import InsightsPage from './pages/insights/InsightsPage'
 import AudioPlayer from './pages/viewer/AudioPlayer'
 import Toaster from './components/Toaster'

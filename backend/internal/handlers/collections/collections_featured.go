@@ -2,7 +2,6 @@ package collections
 
 import (
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"time"
@@ -100,8 +99,7 @@ func (h *Handler) Submit(w http.ResponseWriter, r *http.Request) {
 	user := auth.GetUser(r)
 	id := chi.URLParam(r, "id")
 	var req submitRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utils.Error(w, http.StatusBadRequest, "invalid request body")
+	if !utils.DecodeJSON(w, r, &req) {
 		return
 	}
 	note, problem := cleanNote(req.Note)
@@ -126,8 +124,7 @@ func (h *Handler) Submit(w http.ResponseWriter, r *http.Request) {
 		`INSERT INTO collection_submissions (collection_id, submitted_by, note) VALUES ($1, $2, $3)`,
 		id, user.UserID, note,
 	)
-	var pqErr *pq.Error
-	if errors.As(err, &pqErr) && pqErr.Code == "23505" {
+	if utils.IsUniqueViolation(err) {
 		utils.Error(w, http.StatusConflict, "it's already waiting for review")
 		return
 	}
@@ -277,9 +274,8 @@ Returns:	{ featured_id }
 */
 func (h *Handler) Approve(w http.ResponseWriter, r *http.Request) {
 	user := auth.GetUser(r)
-	submissionID := chi.URLParam(r, "id")
-	if !isUUID(submissionID) {
-		utils.Error(w, http.StatusNotFound, "not found")
+	submissionID, ok := utils.UUIDParam(w, r, "id")
+	if !ok {
 		return
 	}
 
@@ -333,14 +329,12 @@ Body:		{ note? }
 */
 func (h *Handler) Reject(w http.ResponseWriter, r *http.Request) {
 	user := auth.GetUser(r)
-	submissionID := chi.URLParam(r, "id")
-	if !isUUID(submissionID) {
-		utils.Error(w, http.StatusNotFound, "not found")
+	submissionID, ok := utils.UUIDParam(w, r, "id")
+	if !ok {
 		return
 	}
 	var req submitRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utils.Error(w, http.StatusBadRequest, "invalid request body")
+	if !utils.DecodeJSON(w, r, &req) {
 		return
 	}
 	note, problem := cleanNote(req.Note)

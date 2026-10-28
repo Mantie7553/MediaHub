@@ -21,7 +21,6 @@ import (
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/utils"
 	"github.com/Mantie7553/MediaHub/backend/internal/uploads"
 	"github.com/go-chi/chi/v5"
-	"github.com/lib/pq"
 )
 
 /*
@@ -43,7 +42,7 @@ Params:
 func (h *Handler) AddEpisode(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	var req addEpisodeRequest
-	if !decode(w, r, &req) {
+	if !utils.DecodeJSON(w, r, &req) {
 		return
 	}
 	if req.SeasonNumber < 0 || req.SeasonNumber > 1000 || req.EpisodeNumber < 0 || req.EpisodeNumber > maxCount {
@@ -127,7 +126,7 @@ Params:
 func (h *Handler) AddMovieFile(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	var req addMovieFileRequest
-	if !decode(w, r, &req) {
+	if !utils.DecodeJSON(w, r, &req) {
 		return
 	}
 	title, ok := h.titleOf(w, id, "movie")
@@ -193,7 +192,7 @@ Params:
 func (h *Handler) AddVolume(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	var req addVolumeRequest
-	if !decode(w, r, &req) {
+	if !utils.DecodeJSON(w, r, &req) {
 		return
 	}
 	if req.VolumeNumber < 0 || req.VolumeNumber > maxCount {
@@ -283,7 +282,7 @@ Params:
 func (h *Handler) AddTrack(w http.ResponseWriter, r *http.Request) {
 	albumID := chi.URLParam(r, "id")
 	var req addTrackRequest
-	if !decode(w, r, &req) {
+	if !utils.DecodeJSON(w, r, &req) {
 		return
 	}
 	title, ok := cleanTitle(&req.Title)
@@ -303,7 +302,7 @@ func (h *Handler) AddTrack(w http.ResponseWriter, r *http.Request) {
 
 	var albumTitle, artist string
 	err := h.db.QueryRow(`SELECT title, artist FROM albums WHERE id = $1`, albumID).Scan(&albumTitle, &artist)
-	if errors.Is(err, sql.ErrNoRows) || !uuidRe.MatchString(albumID) {
+	if errors.Is(err, sql.ErrNoRows) || !utils.IsUUID(albumID) {
 		utils.Error(w, http.StatusNotFound, "album not found")
 		return
 	}
@@ -375,7 +374,7 @@ Purpose:	a media item's title, checking it is of the type expected. Responds and
 false when it isn't there or is another type
 */
 func (h *Handler) titleOf(w http.ResponseWriter, id, mediaType string) (string, bool) {
-	if !uuidRe.MatchString(id) {
+	if !utils.IsUUID(id) {
 		utils.Error(w, http.StatusNotFound, "not found")
 		return "", false
 	}
@@ -453,8 +452,7 @@ func (h *Handler) unplaceOnError(w http.ResponseWriter, file uploads.File, dest 
 		logger.Error("moving %s back to its upload: %v", dest, moveErr)
 		os.Remove(dest)
 	}
-	var pqErr *pq.Error
-	if errors.As(err, &pqErr) && pqErr.Code == "23505" {
+	if utils.IsUniqueViolation(err) {
 		utils.Error(w, http.StatusConflict, "that's already in the library")
 		return true
 	}

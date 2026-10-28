@@ -140,7 +140,7 @@ func audioTracks(streams []probeStream) []audioTrack {
 /*
 Function:	selectAudio
 Purpose:	pick the audio track for a language preference: that language, then the file's
-            default track, then the first one. Commentary is only used if nothing else exists
+default track, then the first one. Commentary is only used if nothing else exists
 Params:
   - streams: the file's streams from ffprobe
   - preferred: a language code, or "default" for the file's default track
@@ -189,7 +189,7 @@ func selectAudio(streams []probeStream, preferred string) *probeStream {
 /*
 Function:	subtitleTracks
 Purpose:	the subtitle tracks the player can show, text ones to extract and image ones to burn
-            in, with what's needed to choose a default later
+in, with what's needed to choose a default later
 Params:
   - streams: the file's streams from ffprobe
 */
@@ -225,7 +225,7 @@ func subtitleTracks(streams []probeStream) []subtitleTrack {
 /*
 Function:	fontFiles
 Purpose:	the fonts attached to a file, which ASS subtitles are styled with. Only extracted
-            when there is an ASS track to use them
+when there is an ASS track to use them
 Params:
   - streams: the file's streams from ffprobe
   - subs: the file's subtitle tracks
@@ -317,9 +317,9 @@ func matchesLanguage(language, preferred string) bool {
 /*
 Function:	defaultSubtitle
 Purpose:	pick the subtitle track to show. If the audio is already in the preferred subtitle
-            language only a signs/songs track is shown, otherwise full dialogue, avoiding
-            signs-only, SDH and dubtitle tracks. Text beats an image track, which has to be
-            burned in. Returns the stream index, or -1 for none
+language only a signs/songs track is shown, otherwise full dialogue, avoiding
+signs-only, SDH and dubtitle tracks. Text beats an image track, which has to be
+burned in. Returns the stream index, or -1 for none
 Params:
   - tracks: the subtitle tracks
   - audioLanguage: language of the chosen audio track

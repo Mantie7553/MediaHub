@@ -67,27 +67,6 @@ const searchQuery = `query ($search: String, $type: MediaType, $perPage: Int, $f
   }
 }`
 
-// sortQuery when sorting by a specific field
-const sortQuery = `query ($sort: [MediaSort], $type: MediaType, $perPage: Int, $format: MediaFormat) {
-  Page(perPage: $perPage) {
-    media(sort: $sort, type: $type, format: $format) {
-      id
-      type
-      format
-      status
-      title { romaji english native }
-      description
-      episodes
-      chapters
-      volumes
-      coverImage { large medium }
-      genres
-      studios { nodes { name } }
-      startDate { year month day }
-    }
-  }
-}`
-
 // getByIDQuery is the GraphQL document used by GetByID. Same fields as searchQuery,
 // but at the Media root instead of nested inside Page.
 const getByIDQuery = `query ($id: Int) {
@@ -230,49 +209,6 @@ func (c *AnilistClient) Discovery(mediaType string, format string, perPage int) 
 		Popular:  toMediaSlice(env.Popular.Media),
 		TopRated: toMediaSlice(env.TopRated.Media),
 	}, nil
-}
-
-/*
-Function:	Trending
-Purpose:	Search Anilist for media of a given type matching the query
-Params:
-  - mediaType: "ANIME" or "MANGA". Empty string searches across both.
-  - perPage: number of results to return; defaults to 10 when zero or negative
-*/
-func (c *AnilistClient) Trending(mediaType string, perPage int, format string) ([]Media, error) {
-	if perPage <= 0 {
-		perPage = 10
-	}
-
-	vars := map[string]any{
-		"sort":    []string{"TRENDING_DESC"},
-		"type":    mediaType,
-		"perPage": perPage,
-	}
-	// Omit type from the variables when empty so Anilist doesn't reject the value as invalid enum.
-	if mediaType != "" {
-		vars["type"] = mediaType
-	}
-
-	if format != "" {
-		vars["format"] = format
-	}
-
-	var env struct {
-		Page struct {
-			Media []wireMedia `json:"media"`
-		} `json:"Page"`
-	}
-	if err := c.query(sortQuery, vars, &env); err != nil {
-		return nil, err
-	}
-
-	// Map each wire result into the public Media shape used everywhere else in the app.
-	out := make([]Media, 0, len(env.Page.Media))
-	for _, m := range env.Page.Media {
-		out = append(out, m.toDomain())
-	}
-	return out, nil
 }
 
 /*

@@ -13,7 +13,6 @@ package uploads
 import (
 	"crypto/rand"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -126,8 +125,7 @@ Params:
 */
 func (s *Store) Start(w http.ResponseWriter, r *http.Request) {
 	var req startRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utils.Error(w, http.StatusBadRequest, "invalid request body")
+	if !utils.DecodeJSON(w, r, &req) {
 		return
 	}
 	rule, ok := rules[req.Kind]

@@ -7,6 +7,7 @@ import { Link, useLocation } from "react-router-dom"
 import { readStored, writeStored } from "../../utils/storage"
 import { keyForFocused } from "../../utils/keys"
 import { trackListening } from "../../utils/playCount"
+import Format from "../../utils/format"
 
 // how far into a track Previous restarts it instead of going back a track
 const RESTART_AFTER_SECS = 3
@@ -300,12 +301,6 @@ export default function AudioPlayer() {
         writeStored("mediahub.muted", String(!muted))
     }
 
-    function formatTime(secs) {
-        const m = Math.floor(secs / 60)
-        const s = Math.floor(secs % 60)
-        return `${m}:${String(s).padStart(2, "0")}`
-    }
-
     if (!currentTrack) return null
 
     const pct = duration ? (progress / duration) * 100 : 0
@@ -382,13 +377,13 @@ export default function AudioPlayer() {
 
                     {/* Progress Bar */}
                     <div className="hidden sm:flex items-center gap-2 w-full max-w-lg">
-                        <span className="text-xs text-base-content/50 w-10 text-right tabular-nums">{formatTime(progress)}</span>
+                        <span className="text-xs text-base-content/50 w-10 text-right tabular-nums">{Format.duration(progress)}</span>
                         <div className="group/seek flex-1 py-1.5 cursor-pointer" onClick={handleSeek}>
                             <div className="h-1 group-hover/seek:h-1.5 transition-all bg-white/15 rounded-full">
                                 <div className="h-full bg-primary rounded-full" style={{ width: `${pct}%` }} />
                             </div>
                         </div>
-                        <span className="text-xs text-base-content/50 w-10 tabular-nums">{formatTime(duration)}</span>
+                        <span className="text-xs text-base-content/50 w-10 tabular-nums">{Format.duration(duration)}</span>
                     </div>
                 </div>
 

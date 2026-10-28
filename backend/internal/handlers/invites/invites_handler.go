@@ -2,12 +2,10 @@ package invites
 
 import (
 	"database/sql"
-	"encoding/json"
 	"net/http"
 
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/auth"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/utils"
-	"github.com/go-chi/chi/v5"
 )
 
 const (
@@ -26,15 +24,14 @@ func NewHandler(db *sql.DB) *Handler {
 /*
 Function:	Create
 Purpose:	Create a single use sign up code. The code is only ever returned here,
-            the database keeps a hash
+the database keeps a hash
 Params:
   - w: http response writer to respond to the front end
   - r: http request coming from the frontend
 */
 func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	var req createInviteRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utils.Error(w, http.StatusBadRequest, "invalid request body")
+	if !utils.DecodeJSON(w, r, &req) {
 		return
 	}
 
@@ -116,7 +113,10 @@ Params:
   - r: http request coming from the frontend
 */
 func (h *Handler) Revoke(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
+	id, ok := utils.UUIDParam(w, r, "id")
+	if !ok {
+		return
+	}
 
 	res, err := h.db.Exec(`DELETE FROM invite_codes WHERE id = $1 AND used_at IS NULL`, id)
 	if utils.InternalError(w, err) {

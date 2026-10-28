@@ -21,7 +21,8 @@ import EditDetailsModal from "../../components/modals/EditDetailsModal";
 import UploadFilesModal from "../../components/modals/UploadFilesModal";
 import useAdminPieces from "../../hooks/useAdminPieces";
 import useCollectionPicker from "../../hooks/useCollectionPicker";
-import { getRole } from "../../utils/auth";
+import { saveListEntry } from "../../services/mediaService";
+import { userIsAdmin } from "../../utils/auth";
 
 export default function AnimeDetailsPage() {
     const { id } = useParams();
@@ -44,7 +45,7 @@ export default function AnimeDetailsPage() {
     const uploadRef = useRef(null);
     // a cover just uploaded, with a version so the browser doesn't show the one it cached
     const [newCover, setNewCover] = useState(null);
-    const isAdmin = getRole() === "admin";
+    const isAdmin = userIsAdmin();
     const reloadEpisodes = () => setEpisodesAttempt(a => a + 1);
     const pieces = useAdminPieces(reloadEpisodes);
     const picker = useCollectionPicker();
@@ -78,10 +79,7 @@ export default function AnimeDetailsPage() {
     }
 
     function updateStatus(status) {
-        const request = userEntry
-            ? api.put(`/me/media/${userEntry.id}`, { status })
-            : api.post(`/me/media`, { media_item_id: id, status });
-        request
+        saveListEntry(userEntry, { media_item_id: id }, { status })
             .then(() => refresh())
             .catch(err => toast.error(err, "Could not update your list"));
     }

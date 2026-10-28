@@ -18,7 +18,8 @@ import EditDetailsModal from "../../components/modals/EditDetailsModal";
 import UploadFilesModal from "../../components/modals/UploadFilesModal";
 import useAdminPieces from "../../hooks/useAdminPieces";
 import useCollectionPicker from "../../hooks/useCollectionPicker";
-import { getRole } from "../../utils/auth";
+import { saveListEntry } from "../../services/mediaService";
+import { userIsAdmin } from "../../utils/auth";
 
 export default function LightNovelDetailsPage() {
     const navigate = useNavigate();
@@ -33,7 +34,7 @@ export default function LightNovelDetailsPage() {
     const uploadRef = useRef(null);
     // a cover just uploaded, with a version so the browser doesn't show the one it cached
     const [newCover, setNewCover] = useState(null);
-    const isAdmin = getRole() === "admin";
+    const isAdmin = userIsAdmin();
     const pieces = useAdminPieces(() => refetch(false));
     const picker = useCollectionPicker();
 
@@ -50,10 +51,7 @@ export default function LightNovelDetailsPage() {
     }
 
     function updateStatus(status) {
-        const request = userEntry
-            ? api.put(`/me/media/${userEntry.id}`, { status })
-            : api.post(`/me/media`, { media_item_id: id, status });
-        request
+        saveListEntry(userEntry, { media_item_id: id }, { status })
             .then(() => refresh())
             .catch(err => toast.error(err, "Could not update your list"));
     }

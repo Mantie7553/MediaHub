@@ -22,7 +22,7 @@ export function subtitleMode(track, { assReady = false, assFailed = false, video
 /**
  * Whether this browser has what the ASS renderer needs
  */
-export function canRenderAss() {
+function canRenderAss() {
     return typeof Worker !== "undefined" && typeof WebAssembly !== "undefined" &&
         typeof OffscreenCanvas !== "undefined"
 }

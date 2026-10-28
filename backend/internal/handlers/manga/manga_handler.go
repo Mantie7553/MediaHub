@@ -3,6 +3,7 @@ package manga
 import (
 	"archive/zip"
 	"database/sql"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -16,7 +17,6 @@ import (
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/auth"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/logger"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/utils"
-	"github.com/go-chi/chi/v5"
 )
 
 // largest chapter file accepted. A chapter is usually 5-40 MB; this leaves room for a long
@@ -42,11 +42,14 @@ Params:
   - r: multipart form with "file", and optional "number" and "title"
 */
 func (h *Handler) UploadChapter(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
+	id, ok := utils.UUIDParam(w, r, "id")
+	if !ok {
+		return
+	}
 
 	var mangaTitle, mediaType string
 	err := h.db.QueryRow(`SELECT title, type FROM media_items WHERE id = $1`, id).Scan(&mangaTitle, &mediaType)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		utils.Error(w, http.StatusNotFound, "manga not found")
 		return
 	}
@@ -205,7 +208,10 @@ Params:
   - r: http request coming from the frontend
 */
 func (h *Handler) CheckForChapters(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
+	id, ok := utils.UUIDParam(w, r, "id")
+	if !ok {
+		return
+	}
 	user := auth.GetUser(r)
 
 	var mediaType string
@@ -213,7 +219,7 @@ func (h *Handler) CheckForChapters(w http.ResponseWriter, r *http.Request) {
 	err := h.db.QueryRow(
 		`SELECT type, external_id, external_source FROM media_items WHERE id = $1`, id,
 	).Scan(&mediaType, &externalID, &externalSource)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		utils.Error(w, http.StatusNotFound, "manga not found")
 		return
 	}
@@ -246,7 +252,7 @@ func (h *Handler) CheckForChapters(w http.ResponseWriter, r *http.Request) {
 	err = h.db.QueryRow(
 		`SELECT id FROM download_requests WHERE media_item_id = $1 ORDER BY requested_at DESC LIMIT 1`, id,
 	).Scan(&requestID)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		err = h.db.QueryRow(
 			`INSERT INTO download_requests (requested_by, media_item_id, source_url, status, auto_approved, resolved_at)
 			VALUES ($1, $2, '', 'approved', TRUE, NOW())

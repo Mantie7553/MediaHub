@@ -14,7 +14,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -40,8 +39,6 @@ type Handler struct {
 func NewHandler(db *sql.DB) *Handler {
 	return &Handler{db: db, uploads: uploads.Default()}
 }
-
-var uuidRe = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 
 // longest values kept, well past real titles and descriptions
 const (
@@ -93,13 +90,12 @@ Params:
   - r: JSON editMediaRequest
 */
 func (h *Handler) EditMedia(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-	if !uuidRe.MatchString(id) {
-		utils.Error(w, http.StatusNotFound, "not found")
+	id, ok := utils.UUIDParam(w, r, "id")
+	if !ok {
 		return
 	}
 	var req editMediaRequest
-	if !decode(w, r, &req) {
+	if !utils.DecodeJSON(w, r, &req) {
 		return
 	}
 
@@ -321,13 +317,12 @@ Params:
   - r: JSON editAlbumRequest
 */
 func (h *Handler) EditAlbum(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-	if !uuidRe.MatchString(id) {
-		utils.Error(w, http.StatusNotFound, "not found")
+	id, ok := utils.UUIDParam(w, r, "id")
+	if !ok {
 		return
 	}
 	var req editAlbumRequest
-	if !decode(w, r, &req) {
+	if !utils.DecodeJSON(w, r, &req) {
 		return
 	}
 
@@ -389,8 +384,7 @@ func (h *Handler) EditAlbum(w http.ResponseWriter, r *http.Request) {
 
 	query, args := updateQuery("albums", id, sets)
 	if _, err := tx.Exec(query+", updated_at = NOW() WHERE id = $1", args...); err != nil {
-		var pqErr *pq.Error
-		if errors.As(err, &pqErr) && pqErr.Code == "23505" {
+		if utils.IsUniqueViolation(err) {
 			utils.Error(w, http.StatusConflict, "there's already an album with this title by this artist")
 			return
 		}

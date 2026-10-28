@@ -62,8 +62,8 @@ type ffmpegRun struct {
 /*
 Function:	getTranscode
 Purpose:	the transcode for a media and audio track, reusing its folder (and the segments in it)
-            when it was made from the same file, otherwise clearing it and starting a new one.
-            ffmpeg isn't started here, waitForSegment starts it where it's needed
+when it was made from the same file, otherwise clearing it and starting a new one.
+ffmpeg isn't started here, waitForSegment starts it where it's needed
 Params:
   - key: type-id-a<audio> of the media and audio track
   - dir: the transcode folder for this media and audio track
@@ -101,7 +101,7 @@ func (h *Handler) getTranscode(key, dir string, manifest streamManifest) (*trans
 /*
 Function:	loadTranscode
 Purpose:	the transcode for a segment request: the one in use, or one left on disk from before a
-            restart of the server. False if the folder has no transcode
+restart of the server. False if the folder has no transcode
 Params:
   - key: type-id-a<audio> of the media and audio track
   - dir: the transcode folder
@@ -125,7 +125,7 @@ func (h *Handler) loadTranscode(key, dir string) (*transcode, bool) {
 /*
 Function:	usable
 Purpose:	whether a transcode can still be used: no run failed and the folder hasn't been
-            swept away since
+swept away since
 */
 func (tc *transcode) usable() bool {
 	tc.mu.Lock()
@@ -236,8 +236,8 @@ var segmentNameRe = regexp.MustCompile(`^playlist(\d+)\.ts$`)
 /*
 Function:	vodPlaylist
 Purpose:	a playlist listing every segment of the video before any exist, so the player knows the
-            whole length and can seek anywhere. Segments are cut every segmentSecs, the last one
-            holds what's left
+whole length and can seek anywhere. Segments are cut every segmentSecs, the last one
+holds what's left
 Params:
   - duration: length in seconds
 */
@@ -273,8 +273,8 @@ type runState struct {
 /*
 Function:	segmentAction
 Purpose:	what to do about a segment that doesn't exist yet: wait for ffmpeg to reach it, restart
-            ffmpeg there (it isn't running, or is behind or too far before the segment), or give
-            up because a finished run passed it without writing it
+ffmpeg there (it isn't running, or is behind or too far before the segment), or give
+up because a finished run passed it without writing it
 Params:
   - seg: the segment wanted
   - run: the latest ffmpeg run
@@ -298,7 +298,7 @@ func segmentAction(seg int, run runState) action {
 /*
 Function:	waitForSegment
 Purpose:	block until a segment exists, starting or restarting ffmpeg at it when waiting
-            wouldn't get there soon
+wouldn't get there soon
 Params:
   - seg: the segment wanted
   - deadline: when to give up
@@ -397,7 +397,7 @@ func (tc *transcode) killRun() {
 /*
 Function:	startRun
 Purpose:	stop any running ffmpeg and start one writing segments from seg. Segments already on disk
-            are kept. tc.mu must be held
+are kept. tc.mu must be held
 Params:
   - seg: the first segment to write
 */
@@ -450,8 +450,8 @@ func fileExists(path string) bool {
 /*
 Function:	transcodeArgs
 Purpose:	ffmpeg arguments for an HLS transcode of the chosen video and audio tracks from a segment
-            onwards. Timestamps stay those of the whole video, so segments from different runs
-            and the subtitles line up
+onwards. Timestamps stay those of the whole video, so segments from different runs
+and the subtitles line up
 Params:
   - dir: the transcode folder
   - manifest: the source file and chosen tracks
@@ -511,7 +511,7 @@ func transcodeArgs(dir string, manifest streamManifest, startSeg int) []string {
 /*
 Function:	transcodeEncoder
 Purpose:	H.264 encoder to use: "amf" (AMD on Windows), "vaapi" (AMD/Intel GPU on Linux), "nvenc"
-            (NVIDIA GPU) or "libx264" (CPU). TRANSCODE_ENCODER overrides the platform default
+(NVIDIA GPU) or "libx264" (CPU). TRANSCODE_ENCODER overrides the platform default
 */
 func transcodeEncoder() string {
 	switch enc := os.Getenv("TRANSCODE_ENCODER"); enc {
@@ -541,7 +541,7 @@ func vaapiDevice() string {
 /*
 Function:	encoderArgs
 Purpose:	the video filter an encoder from transcodeEncoder needs, and its encoder arguments.
-            All of them cap the bitrate, uncapped AMF output was 9-22 Mbps which stalls over the tunnel
+All of them cap the bitrate, uncapped AMF output was 9-22 Mbps which stalls over the tunnel
 Params:
   - encoder: "amf", "vaapi", "nvenc" or "libx264"
 */
@@ -565,9 +565,9 @@ func encoderArgs(encoder string) (string, []string) {
 /*
 Function:	hwaccelFor
 Purpose:	GPU decoder to use for a source codec. Only AV1 gets one: this ffmpeg decodes it with
-            libaom at ~3.5x realtime vs ~15x on the GPU, while HEVC/H.264 are already fast on the
-            CPU (and slower with -hwaccel auto). TRANSCODE_HWACCEL overrides the platform
-            default, "none" turns it off
+libaom at ~3.5x realtime vs ~15x on the GPU, while HEVC/H.264 are already fast on the
+CPU (and slower with -hwaccel auto). TRANSCODE_HWACCEL overrides the platform
+default, "none" turns it off
 Params:
   - codec: the source video codec from ffprobe
 */
@@ -588,8 +588,8 @@ func hwaccelFor(codec string) string {
 /*
 Function:	extractSubtitles
 Purpose:	extract the attached fonts, then convert the text subtitle tracks to WebVTT (and keep
-            ASS tracks as ASS too) in one pass over the file. Each file is written to .tmp and
-            renamed when complete so the player never loads half a file
+ASS tracks as ASS too) in one pass over the file. Each file is written to .tmp and
+renamed when complete so the player never loads half a file
 Params:
   - dir: the transcode folder
   - manifest: the source file, its subtitle tracks and fonts
@@ -693,7 +693,7 @@ var numberRe = regexp.MustCompile(`-?\d+(?:\.\d+)?`)
 /*
 Function:	isDrawing
 Purpose:	whether cue text is an ASS vector drawing. Drawings are only drawing commands and
-            coordinates, and always have several points, so short lines like "b 2" are kept
+coordinates, and always have several points, so short lines like "b 2" are kept
 Params:
   - text: the visible cue text
 */
@@ -704,8 +704,8 @@ func isDrawing(text string) bool {
 /*
 Function:	cleanVTT
 Purpose:	tidy ffmpeg's ASS to WebVTT output: strip leftover ASS tags, drop cues that are
-            vector drawings or empty, and drop repeated cues (ASS often draws a line several
-            times for styling layers)
+vector drawings or empty, and drop repeated cues (ASS often draws a line several
+times for styling layers)
 Params:
   - vtt: the WebVTT file contents
 */

@@ -163,9 +163,7 @@ func Dispatch(db *sql.DB, requestID string, mediaItemID string,
 /*
 Function:	qualityProfile
 Purpose:	Quality profile id for new series / movies: the profile named in envKey, "Anime" by
-
-	default (created by the Docker bootstrap). Falls back to profile 1 if it doesn't exist
-
+default (created by the Docker bootstrap). Falls back to profile 1 if it doesn't exist
 Params:
   - client: the Sonarr or Radarr client
   - envKey: environment variable holding the profile name

@@ -2,13 +2,12 @@ package lists
 
 import (
 	"database/sql"
-	"encoding/json"
+	"errors"
 	"net/http"
 
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/auth"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/utils"
 	"github.com/go-chi/chi/v5"
-	"github.com/lib/pq"
 )
 
 type Handler struct {
@@ -31,8 +30,7 @@ func (h *Handler) Add(w http.ResponseWriter, r *http.Request) {
 	user := auth.GetUser(r)
 
 	// decode the incoming request, check that the structure is correct
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utils.Error(w, http.StatusBadRequest, "invalid request body")
+	if !utils.DecodeJSON(w, r, &req) {
 		return
 	}
 
@@ -51,7 +49,7 @@ func (h *Handler) Add(w http.ResponseWriter, r *http.Request) {
 		user.UserID, utils.NullString(req.MediaItemId), req.AlbumId, req.Status, req.Rating,
 	).Scan(&statusId)
 	if err != nil {
-		if pqErr, ok := err.(*pq.Error); ok && pqErr.Code == "23505" {
+		if utils.IsUniqueViolation(err) {
 			utils.Error(w, http.StatusConflict, "status already exists")
 			return
 		}
@@ -154,10 +152,12 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	// get the user information from the request
 	user := auth.GetUser(r)
 	// get the entries id from the URL parameters
-	entryID := chi.URLParam(r, "id")
+	entryID, ok := utils.UUIDParam(w, r, "id")
+	if !ok {
+		return
+	}
 	// decode the incoming request, check that the structure is correct
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utils.Error(w, http.StatusBadRequest, "invalid request body")
+	if !utils.DecodeJSON(w, r, &req) {
 		return
 	}
 
@@ -171,7 +171,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		req.Status, req.Rating, entryID, user.UserID,
 	).Scan(&mediaStatusId)
 
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		utils.Error(w, http.StatusNotFound, "not found")
 		return
 	}
@@ -195,7 +195,10 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 	// get the user information from the request
 	user := auth.GetUser(r)
 	// get the entries is from the URL parameters
-	entryID := chi.URLParam(r, "id")
+	entryID, ok := utils.UUIDParam(w, r, "id")
+	if !ok {
+		return
+	}
 
 	// do the delete
 	result, err := h.db.Exec(
@@ -230,11 +233,13 @@ func (h *Handler) UpdateProgress(w http.ResponseWriter, r *http.Request) {
 	// get the user info from the request
 	user := auth.GetUser(r)
 	// get the entries id from the URL parameters
-	episodeID := chi.URLParam(r, "id")
+	episodeID, ok := utils.UUIDParam(w, r, "id")
+	if !ok {
+		return
+	}
 
 	// decode the incoming request, check that the structure is correct
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utils.Error(w, http.StatusBadRequest, "invalid request body")
+	if !utils.DecodeJSON(w, r, &req) {
 		return
 	}
 
@@ -262,11 +267,13 @@ func (h *Handler) UpdateProgress(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) MarkSeasonWatched(w http.ResponseWriter, r *http.Request) {
 	var req progressRequest
 	user := auth.GetUser(r)
-	id := chi.URLParam(r, "id")
+	id, ok := utils.UUIDParam(w, r, "id")
+	if !ok {
+		return
+	}
 	seasonNumber := chi.URLParam(r, "seasonNumber")
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utils.Error(w, http.StatusBadRequest, "invalid request body")
+	if !utils.DecodeJSON(w, r, &req) {
 		return
 	}
 
@@ -290,10 +297,12 @@ func (h *Handler) MarkSeasonWatched(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) MarkShowWatched(w http.ResponseWriter, r *http.Request) {
 	var req progressRequest
 	user := auth.GetUser(r)
-	id := chi.URLParam(r, "id")
+	id, ok := utils.UUIDParam(w, r, "id")
+	if !ok {
+		return
+	}
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utils.Error(w, http.StatusBadRequest, "invalid request body")
+	if !utils.DecodeJSON(w, r, &req) {
 		return
 	}
 

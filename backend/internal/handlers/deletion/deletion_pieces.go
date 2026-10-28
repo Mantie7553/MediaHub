@@ -80,7 +80,7 @@ Params:
     an error stops everything. May be nil
 */
 func (h *Handler) removePiece(w http.ResponseWriter, r *http.Request, id string, p piece, beforeFiles func(sql.NullInt64) error) {
-	if !uuidRe.MatchString(id) {
+	if !utils.IsUUID(id) {
 		utils.Error(w, http.StatusNotFound, "not found")
 		return
 	}

@@ -1,4 +1,4 @@
-import { getRole } from "../../utils/auth";
+import { userIsAdmin } from "../../utils/auth";
 import AccountSection from "./AccountSection";
 import PlaybackSection from "./PlaybackSection";
 import LibrarySyncSection from "./LibrarySyncSection";
@@ -8,7 +8,7 @@ import PageHeader from "../../components/layout/PageHeader";
  * Settings page: the user's account and playback, and for admins server settings such as the library sync
  */
 export default function SettingsPage() {
-    const isAdmin = getRole() === "admin";
+    const isAdmin = userIsAdmin();
 
     return (
         <div>

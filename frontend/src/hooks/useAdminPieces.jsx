@@ -6,7 +6,7 @@ import ConfirmModal from "../components/modals/ConfirmModal";
 import { deletePiece } from "../services/curationService";
 import { deleteMedia } from "../services/mediaService";
 import { toast } from "../stores/useToastStore";
-import { getRole } from "../utils/auth";
+import { userIsAdmin } from "../utils/auth";
 
 // what deleting each kind of piece does, shown before it happens
 const consequences = {
@@ -43,7 +43,7 @@ export default function useAdminPieces(onChanged) {
     const editRef = useRef(null);
     const deleteRef = useRef(null);
     const [piece, setPiece] = useState(null);
-    const isAdmin = getRole() === "admin";
+    const isAdmin = userIsAdmin();
 
     function open(ref, p) {
         // a new version each opening, so the edit form starts from the row's current values

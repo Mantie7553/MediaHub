@@ -3,7 +3,7 @@ package media
 import (
 	"archive/zip"
 	"database/sql"
-	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -18,8 +18,8 @@ import (
 	"github.com/Mantie7553/MediaHub/backend/internal/clients/mangadex"
 	"github.com/Mantie7553/MediaHub/backend/internal/mangafiles"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/auth"
-	"github.com/Mantie7553/MediaHub/backend/internal/platform/logger"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/cache"
+	"github.com/Mantie7553/MediaHub/backend/internal/platform/logger"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/utils"
 	"github.com/go-chi/chi/v5"
 	"github.com/lib/pq"
@@ -42,8 +42,7 @@ Params:
 */
 func (h *Handler) Upload(w http.ResponseWriter, r *http.Request) {
 	var req uploadRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utils.Error(w, http.StatusBadRequest, "invalid request body")
+	if !utils.DecodeJSON(w, r, &req) {
 		return
 	}
 
@@ -91,7 +90,7 @@ func (h *Handler) Upload(w http.ResponseWriter, r *http.Request) {
 		utils.NullString(req.ExternalSource),
 	).Scan(&mediaID)
 	if err != nil {
-		if pqErr, ok := err.(*pq.Error); ok && pqErr.Code == "23505" {
+		if utils.IsUniqueViolation(err) {
 			utils.Error(w, http.StatusConflict, "media item already exists")
 			return
 		}
@@ -143,14 +142,8 @@ func (h *Handler) Upload(w http.ResponseWriter, r *http.Request) {
 				logger.Warn("failed to fetch mangadex metadata for %s: %v", req.ExternalID, err)
 			} else {
 				status = manga.Attributes.Status
-				for _, tag := range manga.Attributes.Tags {
-					if tag.Attributes.Group == "genre" {
-						genres = append(genres, tag.Attributes.Name.En)
-					}
-				}
-				if n, err := strconv.Atoi(manga.Attributes.LastChapter); err == nil {
-					totalChapters = n
-				}
+				genres = manga.Genres()
+				totalChapters = manga.TotalChapters()
 			}
 		}
 
@@ -164,7 +157,7 @@ func (h *Handler) Upload(w http.ResponseWriter, r *http.Request) {
 		)
 
 	default:
-		utils.Error(w, http.StatusBadRequest, "invalid media type, must be one of: anime, movie, music_track")
+		utils.Error(w, http.StatusBadRequest, "invalid media type, must be one of: anime, movie, music_track, manga")
 		return
 	}
 
@@ -260,7 +253,10 @@ Params:
 func (h *Handler) GetSpecific(w http.ResponseWriter, r *http.Request) {
 	user := auth.GetUser(r)
 	// get the id from the URL
-	mediaId := chi.URLParam(r, "id")
+	mediaId, ok := utils.UUIDParam(w, r, "id")
+	if !ok {
+		return
+	}
 	item := MediaItem{}
 	lockedFields := []string{}
 
@@ -269,14 +265,14 @@ func (h *Handler) GetSpecific(w http.ResponseWriter, r *http.Request) {
 		external_source, created_at, locked_fields
 		FROM media_items WHERE id = $1`
 
-	// look for the meida item
+	// look for the media item
 	err := h.db.QueryRow(queryString, mediaId).Scan(
 		&item.ID, &item.Type, &item.Title, &item.Description,
 		&item.CoverImageURL, &item.ReleaseDate, &item.ExternalID,
 		&item.ExternalSource, &item.CreatedAt, pq.Array(&lockedFields),
 	)
 
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		utils.Error(w, http.StatusNotFound, "not found")
 		return
 	}
@@ -298,7 +294,7 @@ func (h *Handler) GetSpecific(w http.ResponseWriter, r *http.Request) {
 			`SELECT studio, status, genres FROM anime_metadata WHERE media_item_id = $1`,
 			item.ID,
 		).Scan(&meta.Studio, &meta.Status, pq.Array(&meta.Genres))
-		if err != nil && err != sql.ErrNoRows {
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
 			utils.Error(w, http.StatusInternalServerError, "internal server error")
 			return
 		}
@@ -314,7 +310,7 @@ func (h *Handler) GetSpecific(w http.ResponseWriter, r *http.Request) {
 			item.ID, user.UserID,
 		).Scan(&meta.RuntimeMins, &meta.Director, pq.Array(&meta.Genres), &meta.FilePath,
 			&meta.PositionSecs, &meta.DurationSecs)
-		if err != nil && err != sql.ErrNoRows {
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
 			utils.Error(w, http.StatusInternalServerError, "internal server error")
 			return
 		}
@@ -326,7 +322,7 @@ func (h *Handler) GetSpecific(w http.ResponseWriter, r *http.Request) {
 			`SELECT artist, track_number, duration_secs, genres FROM music_metadata WHERE media_item_id = $1`,
 			item.ID,
 		).Scan(&meta.Artist, &meta.TrackNumber, &meta.DurationSecs, pq.Array(&meta.Genres))
-		if err != nil && err != sql.ErrNoRows {
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
 			utils.Error(w, http.StatusInternalServerError, "internal server error")
 			return
 		}
@@ -338,7 +334,7 @@ func (h *Handler) GetSpecific(w http.ResponseWriter, r *http.Request) {
 			`SELECT total_chapters, genres, status FROM manga_metadata WHERE media_item_id = $1`,
 			item.ID,
 		).Scan(&meta.TotalChapters, pq.Array(&meta.Genres), &meta.Status)
-		if err != nil && err != sql.ErrNoRows {
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
 			utils.Error(w, http.StatusInternalServerError, "internal server error")
 			return
 		}
@@ -382,7 +378,7 @@ func (h *Handler) GetSpecific(w http.ResponseWriter, r *http.Request) {
 			`SELECT author, total_volumes, genres FROM light_novel_metadata WHERE media_item_id = $1`,
 			item.ID,
 		).Scan(&meta.Author, &meta.TotalVolumes, pq.Array(&meta.Genres))
-		if err != nil && err != sql.ErrNoRows {
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
 			utils.Error(w, http.StatusInternalServerError, "internal server error")
 			return
 		}
@@ -426,13 +422,15 @@ Params:
 func (h *Handler) MangaProgress(w http.ResponseWriter, r *http.Request) {
 	var req progressRequest
 	// get the chapter id from the URL parameters
-	chapterId := chi.URLParam(r, "chapterId")
+	chapterId, ok := utils.UUIDParam(w, r, "chapterId")
+	if !ok {
+		return
+	}
 	// get the user info from the request
 	user := auth.GetUser(r)
 
 	// decode the incoming request, check that the structure is correct
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utils.Error(w, http.StatusBadRequest, "invalid request body")
+	if !utils.DecodeJSON(w, r, &req) {
 		return
 	}
 
@@ -462,10 +460,12 @@ func (h *Handler) UpdateLightNovelProgress(w http.ResponseWriter, r *http.Reques
 		ScrollPosition float64 `json:"scroll_position"`
 	}
 	user := auth.GetUser(r)
-	volumeId := chi.URLParam(r, "volumeId")
+	volumeId, ok := utils.UUIDParam(w, r, "volumeId")
+	if !ok {
+		return
+	}
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utils.Error(w, http.StatusBadRequest, "invalid request body")
+	if !utils.DecodeJSON(w, r, &req) {
 		return
 	}
 
@@ -494,7 +494,10 @@ Params:
 func (h *Handler) ServePage(w http.ResponseWriter, r *http.Request) {
 	var fPath string
 	// get the chapters id from the URL parameters
-	chapterId := chi.URLParam(r, "chapterId")
+	chapterId, ok := utils.UUIDParam(w, r, "chapterId")
+	if !ok {
+		return
+	}
 	// get the page number from the URL parameters
 	pageNum, err := strconv.Atoi(chi.URLParam(r, "pageNum"))
 
@@ -508,7 +511,7 @@ func (h *Handler) ServePage(w http.ResponseWriter, r *http.Request) {
 		chapterId,
 	).Scan(&fPath)
 
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		utils.Error(w, http.StatusNotFound, "chapter not found")
 		return
 	}
@@ -549,8 +552,14 @@ func (h *Handler) ServePage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) ServeVolume(w http.ResponseWriter, r *http.Request) {
-	volumeId := chi.URLParam(r, "volumeId")
-	id := chi.URLParam(r, "id")
+	volumeId, ok := utils.UUIDParam(w, r, "volumeId")
+	if !ok {
+		return
+	}
+	id, ok := utils.UUIDParam(w, r, "id")
+	if !ok {
+		return
+	}
 
 	var filePath string
 	err := h.db.QueryRow(
@@ -558,7 +567,7 @@ func (h *Handler) ServeVolume(w http.ResponseWriter, r *http.Request) {
 		volumeId,
 	).Scan(&filePath)
 
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		utils.Error(w, http.StatusNotFound, "volume not found")
 		return
 	}
@@ -717,7 +726,10 @@ func (h *Handler) ServeVolume(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) ServeVolumeImage(w http.ResponseWriter, r *http.Request) {
-	volumeId := chi.URLParam(r, "volumeId")
+	volumeId, ok := utils.UUIDParam(w, r, "volumeId")
+	if !ok {
+		return
+	}
 	imageName := chi.URLParam(r, "imageName")
 
 	if !utils.SafeFileName(imageName) {
@@ -731,7 +743,7 @@ func (h *Handler) ServeVolumeImage(w http.ResponseWriter, r *http.Request) {
 		volumeId,
 	).Scan(&filePath)
 
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		utils.Error(w, http.StatusNotFound, "volume not found")
 		return
 	}
@@ -779,7 +791,10 @@ func (h *Handler) ServeVolumeImage(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) GetEpisodes(w http.ResponseWriter, r *http.Request) {
 	user := auth.GetUser(r)
-	mediaID := chi.URLParam(r, "id")
+	mediaID, ok := utils.UUIDParam(w, r, "id")
+	if !ok {
+		return
+	}
 	episodes := []Episode{}
 
 	rows, err := h.db.Query(
@@ -818,7 +833,7 @@ func (h *Handler) GetEpisodes(w http.ResponseWriter, r *http.Request) {
 /*
 Function:	UpdateEpisodeProgress
 Purpose:	Save the current user's playback position in an episode, and how long they watched
-            since the last save. Reaching the end marks the episode watched
+since the last save. Reaching the end marks the episode watched
 Params:
   - w: http response writer to respond to the front end
   - r: http request coming from the frontend
@@ -830,10 +845,12 @@ func (h *Handler) UpdateEpisodeProgress(w http.ResponseWriter, r *http.Request) 
 		WatchedSecs  float64 `json:"watched_secs"`
 	}
 	user := auth.GetUser(r)
-	episodeId := chi.URLParam(r, "id")
+	episodeId, ok := utils.UUIDParam(w, r, "id")
+	if !ok {
+		return
+	}
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utils.Error(w, http.StatusBadRequest, "invalid request body")
+	if !utils.DecodeJSON(w, r, &req) {
 		return
 	}
 
@@ -874,7 +891,7 @@ func (h *Handler) UpdateEpisodeProgress(w http.ResponseWriter, r *http.Request) 
 /*
 Function:	UpdateMovieProgress
 Purpose:	Save the current user's playback position in a movie, and how long they watched
-            since the last save
+since the last save
 Params:
   - w: http response writer to respond to the front end
   - r: http request coming from the frontend
@@ -886,10 +903,12 @@ func (h *Handler) UpdateMovieProgress(w http.ResponseWriter, r *http.Request) {
 		WatchedSecs  float64 `json:"watched_secs"`
 	}
 	user := auth.GetUser(r)
-	movieId := chi.URLParam(r, "id")
+	movieId, ok := utils.UUIDParam(w, r, "id")
+	if !ok {
+		return
+	}
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utils.Error(w, http.StatusBadRequest, "invalid request body")
+	if !utils.DecodeJSON(w, r, &req) {
 		return
 	}
 
@@ -937,7 +956,7 @@ const maxWatchedPerSave = 30
 /*
 Function:	watchedSeconds
 Purpose:	how much of a progress save's watched_secs to count: nothing for a bad value, and no
-            more than maxWatchedPerSave
+more than maxWatchedPerSave
 Params:
   - secs: the seconds the player says were watched since its last save
 */
@@ -975,10 +994,12 @@ func (h *Handler) recordWatching(userID, titleQuery, id string, watched float64)
 func (h *Handler) MarkChapterRead(w http.ResponseWriter, r *http.Request) {
 	var req markReadRequest
 	user := auth.GetUser(r)
-	chapterId := chi.URLParam(r, "chapterId")
+	chapterId, ok := utils.UUIDParam(w, r, "chapterId")
+	if !ok {
+		return
+	}
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utils.Error(w, http.StatusBadRequest, "invalid request body")
+	if !utils.DecodeJSON(w, r, &req) {
 		return
 	}
 
@@ -999,10 +1020,12 @@ func (h *Handler) MarkChapterRead(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) MarkMangaRead(w http.ResponseWriter, r *http.Request) {
 	var req markReadRequest
 	user := auth.GetUser(r)
-	mediaId := chi.URLParam(r, "id")
+	mediaId, ok := utils.UUIDParam(w, r, "id")
+	if !ok {
+		return
+	}
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utils.Error(w, http.StatusBadRequest, "invalid request body")
+	if !utils.DecodeJSON(w, r, &req) {
 		return
 	}
 
@@ -1024,10 +1047,12 @@ func (h *Handler) MarkMangaRead(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) MarkVolumeRead(w http.ResponseWriter, r *http.Request) {
 	var req markReadRequest
 	user := auth.GetUser(r)
-	volumeId := chi.URLParam(r, "volumeId")
+	volumeId, ok := utils.UUIDParam(w, r, "volumeId")
+	if !ok {
+		return
+	}
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utils.Error(w, http.StatusBadRequest, "invalid request body")
+	if !utils.DecodeJSON(w, r, &req) {
 		return
 	}
 
@@ -1048,10 +1073,12 @@ func (h *Handler) MarkVolumeRead(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) MarkLightNovelRead(w http.ResponseWriter, r *http.Request) {
 	var req markReadRequest
 	user := auth.GetUser(r)
-	mediaId := chi.URLParam(r, "id")
+	mediaId, ok := utils.UUIDParam(w, r, "id")
+	if !ok {
+		return
+	}
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utils.Error(w, http.StatusBadRequest, "invalid request body")
+	if !utils.DecodeJSON(w, r, &req) {
 		return
 	}
 

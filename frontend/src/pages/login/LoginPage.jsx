@@ -72,7 +72,7 @@ export default function Login() {
             setError("Passwords must match");
             return;
         }
-        
+
         setSubmitting(true);
         api.post("/auth/register", {username, email, password, invite_code: inviteCode})
         .then(res => {

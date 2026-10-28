@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { Trash2 } from "lucide-react";
 import DeleteMediaModal from "./modals/DeleteMediaModal";
-import { getRole } from "../utils/auth";
+import { userIsAdmin } from "../utils/auth";
 
 /**
  * Admin only: a button on a details page that permanently deletes the title, then leaves the
@@ -15,7 +15,7 @@ export default function DeleteFromServerButton({ item, asMenuItem = false }) {
     const navigate = useNavigate();
     const dialogRef = useRef(null);
 
-    if (getRole() !== "admin") return null;
+    if (!userIsAdmin()) return null;
 
     function open() {
         document.activeElement?.blur();

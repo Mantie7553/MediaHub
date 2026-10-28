@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"strconv"
 	"strings"
 )
 
@@ -47,71 +46,10 @@ func NewYtdlpClient(binEnvKey string, dirEnvKey string) *YtdlpClient {
 	}
 }
 
-// ProgressFunc receives integer percent updates parsed from yt-dlp's stdout.
-type ProgressFunc func(percent int)
-
-/*
-Function:	Download
-Purpose:	Run yt-dlp to fetch a source URL, extract audio as mp3, and write
-
-	it to the given output template, reporting progress as it goes
-
-Params:
-  - sourceURL: URL yt-dlp will download from
-  - outputTemplate: yt-dlp -o template, including any per-job subdirs
-  - onProgress: optional callback receiving integer percent updates
-*/
-func (c *YtdlpClient) Download(sourceURL, outputTemplate string, onProgress ProgressFunc) error {
-	cmd := c.command(
-		"-x",
-		"--audio-format", "mp3",
-		"--newline",
-		"-o", outputTemplate,
-		sourceURL,
-	)
-
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return err
-	}
-
-	if err := cmd.Start(); err != nil {
-		return err
-	}
-
-	// yt-dlp emits lines like "[download]  12.3% of  4.5MiB at  1.2MiB/s ETA 00:08".
-	// We pull the percent from the second whitespace-delimited field.
-	scanner := bufio.NewScanner(stdout)
-	for scanner.Scan() {
-		line := scanner.Text()
-		if onProgress != nil && strings.Contains(line, "[download]") && strings.Contains(line, "%") {
-			fields := strings.Fields(line)
-			if len(fields) >= 2 {
-				percentStr := strings.TrimSuffix(fields[1], "%")
-				if pct, err := strconv.ParseFloat(percentStr, 64); err == nil {
-					onProgress(int(pct))
-				}
-			}
-		}
-	}
-
-	if err := cmd.Wait(); err != nil {
-		return err
-	}
-
-	// Some lines may report 99% before completion; force a final 100 once the binary exits cleanly.
-	if onProgress != nil {
-		onProgress(100)
-	}
-	return nil
-}
-
 /*
 Function:	SearchMusic
 Purpose:	Run a YouTube Music search via yt-dlp's ytmsearch prefix and return
-
-	parsed candidates without downloading anything
-
+parsed candidates without downloading anything
 Params:
   - query: free-text search term
   - limit: number of results to return; defaults to 10 when zero or negative

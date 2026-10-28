@@ -47,78 +47,78 @@ func NewMangaDexClient(urlEnvKey string) *MangaDexClient {
 }
 
 func (c *MangaDexClient) fetch(params url.Values) ([]Manga, error) {
-    params.Add("includes[]", "cover_art")
-    params.Add("includes[]", "tag")
-    params.Add("excludedTags[]", "b13b2a48-c720-44a9-9c77-39c9979373fb") // doujinshi
+	params.Add("includes[]", "cover_art")
+	params.Add("includes[]", "tag")
+	params.Add("excludedTags[]", "b13b2a48-c720-44a9-9c77-39c9979373fb") // doujinshi
 
-    req, err := http.NewRequest("GET", c.config.BaseURL+"/manga?"+params.Encode(), nil)
-    if err != nil {
-        return nil, err
-    }
-    req.Header.Set("Accept", "application/json")
+	req, err := http.NewRequest("GET", c.config.BaseURL+"/manga?"+params.Encode(), nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Accept", "application/json")
 
-    resp, err := c.http.Do(req)
-    if err != nil {
-        return nil, err
-    }
-    defer resp.Body.Close()
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
 
-    if resp.StatusCode >= 400 {
-        return nil, fmt.Errorf("mangadex returned %d", resp.StatusCode)
-    }
+	if resp.StatusCode >= 400 {
+		return nil, fmt.Errorf("mangadex returned %d", resp.StatusCode)
+	}
 
-    var result struct {
-        Data []Manga `json:"data"`
-    }
-    if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-        return nil, err
-    }
-    return result.Data, nil
+	var result struct {
+		Data []Manga `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+	return result.Data, nil
 }
 
 func (c *MangaDexClient) Discovery(limit int) (*DiscoveryResult, error) {
-    if limit <= 0 {
-        limit = 20
-    }
-    limitStr := fmt.Sprintf("%d", limit)
+	if limit <= 0 {
+		limit = 20
+	}
+	limitStr := fmt.Sprintf("%d", limit)
 
-    trendingParams := url.Values{}
-    trendingParams.Set("limit", limitStr)
-    trendingParams.Add("order[followedCount]", "desc")
+	trendingParams := url.Values{}
+	trendingParams.Set("limit", limitStr)
+	trendingParams.Add("order[followedCount]", "desc")
 
-    popularParams := url.Values{}
-    popularParams.Set("limit", limitStr)
-    popularParams.Add("order[rating]", "desc")
+	popularParams := url.Values{}
+	popularParams.Set("limit", limitStr)
+	popularParams.Add("order[rating]", "desc")
 
-    latestParams := url.Values{}
-    latestParams.Set("limit", limitStr)
-    latestParams.Add("order[latestUploadedChapter]", "desc")
+	latestParams := url.Values{}
+	latestParams.Set("limit", limitStr)
+	latestParams.Add("order[latestUploadedChapter]", "desc")
 
-    // three independent lists: fetched together, Discover waits for the slowest instead of all three
-    var trending, popular, latest []Manga
-    var trendingErr, popularErr, latestErr error
-    var wg sync.WaitGroup
-    wg.Add(3)
-    go func() { defer wg.Done(); trending, trendingErr = c.fetch(trendingParams) }()
-    go func() { defer wg.Done(); popular, popularErr = c.fetch(popularParams) }()
-    go func() { defer wg.Done(); latest, latestErr = c.fetch(latestParams) }()
-    wg.Wait()
+	// three independent lists: fetched together, Discover waits for the slowest instead of all three
+	var trending, popular, latest []Manga
+	var trendingErr, popularErr, latestErr error
+	var wg sync.WaitGroup
+	wg.Add(3)
+	go func() { defer wg.Done(); trending, trendingErr = c.fetch(trendingParams) }()
+	go func() { defer wg.Done(); popular, popularErr = c.fetch(popularParams) }()
+	go func() { defer wg.Done(); latest, latestErr = c.fetch(latestParams) }()
+	wg.Wait()
 
-    if trendingErr != nil {
-        return nil, fmt.Errorf("trending: %w", trendingErr)
-    }
-    if popularErr != nil {
-        return nil, fmt.Errorf("popular: %w", popularErr)
-    }
-    if latestErr != nil {
-        return nil, fmt.Errorf("latest: %w", latestErr)
-    }
+	if trendingErr != nil {
+		return nil, fmt.Errorf("trending: %w", trendingErr)
+	}
+	if popularErr != nil {
+		return nil, fmt.Errorf("popular: %w", popularErr)
+	}
+	if latestErr != nil {
+		return nil, fmt.Errorf("latest: %w", latestErr)
+	}
 
-    return &DiscoveryResult{
-        Trending: trending,
-        Popular:  popular,
-        Latest:   latest,
-    }, nil
+	return &DiscoveryResult{
+		Trending: trending,
+		Popular:  popular,
+		Latest:   latest,
+	}, nil
 }
 
 /*

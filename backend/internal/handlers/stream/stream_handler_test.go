@@ -91,4 +91,3 @@ func TestServeSegmentRejectsTraversal(t *testing.T) {
 		})
 	}
 }
-

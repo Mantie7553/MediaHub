@@ -7,7 +7,8 @@ if [ "${YTDLP_AUTO_UPDATE:-true}" = "true" ]; then
   "$YTDLP_PATH" -U >/dev/null 2>&1 || echo "yt-dlp update failed, using the bundled version"
 fi
 
-# transcodes and yt-dlp temp files go on the media disk, not the container layer
+# transcodes and other temp files go on the media disk, not the container layer. yt-dlp unpacks
+# itself into YTDLP_TMPDIR instead (see the Dockerfile), a NAS is too slow for that
 if [ -n "$MEDIA_ROOT" ]; then
   mkdir -p "$MEDIA_ROOT/temp"
   export TMPDIR="$MEDIA_ROOT/temp"

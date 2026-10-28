@@ -2,12 +2,15 @@ package utils
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"path/filepath"
 	"regexp"
 	"strings"
 
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/logger"
+	"github.com/go-chi/chi/v5"
+	"github.com/lib/pq"
 )
 
 /*
@@ -57,6 +60,30 @@ func InternalError(w http.ResponseWriter, err error) bool {
 }
 
 /*
+Function:	DecodeJSON
+Purpose:	read a JSON request body into v, answering 400 when it can't
+Params:
+  - w: http response writer to respond to the front end
+  - r: http request whose body we are reading
+  - v: pointer to what the body decodes into
+*/
+func DecodeJSON(w http.ResponseWriter, r *http.Request, v any) bool {
+	if err := json.NewDecoder(r.Body).Decode(v); err != nil {
+		// logged at the same depth as Error so the line is the handler's, not this one
+		logger.WarnDepth(3, "http %d: %s", http.StatusBadRequest, "invalid request body")
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return false
+	}
+	return true
+}
+
+// whether a database error is a unique constraint saying the row already exists
+func IsUniqueViolation(err error) bool {
+	var pqErr *pq.Error
+	return errors.As(err, &pqErr) && pqErr.Code == "23505"
+}
+
+/*
 Function:	NullString
 Purpose:	if a string is empty change it to a nil or return the existing string
 Params:
@@ -71,29 +98,26 @@ func NullString(s string) *string {
 
 /*
 Function:	NullInt
-Purpose:	if the pointer is pointing to a null value return nil else return the value
+Purpose:	if the pointer is nil or points at 0 (unknown) return nil, else return the pointer
 Params:
   - i: an int pointer for the number we are checking
 */
 func NullInt(i *int) *int {
-	if i == nil {
+	if i == nil || *i == 0 {
 		return nil
 	}
 	return i
 }
 
-func SafeMonth(m *int) int {
-	if m == nil {
-		return 1
+/*
+Function:	DerefOr
+Purpose:	the value p points at, or def when p is nil
+*/
+func DerefOr(p *int, def int) int {
+	if p == nil {
+		return def
 	}
-	return *m
-}
-
-func SafeDay(d *int) int {
-	if d == nil {
-		return 1
-	}
-	return *d
+	return *p
 }
 
 /*
@@ -122,6 +146,24 @@ Purpose:	check that s is a UUID, before using it as an id in a query
 */
 func IsUUID(s string) bool {
 	return uuidPattern.MatchString(s)
+}
+
+/*
+Function:	UUIDParam
+Purpose:	read an id from the URL, answering 404 when it isn't a UUID (so it can't be one of ours)
+Params:
+  - w: http response writer to respond to the front end
+  - r: http request holding the URL parameter
+  - name: the URL parameter's name
+*/
+func UUIDParam(w http.ResponseWriter, r *http.Request, name string) (string, bool) {
+	id := chi.URLParam(r, name)
+	if !IsUUID(id) {
+		logger.WarnDepth(3, "http %d: %s", http.StatusNotFound, "not found")
+		http.Error(w, "not found", http.StatusNotFound)
+		return "", false
+	}
+	return id, true
 }
 
 /*

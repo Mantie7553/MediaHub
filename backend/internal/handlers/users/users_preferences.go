@@ -1,7 +1,6 @@
 package users
 
 import (
-	"encoding/json"
 	"net/http"
 	"regexp"
 
@@ -62,8 +61,7 @@ Params:
 */
 func (h *Handler) UpdatePreferences(w http.ResponseWriter, r *http.Request) {
 	var p preferences
-	if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
-		utils.Error(w, http.StatusBadRequest, "invalid request body")
+	if !utils.DecodeJSON(w, r, &p) {
 		return
 	}
 	if !validPreferences(p) {

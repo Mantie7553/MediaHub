@@ -2,6 +2,7 @@ package sync
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -61,7 +62,7 @@ func (h *Handler) syncSonarr() error {
 			s.ID,
 		).Scan(&mediaItemID)
 
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			// New series — insert media_item
 			var releaseDate *string
 			if s.Year > 0 {
@@ -126,8 +127,8 @@ func (h *Handler) syncSonarr() error {
 			if aniResult.StartDate.Year != nil {
 				date := fmt.Sprintf("%04d-%02d-%02d",
 					*aniResult.StartDate.Year,
-					utils.SafeMonth(aniResult.StartDate.Month),
-					utils.SafeDay(aniResult.StartDate.Day),
+					utils.DerefOr(aniResult.StartDate.Month, 1),
+					utils.DerefOr(aniResult.StartDate.Day, 1),
 				)
 				h.db.Exec(
 					`UPDATE media_items SET `+locks.Keep(locks.ReleaseDate, "release_date", "$1")+` WHERE id = $2`,
@@ -135,15 +136,7 @@ func (h *Handler) syncSonarr() error {
 				)
 			}
 
-			var status string
-			switch aniResult.Status {
-			case "RELEASING":
-				status = "airing"
-			case "FINISHED":
-				status = "finished"
-			case "NOT_YET_RELEASED":
-				status = "upcoming"
-			}
+			status := aniResult.LibraryStatus()
 
 			var studio string
 			if len(aniResult.Studios) > 0 {
@@ -279,7 +272,7 @@ func (h *Handler) syncRadarr() error {
 			m.ID,
 		).Scan(&mediaItemID)
 
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			// New movie - insert media_item using Radarr's native data
 			err = h.db.QueryRow(
 				`INSERT INTO media_items (type, title, cover_image_url, description, release_date)
@@ -427,19 +420,9 @@ func (h *Handler) syncManga() error {
 			}
 		}
 
-		// Extract genres and status
-		var genres []string
-		for _, tag := range manga.Attributes.Tags {
-			if tag.Attributes.Group == "genre" {
-				genres = append(genres, tag.Attributes.Name.En)
-			}
-		}
+		genres := manga.Genres()
 		status := manga.Attributes.Status
-
-		var totalChapters int
-		if n, convErr := strconv.Atoi(manga.Attributes.LastChapter); convErr == nil {
-			totalChapters = n
-		}
+		totalChapters := manga.TotalChapters()
 
 		// Insert or find the media item
 		var mediaItemID string
@@ -573,21 +556,21 @@ func (h *Handler) syncLightNovels() error {
 			`SELECT media_item_id FROM light_novel_volumes WHERE file_path LIKE $1 ESCAPE '\' LIMIT 1`,
 			utils.LikePrefix(folder+string(filepath.Separator)),
 		).Scan(&mediaItemID)
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			err = h.db.QueryRow(
 				`SELECT id FROM media_items WHERE type = 'light_novel' AND title = $1`,
 				entry.Name(),
 			).Scan(&mediaItemID)
 		}
 
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			var startDate *string
 
 			if lightNovel.StartDate.Year != nil {
 				date := fmt.Sprintf("%04d-%02d-%02d",
 					*lightNovel.StartDate.Year,
-					utils.SafeMonth(lightNovel.StartDate.Month),
-					utils.SafeDay(lightNovel.StartDate.Day),
+					utils.DerefOr(lightNovel.StartDate.Month, 1),
+					utils.DerefOr(lightNovel.StartDate.Day, 1),
 				)
 				startDate = &date
 			}
@@ -607,8 +590,8 @@ func (h *Handler) syncLightNovels() error {
 			if lightNovel.StartDate.Year != nil {
 				date := fmt.Sprintf("%04d-%02d-%02d",
 					*lightNovel.StartDate.Year,
-					utils.SafeMonth(lightNovel.StartDate.Month),
-					utils.SafeDay(lightNovel.StartDate.Day),
+					utils.DerefOr(lightNovel.StartDate.Month, 1),
+					utils.DerefOr(lightNovel.StartDate.Day, 1),
 				)
 				releaseDate = &date
 			}
@@ -744,7 +727,7 @@ func (h *Handler) syncMusic() (int, error) {
 			fileName,
 		).Scan(&mediaItemID)
 
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			err = h.db.QueryRow(
 				`INSERT INTO media_items (type, title)
 				VALUES ('music_track', $1)
@@ -769,14 +752,14 @@ func (h *Handler) syncMusic() (int, error) {
 			`SELECT album_id FROM music_metadata WHERE album_id IS NOT NULL AND file_path LIKE $1 ESCAPE '\' LIMIT 1`,
 			utils.LikePrefix(filepath.Join(musicRoot, artist, albumName)+string(filepath.Separator)),
 		).Scan(&id)
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			err = h.db.QueryRow(
 				`SELECT id FROM albums WHERE title = $1 AND artist = $2`,
 				albumName, artist,
 			).Scan(&id)
 		}
 
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			err = h.db.QueryRow(
 				`INSERT INTO albums (title, artist)
 				VALUES ($1, $2)

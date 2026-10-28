@@ -2,6 +2,7 @@ package collections
 
 import (
 	"database/sql"
+	"errors"
 )
 
 /*
@@ -180,7 +181,7 @@ one
 func featuredCopyOf(db querier, srcID string) (*string, error) {
 	var id string
 	err := db.QueryRow(`SELECT id FROM collections WHERE source_collection_id = $1 AND featured_at IS NOT NULL`, srcID).Scan(&id)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {

@@ -44,7 +44,7 @@ type runner struct {
 /*
 Function:	sources
 Purpose:	every library source in the order a full sync runs them. Sonarr/Radarr first so their
-            items exist before anything else, the folder scans after
+items exist before anything else, the folder scans after
 */
 func (h *Handler) sources() []struct {
 	name string
@@ -144,7 +144,7 @@ func (h *Handler) SyncStatus() Status {
 /*
 Function:	scheduleHour
 Purpose:	hour of day (container local time, TZ) for the nightly sync from LIBRARY_SYNC_HOUR.
-            Defaults to 4, "off" disables it
+Defaults to 4, "off" disables it
 */
 func scheduleHour() (int, bool) {
 	v := os.Getenv("LIBRARY_SYNC_HOUR")

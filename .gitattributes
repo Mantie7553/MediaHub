@@ -7,5 +7,7 @@
 Dockerfile text eol=lf
 Caddyfile text eol=lf
 .env.example text eol=lf
+# gofmt writes LF; a CRLF checkout would fail the gofmt check on Windows
+*.go text eol=lf
 
 *.ps1 text eol=crlf

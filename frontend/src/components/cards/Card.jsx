@@ -5,8 +5,8 @@ import { useRef, useState } from "react";
 import api from "../../services/api";
 import AddToListModal from "../modals/AddToListModal";
 import DeleteMediaModal from "../modals/DeleteMediaModal";
-import { removeFromList } from "../../services/mediaService";
-import { getRole } from "../../utils/auth";
+import { removeFromList, saveListEntry } from "../../services/mediaService";
+import { userIsAdmin } from "../../utils/auth";
 import { Plus, Check, Play } from "lucide-react";
 import Cover from "../Cover";
 import { toast } from "../../stores/useToastStore";
@@ -135,7 +135,7 @@ function ActionButtons({item, userEntry, onListChange, onDeleted}) {
     // list entries carry media_item_id, library items their own id; search results that
     // aren't in the library have neither
     const mediaId = item.media_item_id ?? item.id;
-    const canDelete = getRole() === "admin" && !!mediaId;
+    const canDelete = userIsAdmin() && !!mediaId;
     const picker = useCollectionPicker(onListChange);
     // list entries for albums carry album_id; anything else in the library has a media id
     const collectable = item.album_id
@@ -150,23 +150,10 @@ function ActionButtons({item, userEntry, onListChange, onDeleted}) {
 
     function handleConfirm({ status, score, progress }) {
         setLoading(true);
-        if (userEntry) {
-            // existing list entry — update it
-            api.put(`/me/media/${userEntry.id}`, {
-                status,
-                rating: score === 0 ? null : score,
-            })
-            .then(() => { toast.success("List updated"); onListChange?.(); })
-            .catch(err => toast.error(err, "Could not update your list"))
-            .finally(() => setLoading(false))
-        } else if (item.id) {
-            // already in DB — just add to list, no download
-            api.post("/me/media", {
-                media_item_id: item.id,
-                status,
-                rating: score === 0 ? null : score,
-            })
-            .then(() => { toast.success("Added to your list"); onListChange?.(); })
+        if (userEntry || item.id) {
+            // on their list already, or in the library — save the entry, no download
+            saveListEntry(userEntry, { media_item_id: item.id }, { status, rating: score === 0 ? null : score })
+            .then(() => { toast.success(userEntry ? "List updated" : "Added to your list"); onListChange?.(); })
             .catch(err => toast.error(err, "Could not update your list"))
             .finally(() => setLoading(false))
         } else if (item.external_source) {

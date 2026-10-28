@@ -48,7 +48,7 @@ export default function ItemRow({ checked, onToggle, toggleLabel, number, title,
  * @param {function} onClick flips it
  * @param {string} label for screen readers
  */
-export function CheckToggle({ checked, onClick, label }) {
+function CheckToggle({ checked, onClick, label }) {
     return <button
         type="button"
         aria-pressed={checked}

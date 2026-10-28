@@ -40,7 +40,7 @@ func TestOwnedFolders(t *testing.T) {
 		filepath.Join(root, "Artist", "Album", "01.mp3"),
 		filepath.Join(root, "Artist", "Album", "02.mp3"),
 		filepath.Join(root, "Other", "Album", "01.mp3"),
-		filepath.Join(root, "loose.mp3"),               // not deep enough
+		filepath.Join(root, "loose.mp3"),              // not deep enough
 		filepath.Join("media", "Manga", "X", "1.cbz"), // outside root
 	}
 

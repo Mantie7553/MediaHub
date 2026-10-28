@@ -2,7 +2,7 @@ package webhooks
 
 import (
 	"database/sql"
-	"encoding/json"
+	"errors"
 	"net/http"
 
 	"github.com/Mantie7553/MediaHub/backend/internal/clients/arr"
@@ -27,8 +27,7 @@ Params:
 */
 func (h *Handler) SonarrWebhook(w http.ResponseWriter, r *http.Request) {
 	var payload sonarrPayload
-	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-		utils.Error(w, http.StatusBadRequest, "invalid request body")
+	if !utils.DecodeJSON(w, r, &payload) {
 		return
 	}
 
@@ -45,7 +44,7 @@ func (h *Handler) SonarrWebhook(w http.ResponseWriter, r *http.Request) {
 		payload.Series.ID,
 	).Scan(&mediaItemID)
 
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		// sonarr series not linked to a media item, ignore
 		w.WriteHeader(http.StatusOK)
 		return
@@ -88,8 +87,7 @@ func (h *Handler) SonarrWebhook(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) RadarrWebhook(w http.ResponseWriter, r *http.Request) {
 	var payload radarrPayload
-	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-		utils.Error(w, http.StatusBadRequest, "invalid request body")
+	if !utils.DecodeJSON(w, r, &payload) {
 		return
 	}
 
@@ -104,7 +102,7 @@ func (h *Handler) RadarrWebhook(w http.ResponseWriter, r *http.Request) {
 		payload.Movie.ID,
 	).Scan(&mediaItemID)
 
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		w.WriteHeader(http.StatusOK)
 		return
 	}

@@ -3,6 +3,7 @@ package stream
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -31,15 +32,18 @@ var chapterTypes = []struct {
 /*
 Function:	SkipTimes
 Purpose:	the openings, endings, recaps and previews of an episode or movie, for skip buttons.
-            The file's own chapters when it names them, otherwise AniSkip's times for episodes.
-            Apart from playback so a slow AniSkip never holds up the video
+The file's own chapters when it names them, otherwise AniSkip's times for episodes.
+Apart from playback so a slow AniSkip never holds up the video
 Params:
   - w: http response writer to respond to the front end
   - r: http request coming from the frontend
 */
 func (h *Handler) SkipTimes(w http.ResponseWriter, r *http.Request) {
 	mediaType := chi.URLParam(r, "type")
-	mediaID := chi.URLParam(r, "id")
+	mediaID, ok := utils.UUIDParam(w, r, "id")
+	if !ok {
+		return
+	}
 	filePath, ok := h.videoFile(w, mediaType, mediaID)
 	if !ok {
 		return
@@ -94,7 +98,7 @@ func chapterSegments(chapters []probeChapter) []aniskip.Segment {
 /*
 Function:	aniskipSegments
 Purpose:	AniSkip's times for an episode, saved so it's only asked again for a new file or,
-            when it had none, after a while. None when the season has no MyAnimeList id
+when it had none, after a while. None when the season has no MyAnimeList id
 Params:
   - episodeID: the episode
   - filePath: the episode's file, times are for one cut
@@ -108,7 +112,7 @@ func (h *Handler) aniskipSegments(episodeID, filePath string, length float64) ([
 		WHERE e.id = $1`,
 		episodeID,
 	).Scan(&malID, &episode)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {
@@ -122,7 +126,7 @@ func (h *Handler) aniskipSegments(episodeID, filePath string, length float64) ([
 		`SELECT file_path, segments, fetched_at FROM skip_times WHERE episode_id = $1`,
 		episodeID,
 	).Scan(&cachedPath, &cachedJSON, &fetchedAt)
-	if err != nil && err != sql.ErrNoRows {
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return nil, err
 	}
 	if err == nil && cachedPath == filePath {

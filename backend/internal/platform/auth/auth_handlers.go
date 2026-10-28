@@ -2,7 +2,7 @@ package auth
 
 import (
 	"database/sql"
-	"encoding/json"
+	"errors"
 	"net/http"
 	"time"
 
@@ -90,8 +90,7 @@ Params:
 func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	// Decode the incoming request, check that the structure is correct
 	var req registerRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utils.Error(w, http.StatusBadRequest, "invalid request body")
+	if !utils.DecodeJSON(w, r, &req) {
 		return
 	}
 	req.Email = NormalizeEmail(req.Email)
@@ -145,7 +144,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		 RETURNING id`,
 		codeHash,
 	).Scan(&inviteID)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		utils.Error(w, http.StatusForbidden, "invalid or expired invite code")
 		return
 	}
@@ -186,8 +185,7 @@ Params:
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	// decode the incoming request, check that the structure is correct
 	var req loginRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utils.Error(w, http.StatusBadRequest, "invalid request body")
+	if !utils.DecodeJSON(w, r, &req) {
 		return
 	}
 	email := NormalizeEmail(req.Email)
@@ -205,7 +203,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		`SELECT id, password_hash, role FROM users WHERE LOWER(email) = $1`,
 		email,
 	).Scan(&userID, &passwordHash, &role)
-	if err != nil && err != sql.ErrNoRows {
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		utils.InternalError(w, err)
 		return
 	}
@@ -248,7 +246,7 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 		RETURNING u.id, u.role`,
 		tokenHash, time.Now().Add(RefreshTokenTTL),
 	).Scan(&userID, &role)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		clearRefreshCookie(w, r)
 		utils.Error(w, http.StatusUnauthorized, "session expired, sign in again")
 		return

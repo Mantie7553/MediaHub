@@ -19,6 +19,19 @@ type Media struct {
 	StartDate   FuzzyDate  `json:"start_date"`
 }
 
+// LibraryStatus: the status in the library's words (airing, finished, upcoming), "" for anything else
+func (m Media) LibraryStatus() string {
+	switch m.Status {
+	case "RELEASING":
+		return "airing"
+	case "FINISHED":
+		return "finished"
+	case "NOT_YET_RELEASED":
+		return "upcoming"
+	}
+	return ""
+}
+
 // Title carries Anilist's three localised title variants. Any may be empty.
 // Field names already match Anilist's JSON keys, so the same struct serves both
 // inbound decoding and outbound encoding.
@@ -69,9 +82,8 @@ type wireMedia struct {
 /*
 Function:	toDomain
 Purpose:	Flatten a raw Anilist response entry into the public Media shape,
-
-	collapsing studios.nodes[].name into a flat []string and renaming
-	camelCase fields.
+collapsing studios.nodes[].name into a flat []string and renaming
+camelCase fields.
 */
 func (w wireMedia) toDomain() Media {
 	studios := make([]string, 0, len(w.Studios.Nodes))

@@ -2,7 +2,6 @@ package curation
 
 import (
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -327,20 +326,11 @@ func parseChapterNumber(s *string) (mangafiles.Chapter, bool) {
 
 // decodePiece reads an edit of one piece, answering 404 for an id that isn't a UUID
 func decodePiece(w http.ResponseWriter, r *http.Request, id string, req *editPieceRequest) bool {
-	if !uuidRe.MatchString(id) {
+	if !utils.IsUUID(id) {
 		utils.Error(w, http.StatusNotFound, "not found")
 		return false
 	}
-	return decode(w, r, req)
-}
-
-// decode reads a JSON body, answering 400 when it can't
-func decode(w http.ResponseWriter, r *http.Request, v any) bool {
-	if err := json.NewDecoder(r.Body).Decode(v); err != nil {
-		utils.Error(w, http.StatusBadRequest, "invalid request body")
-		return false
-	}
-	return true
+	return utils.DecodeJSON(w, r, req)
 }
 
 func nullable(s sql.NullString) *string {
