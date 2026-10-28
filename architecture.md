@@ -32,12 +32,12 @@ backend/
       database/            Postgres connection
       logger/              Logging helpers
       server/              Chi router and all route registration (routes.go)
-      utils/               JSON and error response helpers
+      utils/               JSON and error responses, reading request bodies and ids
     handlers/              One folder per domain (media, lists, requests, jobs,
                            search, stream, sync, users, webhooks, music, manga,
-                           curation, deletion)
-    clients/               Wrappers for external APIs (anilist, arr, mangadex,
-                           ytdlp)
+                           curation, deletion, collections, insights, invites)
+    clients/               Wrappers for external APIs (anilist, aniskip, arr,
+                           mangadex, ytdlp)
     downloader/            Routes approved requests to a download tool and runs
                            yt-dlp and MangaDex jobs
     mangafiles/            Manga chapter files: reading chapter numbers from file
@@ -70,13 +70,13 @@ All routes are registered in `internal/platform/server/routes.go`. Every handler
 - **Webhook secret:** Sonarr/Radarr webhooks, which must send `X-MediaHub-Secret` matching `WEBHOOK_SECRET`. If `WEBHOOK_SECRET` is unset, every webhook is rejected
 - **Media token:** byte-serving routes loaded by `<video>`, `<audio>` and `<img>` (HLS segments, music tracks and covers, light novel images). These can't send a Bearer header, so they require a `media_token` query param instead (see [Media tokens](#media-tokens))
 - **Rate limited:** register, login and account changes, behind a per-IP token bucket (session refresh and logout have a looser one). Register also requires a valid invite code
-- **Authenticated:** anything a normal user does (browsing, lists, progress, requests, search)
+- **Authenticated:** anything a normal user does (browsing, lists, progress, requests, search), including their own playlists and collections (`/collections`) and the Featured row (`/featured`)
 - **Admin:** request approval, job management, library syncs, user management, editing the library by hand (`/api/admin/media`, `/admin/episodes`, `/admin/uploads`, ...)
 
 A `/health` route outside `/api` returns `ok`.
 
 ### Handlers
-Every domain package exposes a `Handler` struct built by `NewHandler(db *sql.DB)`. The handler only receives the database connection. Any external clients it needs (Sonarr, AniList, etc.) are created inside `NewHandler` rather than passed in from the router. Responses go through the helpers in `platform/utils` so errors are returned in a consistent shape.
+Every domain package exposes a `Handler` struct built by `NewHandler(db *sql.DB)`. The handler only receives the database connection. Any external clients it needs (Sonarr, AniList, etc.) are created inside `NewHandler` rather than passed in from the router. Responses go through the helpers in `platform/utils` so errors are returned in a consistent shape. Request bodies are read with `utils.DecodeJSON` (400 when they don't parse) and ids from the URL with `utils.UUIDParam` (404 when they can't be a UUID, rather than a failed query).
 
 ### Auth and Permissions
 - **Sign up is invite only.** Admins create single use codes (`POST /api/admin/invites`) on the User Management page and share the code or a `/login?invite=CODE` link. Codes expire after 1 to 30 days (7 by default). Only a SHA-256 hash of each code is stored, in `invite_codes`, so a code is shown once when it is created. `Register` checks the code before hashing the password, then claims it and creates the user in one transaction: a code can't be used twice, and a failed sign up (for example a taken email) frees it again. Unused invites can be revoked; used ones are kept as a record of who invited whom.
@@ -126,6 +126,10 @@ Routes are defined in `App.jsx` with React Router. `/login` is public. Everythin
 | `download_jobs` | The actual download work for an approved request, with handler, status, and progress |
 | `user_media_status` | A user's list entry (current, planned, completed, etc.) and rating |
 | `user_episode_progress`, `user_movie_progress`, `user_anime_progress`, `manga_progress`, `light_novel_progress` | Per-user watch and read progress |
+| `collections`, `collection_items` | Users' playlists and collections, and featured copies of them. An item is a title, an album, a nested playlist or one season of an anime; `image_id` is an image an admin uploaded for it |
+| `collection_submissions` | A user asking for one of theirs to be featured, and the admin's answer |
+| `music_plays`, `watch_time`, `user_active_days`, `storage_snapshots` | History for the Insights page: track plays, seconds watched per title and day, the days each user was around, and the library's size per day |
+| `anime_season_mal`, `skip_times` | The MyAnimeList entry for each Sonarr season, and the openings/endings AniSkip returned for an episode |
 
 See [`backend/migrations/`](backend/migrations/) for the full schema.
 
@@ -152,7 +156,7 @@ See [`backend/migrations/`](backend/migrations/) for the full schema.
    - **Audio:** the `audio` parameter if given, otherwise the preferred language (default-flagged first), otherwise the file's default track, skipping commentary. A preference of `default` always uses the file's default track.
    - **Subtitles:** every text track (ASS, SRT, ...) is extracted; image tracks (PGS, VobSub) can't become WebVTT and are skipped. The default shown is full dialogue in the preferred subtitle language, avoiding signs/songs-only, SDH and dubtitle tracks. If the audio is already in that language only a signs/songs track is turned on. A preference of `off` shows none.
 3. Each audio choice is its own transcode in `MEDIA_ROOT/temp/<type>-<id>-a<audio index>`. Concurrent requests share a running transcode; a finished one (playlist ends with `#EXT-X-ENDLIST` and `stream.json` exists) is reused. Anything else in the folder is left over from a failed or interrupted run and is deleted before starting again. `stream.json` records the audio and subtitle tracks so the default subtitle can be worked out per request.
-4. Every ffmpeg and ffprobe input is opened with `-protocol_whitelist file`, so a file that is really a playlist or a reference elsewhere can't make the server send requests; admin uploads are also limited to the formats allowed for them (`-format_whitelist`). ffmpeg writes an `EVENT` HLS playlist with 4 second segments (keyframe forced at each), `h264_amf` capped at ~6 Mbps, and stereo AAC. AV1 sources are decoded on the GPU (`d3d11va` on Windows, `TRANSCODE_HWACCEL` elsewhere) because CPU AV1 decoding is the slowest step. ffmpeg's output goes to `transcode.log` in the folder and is logged if it fails.
+4. Every ffmpeg and ffprobe input is opened with `-protocol_whitelist file`, so a file that is really a playlist or a reference elsewhere can't make the server send requests; admin uploads are also limited to the formats allowed for them (`-format_whitelist`). ffmpeg writes an `EVENT` HLS playlist with 4 second segments (keyframe forced at each), H.264 capped at ~6 Mbps from the encoder `TRANSCODE_ENCODER` picks (AMF on Windows and libx264 elsewhere by default, VAAPI or NVENC when set), and stereo AAC. AV1 sources are decoded on the GPU (`d3d11va` on Windows, `TRANSCODE_HWACCEL` elsewhere) because CPU AV1 decoding is the slowest step. ffmpeg's output goes to `transcode.log` in the folder and is logged if it fails.
 5. Subtitles are extracted in one pass to `subs_<index>.vtt`, written as `.tmp`, cleaned, then renamed so the player never loads a partial file. Cleaning strips leftover ASS override tags (`{...}`), drops ASS vector drawings used for typesetting (which WebVTT shows as walls of coordinates) and drops repeated lines (ASS draws some lines several times for styling).
 6. The handler waits until the playlist covers the start position plus 12 seconds (or the transcode finishes, up to 90 seconds), then returns the playlist URL, the file's audio tracks (with the one in use marked), and the subtitle tracks (with the default marked), all signed with a media token. Segment URLs are `/api/stream/segments/{type}/{id}/a<audio>/{file}`. `ServeSegment` only serves `.m3u8`, `.ts` and `.vtt` files.
 7. HLS.js starts at the resume position. The player downloads each subtitle file itself, retrying while it's still being extracted, and only adds a `<track>` once the file is there (a `<track>` that fails to load never retries). The **Languages** menu on the player switches subtitles instantly, switches audio by requesting the other audio transcode and resuming at the current time, and can save the current languages as the user's defaults (`PUT /api/me/preferences`).
@@ -206,7 +210,8 @@ Admins can fix what the metadata sources get wrong from each details page (*Edit
 | Radarr | Movie downloads and library | Notifies MediaHub through a webhook on download |
 | qBittorrent | Torrent client behind Sonarr and Radarr | MediaHub never talks to it directly |
 | yt-dlp | Music search and downloads | Run as a subprocess. Progress is read from its output |
-| ffmpeg | HLS transcoding and subtitle extraction | Uses AMD hardware encoding (`h264_amf`) |
+| ffmpeg | HLS transcoding and subtitle extraction | Encodes on the GPU (AMF, VAAPI or NVENC) or the CPU (libx264), see `TRANSCODE_ENCODER` |
+| AniSkip | Opening and ending times for anime episodes | Looked up by MyAnimeList id (from Fribb's anime list) and kept in `skip_times` |
 
 ## Design Decisions
 
@@ -232,7 +237,7 @@ Admins can fix what the metadata sources get wrong from each details page (*Edit
 
 ## Configuration
 
-Backend variables live in `backend/.env`. Frontend variables live in `frontend/.env`.
+A Docker install is configured through `.env` in the repo root, which the install script creates from [`.env.example`](.env.example); `docker-compose.yml` passes the backend's variables in. Running the backend outside Docker reads `backend/.env`, with `backend/.env.local` taking precedence. Frontend variables live in `frontend/.env`.
 
 | Variable | Purpose |
 |----------|---------|
@@ -251,4 +256,8 @@ Backend variables live in `backend/.env`. Frontend variables live in `frontend/.
 | `RADARR_URL`, `RADARR_API_KEY` | Radarr API access |
 | `MANGADEX_URL` | MangaDex API base URL |
 | `YTDLP_PATH`, `MUSIC_DIR` | yt-dlp executable and music download folder |
+| `YTDLP_TMPDIR` | Optional. Local folder yt-dlp unpacks itself into on each run, `/tmp` in the image |
+| `YTDLP_AUTO_UPDATE` | Optional. The container updates yt-dlp on start unless this is `false` |
+| `CACHE_MAX_GB`, `CACHE_DIR` | Optional. Size (default 5, `0` turns it off) and folder (default the user cache folder) of the local copies of manga, light novels and music read from `MEDIA_ROOT` |
+| `PUID`, `PGID` | Docker only. User and group the backend runs as, so files it writes on the media share belong to you |
 | `VITE_API_URL` | Frontend API base URL, set to `/api` |
