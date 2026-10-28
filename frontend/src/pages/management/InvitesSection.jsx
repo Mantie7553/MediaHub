@@ -1,12 +1,15 @@
-import { forwardRef, useRef, useState, useEffect } from "react";
+import { forwardRef, useRef, useState } from "react";
 import { Check, Copy, StickyNote, Ticket, X } from "lucide-react";
 import api from "../../services/api";
+import useApi from "../../hooks/useApi";
 import Format from "../../utils/format";
 import { errorMessage } from "../../utils/errors";
 import { toast } from "../../stores/useToastStore";
 import DataTable, { Panel } from "../../components/DataTable";
 import StatusPill from "../../components/StatusPill";
 import EmptyState from "../../components/states/EmptyState";
+import ErrorState from "../../components/states/ErrorState";
+import { TableSkeleton } from "../../components/states/Skeletons";
 import TextField, { SelectField } from "../../components/TextField";
 
 const STATUS_TONE = {
@@ -19,21 +22,12 @@ const STATUS_TONE = {
  * Admin section for creating, listing and revoking single use sign up codes
  */
 export default function InvitesSection() {
-    const [invites, setInvites] = useState([]);
-    const [error, setError] = useState("");
+    const { data: invites, loading, error, reload } = useApi("/admin/invites", { initial: [] });
     const createModalRef = useRef(null);
-
-    function fetchInvites() {
-        api.get("/admin/invites")
-            .then(res => { setInvites(res.data ?? []); setError(""); })
-            .catch(err => setError(errorMessage(err, "Could not load invites")));
-    }
-
-    useEffect(() => { fetchInvites(); }, []);
 
     function handleRevoke(invite) {
         api.delete(`/admin/invites/${invite.id}`)
-            .then(() => { toast.success("Invite revoked"); fetchInvites(); })
+            .then(() => { toast.success("Invite revoked"); reload(true); })
             .catch(err => toast.error(err, "Could not revoke the invite"));
     }
 
@@ -49,9 +43,10 @@ export default function InvitesSection() {
                 <Ticket size={15}/> Create invite
             </button>}
         >
-            {error && <p role="alert" className="text-error text-sm mb-3">{error}</p>}
-            {invites.length === 0 ? (
-                !error && <EmptyState compact icon={Ticket} title="No invites yet" hint="Create one and share the code or link with whoever you're inviting."/>
+            {loading ? <TableSkeleton columns={6} rows={2} /> :
+            error ? <ErrorState compact error={error} onRetry={reload} /> :
+            invites.length === 0 ? (
+                <EmptyState compact icon={Ticket} title="No invites yet" hint="Create one and share the code or link with whoever you're inviting."/>
             ) : (
                 <DataTable
                     items={invites}
@@ -74,7 +69,7 @@ export default function InvitesSection() {
                 />
             )}
 
-            <CreateInviteModal ref={createModalRef} onCreated={fetchInvites} />
+            <CreateInviteModal ref={createModalRef} onCreated={() => reload(true)} />
         </Panel>
     );
 }

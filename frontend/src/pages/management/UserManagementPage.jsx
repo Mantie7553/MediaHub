@@ -12,6 +12,7 @@ import { validatePassword } from "../../utils/validate";
 import InvitesSection from "./InvitesSection";
 import DataTable, { Panel } from "../../components/DataTable";
 import StatusPill from "../../components/StatusPill";
+import ConfirmModal from "../../components/modals/ConfirmModal";
 import TextField, { SelectField } from "../../components/TextField";
 import { Avatar } from "../../components/layout/Sidebar";
 
@@ -42,10 +43,12 @@ export default function UserManagementPage() {
     }
 
     function handleDeleteConfirm() {
-        api.delete(`/admin/users/${deleteTarget.id}`)
+        return api.delete(`/admin/users/${deleteTarget.id}`)
             .then(() => { toast.success(`Deleted ${deleteTarget.username}`); reload(true); })
-            .catch(err => toast.error(err, "Could not delete the user"))
-            .finally(() => deleteModalRef.current.close());
+            .catch(err => {
+                toast.error(err, "Could not delete the user");
+                throw err;
+            });
     }
 
     function handleSave(data) {
@@ -100,7 +103,13 @@ export default function UserManagementPage() {
             <InvitesSection />
 
             <UserModal ref={modalRef} user={selectedUser} onSave={handleSave} />
-            <DeleteModal ref={deleteModalRef} user={deleteTarget} onConfirm={handleDeleteConfirm} />
+            <ConfirmModal
+                dialogRef={deleteModalRef}
+                title={`Delete ${deleteTarget?.username ?? ""}?`}
+                lines={["They won't be able to sign in any more. This can't be undone."]}
+                confirmLabel="Delete user"
+                onConfirm={handleDeleteConfirm}
+            />
         </div>
     );
 }
@@ -201,26 +210,6 @@ const UserModal = forwardRef(function UserModal({ user, onSave }, ref) {
                         {loading && <span className="loading loading-spinner loading-xs"/>}
                         {isEdit ? "Save" : "Create user"}
                     </button>
-                </div>
-            </div>
-        </dialog>
-    );
-});
-
-/**
- * Confirmation modal for deleting a user
- */
-const DeleteModal = forwardRef(function DeleteModal({ user, onConfirm }, ref) {
-    return (
-        <dialog className="modal modal-bottom sm:modal-middle" ref={ref}>
-            <div className="modal-box flex flex-col gap-4">
-                <h3 className="text-xl font-semibold flex items-center gap-2">
-                    <Trash2 size={20} className="text-error"/> Delete {user?.username}?
-                </h3>
-                <p className="text-sm text-base-content/70">They won't be able to sign in any more. This can't be undone.</p>
-                <div className="flex gap-2 justify-end">
-                    <button className="btn btn-ghost" onClick={() => ref.current.close()}>Cancel</button>
-                    <button className="btn btn-error" onClick={onConfirm}>Delete user</button>
                 </div>
             </div>
         </dialog>

@@ -71,7 +71,8 @@ export default class Format {
      * @returns the position in the proper display format
      */
     static duration(secs) {
-        const total = Math.max(0, Math.floor(secs));
+        // NaN or undefined (a length not known yet) reads as 0:00
+        const total = Math.max(0, Math.floor(secs) || 0);
         const h = Math.floor(total / 3600);
         const m = Math.floor((total % 3600) / 60);
         const s = String(total % 60).padStart(2, "0");
@@ -126,7 +127,7 @@ export default class Format {
 
     static statusLabel(status, type) {
         if (!status) return "Add to list";
-        
+
         const labels = {
             current: { anime: "Watching", manga: "Reading", light_novel: "Reading", movie: "Watching" },
             planned: { anime: "Plan to Watch", manga: "Plan to Read", light_novel: "Plan to Read", movie: "Plan to Watch", music_album: "Plan to Listen" },

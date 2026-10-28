@@ -1,6 +1,18 @@
 import api from './api'
 
 /**
+ * Put a title on the logged in user's list, or change the entry they already have
+ * @param {object} [entry] their list entry for it, when they have one
+ * @param {object} target what to add when they don't, { media_item_id } or { album_id }
+ * @param {object} fields what to save, status and optionally rating
+ */
+export function saveListEntry(entry, target, fields) {
+    return entry
+        ? api.put(`/me/media/${entry.id}`, fields)
+        : api.post("/me/media", { ...target, ...fields })
+}
+
+/**
  * Take a title off the logged in user's list. Only their own entry, the media stays
  * @param {string} entryId the list entry id (user_media_status), not the media id
  */

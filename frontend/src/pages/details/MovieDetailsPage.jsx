@@ -8,13 +8,13 @@ import { openViewer } from "../../utils/navigation";
 import { useMediaItem, useUserContent, useRemoveFromList } from "../../hooks";
 import DeleteFromServerButton from "../../components/DeleteFromServerButton";
 import Format from "../../utils/format";
-import api from "../../services/api";
 import { ListPlus, PencilLine, Play, RotateCcw, Upload } from "lucide-react";
 import DetailsHero from "../../components/details/DetailsHero";
 import { ActionMenu, ActionMenuItem, ListStatusMenu } from "../../components/details/Menus";
 import EditDetailsModal from "../../components/modals/EditDetailsModal";
 import UploadFilesModal from "../../components/modals/UploadFilesModal";
-import { getRole } from "../../utils/auth";
+import { userIsAdmin } from "../../utils/auth";
+import { saveListEntry } from "../../services/mediaService";
 import useCollectionPicker from "../../hooks/useCollectionPicker";
 
 export default function MovieDetailsPage() {
@@ -29,13 +29,10 @@ export default function MovieDetailsPage() {
     const uploadRef = useRef(null);
     // a cover just uploaded, with a version so the browser doesn't show the one it cached
     const [newCover, setNewCover] = useState(null);
-    const isAdmin = getRole() === "admin";
+    const isAdmin = userIsAdmin();
 
     function updateStatus(status) {
-        const request = userEntry
-            ? api.put(`/me/media/${userEntry.id}`, { status })
-            : api.post(`/me/media`, { media_item_id: id, status });
-        request
+        saveListEntry(userEntry, { media_item_id: id }, { status })
             .then(() => refresh())
             .catch(err => toast.error(err, "Could not update your list"));
     }

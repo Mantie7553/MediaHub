@@ -11,6 +11,7 @@ import AlbumList from "../../components/layout/AlbumList"
 import { toast } from "../../stores/useToastStore"
 import SearchField from "../../components/SearchField"
 import SectionHeader from "../../components/layout/SectionHeader"
+import Format from "../../utils/format"
 
 export default function MusicDiscover({ onListChange }) {
     const albums = useApi("/albums", { initial: [] });
@@ -34,12 +35,6 @@ export default function MusicDiscover({ onListChange }) {
             .then(res => setSearch({ query: q, results: res.data ?? [], error: null }))
             .catch(err => setSearch({ query: q, results: [], error: err }))
             .finally(() => setSearching(false))
-    }
-
-    function formatDuration(secs) {
-        const mins = Math.floor(secs / 60)
-        const s = secs % 60
-        return `${mins}:${String(s).padStart(2, "0")}`
     }
 
     function handleRequest({ artist, album }) {
@@ -96,7 +91,7 @@ export default function MusicDiscover({ onListChange }) {
                             </div>
                             <span className="hidden sm:flex text-xs text-base-content/50 items-center gap-1 tabular-nums">
                                 <Clock size={12} />
-                                {formatDuration(track.duration_secs)}
+                                {track.duration_secs ? Format.duration(track.duration_secs) : "--:--"}
                             </span>
                             <button className="btn btn-primary btn-sm btn-circle" aria-label={`Request ${track.title}`} onClick={() => { setSelectedTrack(track); dialogRef.current.showModal(); }}>
                                 <Plus size={16}/>

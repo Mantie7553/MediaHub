@@ -1,14 +1,7 @@
 import { useState } from "react"
 import { Clock, GripVertical, Play } from "lucide-react"
 import useAudioStore from "../../stores/useAudioStore"
-
-// 3:07, or --:-- when the length isn't known
-function formatDuration(secs) {
-    if (!secs) return "--:--"
-    const m = Math.floor(secs / 60)
-    const s = secs % 60
-    return `${m}:${String(s).padStart(2, "0")}`
-}
+import Format from "../../utils/format"
 
 /**
  * The numbered list of tracks on an album or playlist page. Picking one plays the list from there
@@ -77,7 +70,7 @@ export default function TrackList({ tracks, onPlay, menu, onReorder }) {
                             <span className={`block truncate text-sm font-medium ${playing ? "text-primary" : ""}`}>{track.title}</span>
                             {track.subtitle && <span className="block truncate text-xs text-base-content/50">{track.subtitle}</span>}
                         </span>
-                        <span className="text-xs tabular-nums text-base-content/45">{formatDuration(track.duration_secs)}</span>
+                        <span className="text-xs tabular-nums text-base-content/45">{track.duration_secs ? Format.duration(track.duration_secs) : "--:--"}</span>
                     </button>
                     {menu?.(track, i)}
                 </li>

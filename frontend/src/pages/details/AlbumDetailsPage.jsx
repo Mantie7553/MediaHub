@@ -1,7 +1,7 @@
 import { useRef, useState } from "react"
 import { useParams } from "react-router-dom"
 import { BookmarkPlus, Check, PencilLine, Upload, ListPlus } from "lucide-react"
-import api from "../../services/api"
+import { saveListEntry } from "../../services/mediaService"
 import useApi from "../../hooks/useApi"
 import ErrorState from "../../components/states/ErrorState"
 import NotFound from "../../components/states/NotFound"
@@ -14,7 +14,7 @@ import { useUserContent, useRemoveFromList } from "../../hooks"
 import AddToListModal from "../../components/modals/AddToListModal"
 import DetailsHero from "../../components/details/DetailsHero"
 import { ActionMenu, ActionMenuItem } from "../../components/details/Menus"
-import { getRole } from "../../utils/auth"
+import { userIsAdmin } from "../../utils/auth"
 import Format from "../../utils/format"
 import EditDetailsModal from "../../components/modals/EditDetailsModal"
 import UploadFilesModal from "../../components/modals/UploadFilesModal"
@@ -29,7 +29,7 @@ export default function AlbumDetailsPage() {
     const uploadRef = useRef(null);
     // a cover just uploaded, with a version so the browser doesn't show the one it cached
     const [uploadedCover, setUploadedCover] = useState(null);
-    const isAdmin = getRole() === "admin";
+    const isAdmin = userIsAdmin();
     const { id } = useParams();
     const { userContentMap, refresh } = useUserContent();
     const userContent = userContentMap[id];
@@ -40,13 +40,10 @@ export default function AlbumDetailsPage() {
     const picker = useCollectionPicker();
 
     function handleAddToList({ status, score }) {
-       const request = userContent
-           ? api.put(`/me/media/${userContent.id}`, { status, rating: score || null })
-           : api.post("/me/media", { album_id: id, status, rating: score || null })
-       request
-           .then(() => { toast.success(userContent ? "List updated" : "Added to your list"); refresh() })
-           .catch(err => toast.error(err, "Could not update your list"))
-   }
+        saveListEntry(userContent, { album_id: id }, { status, rating: score || null })
+            .then(() => { toast.success(userContent ? "List updated" : "Added to your list"); refresh() })
+            .catch(err => toast.error(err, "Could not update your list"))
+    }
 
     if (loading) return <DetailsSkeleton square />
     if (notFound) return <NotFound title="Album not found" hint="This album isn't in the library any more. It may have been removed." />

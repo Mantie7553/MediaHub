@@ -1,5 +1,5 @@
 import PageHeader from "../../components/layout/PageHeader"
-import { useRef, forwardRef, useState } from "react";
+import { useRef, useState } from "react";
 import { Check, Download, Inbox, X } from "lucide-react";
 import useJobs from "../../hooks/useJobs";
 import { useAdminRequests } from "../../hooks"
@@ -8,6 +8,7 @@ import Format from "../../utils/format";
 import { statusBadge, statusColor } from "../../utils/status";
 import { toast } from "../../stores/useToastStore";
 import StatusPill from "../../components/StatusPill";
+import NoteModal from "../../components/modals/NoteModal";
 import RecordsPanel from "./RecordsPanel";
 import SubmissionsPanel from "./SubmissionsPanel";
 
@@ -43,9 +44,8 @@ export default function DownloadsPage() {
 
     function handleReject(id, notes) {
         setBusyId(id)
-        rejectRequest(id, notes)
+        return rejectRequest(id, notes)
             .then(() => { toast.success("Request rejected"); refetchRequests(false) })
-            .catch(err => toast.error(err, "Could not reject the request"))
             .finally(() => setBusyId(null))
     }
 
@@ -159,48 +159,11 @@ export default function DownloadsPage() {
                     ]}
             />
         </div>
-        <Modal ref={modalRef} request={selectedRequest} onConfirm={(notes) => handleReject(selectedRequest.id, notes)} />
+        <NoteModal dialogRef={modalRef} tone="error"
+            title="Reject request"
+            intro={selectedRequest && `${selectedRequest.media_title || selectedRequest.title_override || "This title"}${selectedRequest.requested_by ? `, requested by ${selectedRequest.requested_by}` : ""}`}
+            label="Note for the requester (optional)"
+            confirmLabel="Reject request"
+            onSave={(notes) => handleReject(selectedRequest.id, notes)}/>
     </div>
 }
-
-/**
- * A confirmation modal for rejecting a request
- */
-const Modal = forwardRef(function Modal({request, onConfirm}, ref) {
-const notesRef = useRef(null);
-
-    return <dialog className="modal modal-bottom sm:modal-middle" ref={ref} onClose={() => { if (notesRef.current) notesRef.current.value = "" }}>
-    <div className="modal-box flex flex-col gap-4">
-        <form method="dialog">
-            <button className="btn btn-sm btn-circle btn-ghost absolute right-3 top-3" aria-label="Close">
-                <X size={16}/>
-            </button>
-        </form>
-        <div>
-            <h3 className="text-xl font-semibold">Reject request</h3>
-            {request && <p className="text-sm text-base-content/60 mt-1">
-                {request.media_title || request.title_override || "This title"}
-                {request.requested_by ? `, requested by ${request.requested_by}` : ""}
-            </p>}
-        </div>
-        <label className="flex flex-col gap-1.5">
-            <span className="text-xs font-medium uppercase tracking-wider text-base-content/55">Note for the requester (optional)</span>
-            <textarea ref={notesRef} className="textarea w-full h-28 bg-base-100/60 border-white/10 text-base sm:text-sm" placeholder="Why it was rejected"/>
-        </label>
-        <div className="flex gap-2 justify-end">
-            <button className="btn btn-ghost" onClick={() => ref.current.close()}>
-                Cancel
-            </button>
-            <button
-                className="btn btn-error"
-                onClick={() => {
-                    onConfirm(notesRef.current.value);
-                    ref.current.close();
-                }}
-            >
-                Reject request
-            </button>
-        </div>
-    </div>
-  </dialog>
-})

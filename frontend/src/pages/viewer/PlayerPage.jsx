@@ -7,6 +7,7 @@ import { toast } from "../../stores/useToastStore"
 import { exitViewer, switchViewer } from "../../utils/navigation"
 import { keyForFocused } from "../../utils/keys"
 import useDocumentTitle from "../../hooks/useDocumentTitle"
+import useApi from "../../hooks/useApi"
 import useAssRenderer from "../../hooks/useAssRenderer"
 import { subtitleMode } from "../../utils/subtitles"
 import { watchedBetween } from "../../utils/watchTime"
@@ -98,7 +99,8 @@ export default function PlayerPage() {
     const [activeSkip, setActiveSkip] = useState({ segments: null, index: -1 });
     const skippable = activeSkip.segments === skipSegments ? skipSegments[activeSkip.index] ?? null : null;
     // the user's preference to skip them without asking
-    const [autoSkip, setAutoSkip] = useState(false);
+    const { data: prefs } = useApi("/me/preferences");
+    const autoSkip = !!prefs?.auto_skip;
 
     const initialPosition = location.state?.position ?? 0;
     const animeId = location.state?.animeId ?? null;
@@ -173,12 +175,6 @@ export default function PlayerPage() {
             .finally(() => setLoading(false))
     // eslint-disable-next-line react-hooks/exhaustive-deps -- fetches once per title and retry, the start position is only for the first load
     }, [id, attempt])
-
-    useEffect(() => {
-        api.get("/me/preferences")
-            .then(res => setAutoSkip(!!res.data.auto_skip))
-            .catch(() => {})
-    }, [])
 
     // the parts to offer to skip. A video without any (or the request failing) just has no button
     useEffect(() => {

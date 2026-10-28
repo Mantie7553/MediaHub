@@ -19,8 +19,8 @@ import UploadChaptersModal from "../../components/modals/UploadChaptersModal";
 import EditDetailsModal from "../../components/modals/EditDetailsModal";
 import useAdminPieces from "../../hooks/useAdminPieces";
 import useCollectionPicker from "../../hooks/useCollectionPicker";
-import { checkForChapters } from "../../services/mediaService";
-import { getRole } from "../../utils/auth";
+import { checkForChapters, saveListEntry } from "../../services/mediaService";
+import { userIsAdmin } from "../../utils/auth";
 
 export default function MangaDetailsPage() {
     const navigate = useNavigate();
@@ -35,7 +35,7 @@ export default function MangaDetailsPage() {
     const editRef = useRef(null);
     // a cover just uploaded, with a version so the browser doesn't show the one it cached
     const [newCover, setNewCover] = useState(null);
-    const isAdmin = getRole() === "admin";
+    const isAdmin = userIsAdmin();
     const pieces = useAdminPieces(() => refetch(false));
     const picker = useCollectionPicker();
 
@@ -53,10 +53,7 @@ export default function MangaDetailsPage() {
     }
 
     function updateStatus(status) {
-        const request = userEntry
-            ? api.put(`/me/media/${userEntry.id}`, { status })
-            : api.post(`/me/media`, { media_item_id: id, status });
-        request
+        saveListEntry(userEntry, { media_item_id: id }, { status })
             .then(() => refresh())
             .catch(err => toast.error(err, "Could not update your list"));
     }

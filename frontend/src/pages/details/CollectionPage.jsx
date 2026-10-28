@@ -20,7 +20,7 @@ import ErrorState from "../../components/states/ErrorState"
 import NotFound from "../../components/states/NotFound"
 import { DetailsSkeleton } from "../../components/states/Skeletons"
 import { deleteCollection, featureNow, moveInCollection, onCollectionsChanged, removeCollectionImage, removeFromCollection, saveCopy, setCollectionImage, submitForFeaturing, updateCollection, withdrawSubmission } from "../../services/collectionsService"
-import { getRole } from "../../utils/auth"
+import { userIsAdmin } from "../../utils/auth"
 import { SMART_PLAYLISTS, applyMove, dropTarget, itemTitle, moveTarget } from "../../utils/collections"
 import { PlayButton, QueueModeButtons } from "../../components/details/PlaybackControls"
 
@@ -71,7 +71,7 @@ export default function CollectionPage() {
     const canEdit = data.can_edit
     const featured = data.featured
     // admins look after the images of their own and of the featured ones
-    const canSetImage = getRole() === "admin" && !data.smart && (canEdit || featured)
+    const canSetImage = userIsAdmin() && !data.smart && (canEdit || featured)
 
     function move(index, after) {
         if (after === undefined) return
@@ -240,7 +240,7 @@ export default function CollectionPage() {
 function FeatureStatus({ collection, noun, onChange }) {
     const submitRef = useRef(null)
     const [busy, setBusy] = useState(false)
-    const isAdmin = getRole() === "admin"
+    const isAdmin = userIsAdmin()
     const submission = collection.submission
     const copyId = collection.featured_copy_id
     const copyPath = copyId && `/${collection.kind === "collection" ? "collections" : "playlists"}/${copyId}`
