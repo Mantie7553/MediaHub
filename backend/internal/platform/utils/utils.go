@@ -71,12 +71,12 @@ func NullString(s string) *string {
 
 /*
 Function:	NullInt
-Purpose:	if the pointer is pointing to a null value return nil else return the value
+Purpose:	if the pointer is nil or points at 0 (unknown) return nil, else return the pointer
 Params:
   - i: an int pointer for the number we are checking
 */
 func NullInt(i *int) *int {
-	if i == nil {
+	if i == nil || *i == 0 {
 		return nil
 	}
 	return i

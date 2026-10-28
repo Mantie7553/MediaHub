@@ -60,3 +60,13 @@ func TestLikePrefixEscapesWildcards(t *testing.T) {
 		t.Errorf("LikePrefix = %q", got)
 	}
 }
+
+func TestNullIntTreatsZeroAsUnknown(t *testing.T) {
+	zero, five := 0, 5
+	if NullInt(nil) != nil || NullInt(&zero) != nil {
+		t.Error("nil and 0 should both be NULL")
+	}
+	if got := NullInt(&five); got == nil || *got != 5 {
+		t.Errorf("NullInt(5) = %v", got)
+	}
+}

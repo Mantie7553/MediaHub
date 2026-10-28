@@ -164,7 +164,7 @@ func (h *Handler) Upload(w http.ResponseWriter, r *http.Request) {
 		)
 
 	default:
-		utils.Error(w, http.StatusBadRequest, "invalid media type, must be one of: anime, movie, music_track")
+		utils.Error(w, http.StatusBadRequest, "invalid media type, must be one of: anime, movie, music_track, manga")
 		return
 	}
 
@@ -269,7 +269,7 @@ func (h *Handler) GetSpecific(w http.ResponseWriter, r *http.Request) {
 		external_source, created_at, locked_fields
 		FROM media_items WHERE id = $1`
 
-	// look for the meida item
+	// look for the media item
 	err := h.db.QueryRow(queryString, mediaId).Scan(
 		&item.ID, &item.Type, &item.Title, &item.Description,
 		&item.CoverImageURL, &item.ReleaseDate, &item.ExternalID,
