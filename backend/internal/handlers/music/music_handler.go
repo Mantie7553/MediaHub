@@ -1,6 +1,7 @@
 package music
 
 import (
+	"errors"
 	"database/sql"
 	"io"
 	"net/http"
@@ -10,7 +11,6 @@ import (
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/logger"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/cache"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/utils"
-	"github.com/go-chi/chi/v5"
 	"github.com/lib/pq"
 )
 
@@ -109,7 +109,10 @@ Params:
   - r: http request with URL param {id}
 */
 func (h *Handler) GetAlbum(w http.ResponseWriter, r *http.Request) {
-	albumID := chi.URLParam(r, "id")
+	albumID, ok := utils.UUIDParam(w, r, "id")
+	if !ok {
+		return
+	}
 
 	var album AlbumDetail
 	err := h.db.QueryRow(
@@ -117,7 +120,7 @@ func (h *Handler) GetAlbum(w http.ResponseWriter, r *http.Request) {
 		albumID,
 	).Scan(&album.ID, &album.Title, &album.Artist, &album.CoverURL, &album.ReleaseDate, &album.Description)
 
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		utils.Error(w, http.StatusNotFound, "album not found")
 		return
 	}
@@ -227,7 +230,10 @@ Params:
   - r: multipart form with "file", a JPEG, PNG, WebP or GIF image
 */
 func (h *Handler) UploadCover(w http.ResponseWriter, r *http.Request) {
-	albumID := chi.URLParam(r, "id")
+	albumID, ok := utils.UUIDParam(w, r, "id")
+	if !ok {
+		return
+	}
 
 	var trackID, trackPath string
 	err := h.db.QueryRow(
@@ -237,7 +243,7 @@ func (h *Handler) UploadCover(w http.ResponseWriter, r *http.Request) {
 		LIMIT 1`,
 		albumID,
 	).Scan(&trackID, &trackPath)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		utils.Error(w, http.StatusNotFound, "album not found or none of its tracks are downloaded")
 		return
 	}
@@ -348,9 +354,8 @@ Params:
   - r: http request, with the track's media item id in the path
 */
 func (h *Handler) RecordPlay(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-	if !utils.IsUUID(id) {
-		utils.Error(w, http.StatusNotFound, "track not found")
+	id, ok := utils.UUIDParam(w, r, "id")
+	if !ok {
 		return
 	}
 	user := auth.GetUser(r)

@@ -2,12 +2,10 @@ package users
 
 import (
 	"database/sql"
-	"encoding/json"
 	"net/http"
 
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/auth"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/utils"
-	"github.com/go-chi/chi/v5"
 )
 
 type Handler struct {
@@ -61,8 +59,7 @@ Params:
 */
 func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	var req createUserRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utils.Error(w, http.StatusBadRequest, "invalid request body")
+	if !utils.DecodeJSON(w, r, &req) {
 		return
 	}
 
@@ -107,11 +104,13 @@ Params:
   - r: http request coming from the frontend
 */
 func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
-	targetID := chi.URLParam(r, "id")
+	targetID, ok := utils.UUIDParam(w, r, "id")
+	if !ok {
+		return
+	}
 
 	var req updateUserRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utils.Error(w, http.StatusBadRequest, "invalid request body")
+	if !utils.DecodeJSON(w, r, &req) {
 		return
 	}
 
@@ -190,7 +189,10 @@ Params:
   - r: http request coming from the frontend
 */
 func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
-	targetID := chi.URLParam(r, "id")
+	targetID, ok := utils.UUIDParam(w, r, "id")
+	if !ok {
+		return
+	}
 	admin := auth.GetUser(r)
 
 	if targetID == admin.UserID {

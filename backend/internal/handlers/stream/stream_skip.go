@@ -1,6 +1,7 @@
 package stream
 
 import (
+	"errors"
 	"database/sql"
 	"encoding/json"
 	"net/http"
@@ -39,7 +40,10 @@ Params:
 */
 func (h *Handler) SkipTimes(w http.ResponseWriter, r *http.Request) {
 	mediaType := chi.URLParam(r, "type")
-	mediaID := chi.URLParam(r, "id")
+	mediaID, ok := utils.UUIDParam(w, r, "id")
+	if !ok {
+		return
+	}
 	filePath, ok := h.videoFile(w, mediaType, mediaID)
 	if !ok {
 		return
@@ -108,7 +112,7 @@ func (h *Handler) aniskipSegments(episodeID, filePath string, length float64) ([
 		WHERE e.id = $1`,
 		episodeID,
 	).Scan(&malID, &episode)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {
@@ -122,7 +126,7 @@ func (h *Handler) aniskipSegments(episodeID, filePath string, length float64) ([
 		`SELECT file_path, segments, fetched_at FROM skip_times WHERE episode_id = $1`,
 		episodeID,
 	).Scan(&cachedPath, &cachedJSON, &fetchedAt)
-	if err != nil && err != sql.ErrNoRows {
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return nil, err
 	}
 	if err == nil && cachedPath == filePath {

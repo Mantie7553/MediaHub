@@ -2,7 +2,6 @@ package jobs
 
 import (
 	"database/sql"
-	"encoding/json"
 	"net/http"
 
 	"github.com/Mantie7553/MediaHub/backend/internal/downloader"
@@ -131,8 +130,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	var jobID string
 
 	// decode the request body into the JobRequest struct
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utils.Error(w, http.StatusBadRequest, "invalid request body")
+	if !utils.DecodeJSON(w, r, &req) {
 		return
 	}
 

@@ -22,7 +22,8 @@ func Warn(format string, args ...any) {
 	warnLog.Output(2, fmt.Sprintf(format, args...))
 }
 
-// print to console a warning message
+// print to console a warning message, reporting the file:line depth frames up the stack
+// (2 is the caller, 3 its caller, and so on) so helpers can point at the code that called them
 func WarnDepth(depth int, format string, args ...any) {
 	warnLog.Output(depth, fmt.Sprintf(format, args...))
 }
@@ -32,7 +33,7 @@ func Error(format string, args ...any) {
 	errorLog.Output(2, fmt.Sprintf(format, args...))
 }
 
-// print to console an error message
+// print to console an error message, reporting the file:line depth frames up the stack (see WarnDepth)
 func ErrorDepth(depth int, format string, args ...any) {
 	errorLog.Output(depth, fmt.Sprintf(format, args...))
 }

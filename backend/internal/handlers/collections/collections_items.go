@@ -2,7 +2,6 @@ package collections
 
 import (
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"net/http"
 
@@ -77,8 +76,7 @@ func (h *Handler) AddItem(w http.ResponseWriter, r *http.Request) {
 	user := auth.GetUser(r)
 	id := chi.URLParam(r, "id")
 	var req addRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utils.Error(w, http.StatusBadRequest, "invalid request body")
+	if !utils.DecodeJSON(w, r, &req) {
 		return
 	}
 
@@ -314,8 +312,7 @@ func (h *Handler) MoveItem(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	entryID := chi.URLParam(r, "entryId")
 	var req moveRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utils.Error(w, http.StatusBadRequest, "invalid request body")
+	if !utils.DecodeJSON(w, r, &req) {
 		return
 	}
 

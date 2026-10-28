@@ -6,10 +6,8 @@ package archive
 
 import (
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"net/http"
-	"regexp"
 
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/utils"
 	"github.com/lib/pq"
@@ -17,8 +15,6 @@ import (
 
 // most rows one call changes, far more than the Downloads page ever shows at once
 const maxIDs = 5000
-
-var uuidRe = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 
 // the rows to change: the ones the admin was looking at, so a row that arrived since isn't
 // swept up with them
@@ -58,8 +54,7 @@ func Handler(db *sql.DB, table string) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req request
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			utils.Error(w, http.StatusBadRequest, "invalid request body")
+		if !utils.DecodeJSON(w, r, &req) {
 			return
 		}
 		if len(req.IDs) == 0 || len(req.IDs) > maxIDs {
@@ -67,7 +62,7 @@ func Handler(db *sql.DB, table string) http.HandlerFunc {
 			return
 		}
 		for _, id := range req.IDs {
-			if !uuidRe.MatchString(id) {
+			if !utils.IsUUID(id) {
 				utils.Error(w, http.StatusBadRequest, "invalid id")
 				return
 			}

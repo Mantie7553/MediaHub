@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	"github.com/Mantie7553/MediaHub/backend/internal/clients/arr"
@@ -15,7 +14,6 @@ import (
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/auth"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/logger"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/utils"
-	"github.com/go-chi/chi/v5"
 	"github.com/lib/pq"
 )
 
@@ -68,7 +66,6 @@ type deleteError struct {
 
 func (e *deleteError) Error() string { return e.message }
 
-var uuidRe = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 
 // every table that records a title's files, so the queries below don't depend on the type
 const filesUnion = `
@@ -87,9 +84,8 @@ Params:
   - r: http request coming from the frontend
 */
 func (h *Handler) DeleteMedia(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-	if !uuidRe.MatchString(id) {
-		utils.Error(w, http.StatusNotFound, "not found")
+	id, ok := utils.UUIDParam(w, r, "id")
+	if !ok {
 		return
 	}
 
@@ -134,9 +130,8 @@ Params:
   - r: http request coming from the frontend
 */
 func (h *Handler) DeleteAlbum(w http.ResponseWriter, r *http.Request) {
-	albumID := chi.URLParam(r, "id")
-	if !uuidRe.MatchString(albumID) {
-		utils.Error(w, http.StatusNotFound, "not found")
+	albumID, ok := utils.UUIDParam(w, r, "id")
+	if !ok {
 		return
 	}
 

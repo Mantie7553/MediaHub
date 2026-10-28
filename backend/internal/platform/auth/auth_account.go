@@ -2,12 +2,10 @@ package auth
 
 import (
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"net/http"
 
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/utils"
-	"github.com/lib/pq"
 )
 
 type updateAccountRequest struct {
@@ -35,7 +33,7 @@ func (h *Handler) checkCurrentPassword(w http.ResponseWriter, userID, password s
 	}
 	var hash string
 	err := h.db.QueryRow(`SELECT password_hash FROM users WHERE id = $1`, userID).Scan(&hash)
-	if err != nil && err != sql.ErrNoRows {
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		utils.InternalError(w, err)
 		return false
 	}
@@ -57,8 +55,7 @@ Params:
 func (h *Handler) UpdateAccount(w http.ResponseWriter, r *http.Request) {
 	user := GetUser(r)
 	var req updateAccountRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utils.Error(w, http.StatusBadRequest, "invalid request body")
+	if !utils.DecodeJSON(w, r, &req) {
 		return
 	}
 	req.Email = NormalizeEmail(req.Email)
@@ -92,7 +89,7 @@ func (h *Handler) UpdateAccount(w http.ResponseWriter, r *http.Request) {
 		RETURNING username, email`,
 		req.Username, req.Email, user.UserID,
 	).Scan(&username, &email)
-	if isTaken(err) {
+	if utils.IsUniqueViolation(err) {
 		utils.Error(w, http.StatusConflict, "username or email already taken")
 		return
 	}
@@ -113,8 +110,7 @@ Params:
 func (h *Handler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	user := GetUser(r)
 	var req changePasswordRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utils.Error(w, http.StatusBadRequest, "invalid request body")
+	if !utils.DecodeJSON(w, r, &req) {
 		return
 	}
 	if err := ValidatePassword(req.NewPassword); err != nil {
@@ -165,10 +161,4 @@ func currentSessionHash(r *http.Request) string {
 		return hashToken(c.Value)
 	}
 	return ""
-}
-
-// whether a database error is a unique constraint saying the value is taken
-func isTaken(err error) bool {
-	var pqErr *pq.Error
-	return errors.As(err, &pqErr) && pqErr.Code == "23505"
 }

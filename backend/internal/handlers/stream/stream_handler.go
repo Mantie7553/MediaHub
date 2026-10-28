@@ -1,6 +1,7 @@
 package stream
 
 import (
+	"errors"
 	"database/sql"
 	"io"
 	"net/http"
@@ -52,7 +53,10 @@ Params:
 */
 func (h *Handler) StreamMedia(w http.ResponseWriter, r *http.Request) {
 	mediaType := chi.URLParam(r, "type")
-	mediaID := chi.URLParam(r, "id")
+	mediaID, ok := utils.UUIDParam(w, r, "id")
+	if !ok {
+		return
+	}
 	filePath, ok := h.videoFile(w, mediaType, mediaID)
 	if !ok {
 		return
@@ -142,7 +146,7 @@ func (h *Handler) videoFile(w http.ResponseWriter, mediaType, mediaID string) (s
 		return "", false
 	}
 
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		utils.Error(w, http.StatusNotFound, mediaType+" not found")
 		return "", false
 	}
@@ -278,7 +282,10 @@ Params:
   - r: http request coming from the frontend
 */
 func (h *Handler) SignTrackURL(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
+	id, ok := utils.UUIDParam(w, r, "id")
+	if !ok {
+		return
+	}
 
 	var exists bool
 	err := h.db.QueryRow(
@@ -410,7 +417,10 @@ func (h *Handler) ServeSegment(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) ServeTrack(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
+	id, ok := utils.UUIDParam(w, r, "id")
+	if !ok {
+		return
+	}
 
 	var filePath string
 	err := h.db.QueryRow(
@@ -427,7 +437,10 @@ func (h *Handler) ServeTrack(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) ServeCover(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
+	id, ok := utils.UUIDParam(w, r, "id")
+	if !ok {
+		return
+	}
 
 	var filePath string
 	err := h.db.QueryRow(

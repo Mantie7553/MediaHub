@@ -2,7 +2,6 @@ package collections
 
 import (
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -179,8 +178,7 @@ Purpose:	Make a new, empty playlist or collection for the user
 func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	user := auth.GetUser(r)
 	var req createRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utils.Error(w, http.StatusBadRequest, "invalid request body")
+	if !utils.DecodeJSON(w, r, &req) {
 		return
 	}
 	if req.Kind != kindPlaylist && req.Kind != kindCollection {
@@ -312,8 +310,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	user := auth.GetUser(r)
 	id := chi.URLParam(r, "id")
 	var req updateRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utils.Error(w, http.StatusBadRequest, "invalid request body")
+	if !utils.DecodeJSON(w, r, &req) {
 		return
 	}
 

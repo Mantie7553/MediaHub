@@ -2,7 +2,6 @@ package requests
 
 import (
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"net/http"
 
@@ -12,8 +11,6 @@ import (
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/auth"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/logger"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/utils"
-	"github.com/go-chi/chi/v5"
-	"github.com/lib/pq"
 )
 
 type Handler struct {
@@ -39,8 +36,7 @@ func (h *Handler) Add(w http.ResponseWriter, r *http.Request) {
 	user := auth.GetUser(r)
 
 	// decode the incoming request, check that the structure is correct
-	if err = json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utils.Error(w, http.StatusBadRequest, "invalid request body")
+	if !utils.DecodeJSON(w, r, &req) {
 		return
 	}
 
@@ -91,7 +87,7 @@ func (h *Handler) Add(w http.ResponseWriter, r *http.Request) {
 		status, autoApproved, nil,
 	).Scan(&requestId)
 	if err != nil {
-		if pqErr, ok := err.(*pq.Error); ok && pqErr.Code == "23505" {
+		if utils.IsUniqueViolation(err) {
 			utils.Error(w, http.StatusConflict, "download request already made")
 			return
 		}
@@ -225,7 +221,10 @@ Params:
 */
 func (h *Handler) Approve(w http.ResponseWriter, r *http.Request) {
 	// get the request id from the URL parameters
-	requestId := chi.URLParam(r, "id")
+	requestId, ok := utils.UUIDParam(w, r, "id")
+	if !ok {
+		return
+	}
 
 	// update the download request with status "approved" and the time it was updated
 	var requestThingId string
@@ -239,7 +238,7 @@ func (h *Handler) Approve(w http.ResponseWriter, r *http.Request) {
 		requestId,
 	).Scan(&requestThingId, &mediaItemId, &sourceURL)
 
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		utils.Error(w, http.StatusNotFound, "not found")
 		return
 	}
@@ -286,11 +285,13 @@ Params:
 func (h *Handler) Reject(w http.ResponseWriter, r *http.Request) {
 	var req rejectRequest
 	// get the request ID from the url parameters
-	requestId := chi.URLParam(r, "id")
+	requestId, ok := utils.UUIDParam(w, r, "id")
+	if !ok {
+		return
+	}
 
 	// decode the incoming request, check that the structure is correct
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utils.Error(w, http.StatusBadRequest, "invalid request body")
+	if !utils.DecodeJSON(w, r, &req) {
 		return
 	}
 
@@ -304,7 +305,7 @@ func (h *Handler) Reject(w http.ResponseWriter, r *http.Request) {
 		requestId, utils.NullString(req.AdminNotes),
 	).Scan(&requestThingId)
 
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		utils.Error(w, http.StatusNotFound, "not found")
 		return
 	}

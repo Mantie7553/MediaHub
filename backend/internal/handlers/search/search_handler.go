@@ -2,9 +2,7 @@ package search
 
 import (
 	"database/sql"
-	"encoding/json"
 	"errors"
-	"log"
 	"net/http"
 	"strconv"
 
@@ -78,8 +76,7 @@ func (h *Handler) Save(w http.ResponseWriter, r *http.Request) {
 	user := auth.GetUser(r)
 
 	// decode the incoming request, check that the structure is correct
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utils.Error(w, http.StatusBadRequest, "invalid request body")
+	if !utils.DecodeJSON(w, r, &req) {
 		return
 	}
 
@@ -161,22 +158,13 @@ func (h *Handler) Save(w http.ResponseWriter, r *http.Request) {
 		client := anilist.NewAnilistClient("")
 		anilistID, convErr := strconv.Atoi(req.ExternalID)
 		if convErr != nil {
-			log.Printf("invalid anilist external_id %s: %v", req.ExternalID, convErr)
+			logger.Warn("invalid anilist external_id %s: %v", req.ExternalID, convErr)
 		} else {
 			anime, fetchErr := client.GetByID(anilistID)
 			if fetchErr != nil {
-				log.Printf("failed to fetch anilist metadata for %s: %v", req.ExternalID, fetchErr)
+				logger.Warn("failed to fetch anilist metadata for %s: %v", req.ExternalID, fetchErr)
 			} else {
-				switch anime.Status {
-				case "RELEASING":
-					status = "airing"
-				case "FINISHED":
-					status = "finished"
-				case "NOT_YET_RELEASED":
-					status = "upcoming"
-				default:
-					status = ""
-				}
+				status = anime.LibraryStatus()
 				genres = append(genres, anime.Genres...)
 				if len(anime.Studios) > 0 {
 					studio = anime.Studios[0]
@@ -211,11 +199,11 @@ func (h *Handler) Save(w http.ResponseWriter, r *http.Request) {
 		client := anilist.NewAnilistClient("")
 		anilistID, convErr := strconv.Atoi(req.ExternalID)
 		if convErr != nil {
-			log.Printf("invalid anilist external_id %s: %v", req.ExternalID, convErr)
+			logger.Warn("invalid anilist external_id %s: %v", req.ExternalID, convErr)
 		} else {
 			movie, fetchErr := client.GetByID(anilistID)
 			if fetchErr != nil {
-				log.Printf("failed to fetch anilist metadata for %s: %v", req.ExternalID, fetchErr)
+				logger.Warn("failed to fetch anilist metadata for %s: %v", req.ExternalID, fetchErr)
 			} else {
 				genres = append(genres, movie.Genres...)
 			}
@@ -248,17 +236,11 @@ func (h *Handler) Save(w http.ResponseWriter, r *http.Request) {
 		client := mangadex.NewMangaDexClient("")
 		manga, err := client.GetByID(req.ExternalID)
 		if err != nil {
-			log.Printf("failed to fetch mangadex metadata for %s: %v", req.ExternalID, err)
+			logger.Warn("failed to fetch mangadex metadata for %s: %v", req.ExternalID, err)
 		} else {
 			status = manga.Attributes.Status
-			for _, tag := range manga.Attributes.Tags {
-				if tag.Attributes.Group == "genre" {
-					genres = append(genres, tag.Attributes.Name.En)
-				}
-			}
-			if n, err := strconv.Atoi(manga.Attributes.LastChapter); err == nil {
-				totalChapters = n
-			}
+			genres = manga.Genres()
+			totalChapters = manga.TotalChapters()
 		}
 
 		_, err = h.db.Exec(
@@ -299,7 +281,7 @@ func (h *Handler) Save(w http.ResponseWriter, r *http.Request) {
 				albumID = &id
 			}
 
-			if err == sql.ErrNoRows {
+			if errors.Is(err, sql.ErrNoRows) {
 				err = h.db.QueryRow(
 					`SELECT id FROM albums WHERE LOWER(title) = LOWER($1) AND LOWER(artist) = LOWER($2)`,
 					req.Album, req.Artist,
@@ -368,7 +350,7 @@ func (h *Handler) Save(w http.ResponseWriter, r *http.Request) {
 			user.UserID, mediaItemID, status, autoApproved, req.SourceURL,
 		).Scan(&requestID)
 
-		if err != nil && err != sql.ErrNoRows {
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
 			utils.InternalError(w, err)
 			return
 		}
@@ -397,7 +379,7 @@ Returns:	its id, and whether it was just created
 func (h *Handler) findOrCreate(req saveRequest) (string, bool, error) {
 	var id string
 	err := h.db.QueryRow(`SELECT id FROM media_items WHERE title = $1 AND type = $2`, req.Title, req.Type).Scan(&id)
-	if err != sql.ErrNoRows {
+	if !errors.Is(err, sql.ErrNoRows) {
 		return id, false, err
 	}
 	if req.ExternalID == "" || req.ExternalSource == "" {
@@ -414,7 +396,7 @@ func (h *Handler) findOrCreate(req saveRequest) (string, bool, error) {
 	if err == nil {
 		return id, true, nil
 	}
-	if err != sql.ErrNoRows {
+	if !errors.Is(err, sql.ErrNoRows) {
 		return "", false, err
 	}
 	// already in the library under another title
