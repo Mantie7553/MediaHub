@@ -28,21 +28,6 @@ export function statusColor(status) {
 }
 
 /**
- * Helper function for translating status into color
- * @param status the status we are matching the color to 
- * @returns the class representation of the color we want displayed
- */
-export function mediaStatusBadge(status) {
-    switch(status) {
-        case "completed": return "badge-success"
-        case "current": return "badge-info"
-        case "planned": return "badge-warning"
-        case "dropped": return "badge-error"
-        default: return "badge-neutral"
-    }
-}
-
-/**
  * The dot color for a list status, used on the chips over cover art
  * @param status the status we are matching the color to
  * @returns the background class for the dot

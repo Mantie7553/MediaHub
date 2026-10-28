@@ -9,7 +9,7 @@ import { cardGrid } from "../layout/cardGrid"
  * @param {boolean} square album covers instead of posters
  * @param {boolean} fluid fills its grid cell
  */
-export function CardSkeleton({ square = false, fluid = false }) {
+function CardSkeleton({ square = false, fluid = false }) {
     return <li className={`${fluid ? "min-w-0" : "w-[8.5rem] sm:w-40 md:w-44 shrink-0"} flex flex-col gap-2`} aria-hidden="true">
         <div className={`skeleton w-full rounded-box ${square ? "aspect-square" : "aspect-[2/3]"}`}></div>
         <div className="skeleton h-3.5 w-3/4 mt-1"></div>
@@ -108,7 +108,7 @@ export function TableSkeleton({ columns = 4, rows = 4 }) {
 /**
  * A reader toolbar with a progress bar
  */
-export function ReaderToolbarSkeleton() {
+function ReaderToolbarSkeleton() {
     return <div className="sticky top-0 z-20 bg-base-100/80 border-b border-white/5 pt-[env(safe-area-inset-top)]" aria-hidden="true">
         <div className="flex items-center gap-3 h-14 px-2 sm:px-4 max-w-5xl mx-auto">
             <div className="skeleton h-8 w-24 shrink-0"></div>
