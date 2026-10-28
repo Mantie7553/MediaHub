@@ -53,7 +53,7 @@ type audioTrack struct {
 // VobSub) that can only be burned into the video
 type subtitleTrack struct {
 	Index       int    `json:"index"`
-	File        string `json:"file"` // empty for image tracks
+	File        string `json:"file"`     // empty for image tracks
 	AssFile     string `json:"ass_file"` // the ASS/SSA track as it is, for rendering with its styling
 	Image       bool   `json:"image"`
 	Language    string `json:"language"`

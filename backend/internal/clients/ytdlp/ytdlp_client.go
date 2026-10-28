@@ -49,9 +49,7 @@ func NewYtdlpClient(binEnvKey string, dirEnvKey string) *YtdlpClient {
 /*
 Function:	SearchMusic
 Purpose:	Run a YouTube Music search via yt-dlp's ytmsearch prefix and return
-
-	parsed candidates without downloading anything
-
+parsed candidates without downloading anything
 Params:
   - query: free-text search term
   - limit: number of results to return; defaults to 10 when zero or negative

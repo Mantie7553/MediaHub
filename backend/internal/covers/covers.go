@@ -20,6 +20,7 @@ Purpose:	where an uploaded cover for a media item is kept. The image type is rea
 file when it is served, so the name has no extension
 Params:
   - mediaItemID: the media item's id, a UUID
+
 Returns:	the path, and false when the id isn't a UUID or MEDIA_ROOT isn't set
 */
 func Path(mediaItemID string) (string, bool) {

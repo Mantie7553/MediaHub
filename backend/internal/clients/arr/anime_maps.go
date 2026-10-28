@@ -62,7 +62,7 @@ func FetchAnimeMaps() (tvdbToAnilist map[int]int, tmdbToAnilist map[int]int, sea
 /*
 Function:	seasonMalMap
 Purpose:	map each TVDB season to its MyAnimeList entry. A season more than one entry claims
-            (a split cour, the specials) is left out, its episode numbers don't match any one entry
+(a split cour, the specials) is left out, its episode numbers don't match any one entry
 Params:
   - entries: Fribb's anime list
 */

@@ -62,7 +62,7 @@ type Name struct {
 }
 
 type DiscoveryResult struct {
-    Trending []Manga
-    Popular  []Manga
-    Latest   []Manga
+	Trending []Manga
+	Popular  []Manga
+	Latest   []Manga
 }

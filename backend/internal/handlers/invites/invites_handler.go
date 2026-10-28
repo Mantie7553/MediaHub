@@ -24,7 +24,7 @@ func NewHandler(db *sql.DB) *Handler {
 /*
 Function:	Create
 Purpose:	Create a single use sign up code. The code is only ever returned here,
-            the database keeps a hash
+the database keeps a hash
 Params:
   - w: http response writer to respond to the front end
   - r: http request coming from the frontend

@@ -29,8 +29,8 @@ func Migrate(db *sql.DB) error {
 /*
 Function:	SetInitialAdminPassword
 Purpose:	Replace the seeded default admin password with ADMIN_PASSWORD. Only touches the account
-            while it still has the seeded hash, so a password the admin changed is never overwritten.
-            Returns whether the password was changed
+while it still has the seeded hash, so a password the admin changed is never overwritten.
+Returns whether the password was changed
 Params:
   - db: the database connection
 */

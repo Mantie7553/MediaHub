@@ -82,9 +82,8 @@ type wireMedia struct {
 /*
 Function:	toDomain
 Purpose:	Flatten a raw Anilist response entry into the public Media shape,
-
-	collapsing studios.nodes[].name into a flat []string and renaming
-	camelCase fields.
+collapsing studios.nodes[].name into a flat []string and renaming
+camelCase fields.
 */
 func (w wireMedia) toDomain() Media {
 	studios := make([]string, 0, len(w.Studios.Nodes))

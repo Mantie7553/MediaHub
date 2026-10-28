@@ -1,9 +1,9 @@
 package media
 
 import (
-	"errors"
 	"archive/zip"
 	"database/sql"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -18,8 +18,8 @@ import (
 	"github.com/Mantie7553/MediaHub/backend/internal/clients/mangadex"
 	"github.com/Mantie7553/MediaHub/backend/internal/mangafiles"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/auth"
-	"github.com/Mantie7553/MediaHub/backend/internal/platform/logger"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/cache"
+	"github.com/Mantie7553/MediaHub/backend/internal/platform/logger"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/utils"
 	"github.com/go-chi/chi/v5"
 	"github.com/lib/pq"
@@ -833,7 +833,7 @@ func (h *Handler) GetEpisodes(w http.ResponseWriter, r *http.Request) {
 /*
 Function:	UpdateEpisodeProgress
 Purpose:	Save the current user's playback position in an episode, and how long they watched
-            since the last save. Reaching the end marks the episode watched
+since the last save. Reaching the end marks the episode watched
 Params:
   - w: http response writer to respond to the front end
   - r: http request coming from the frontend
@@ -891,7 +891,7 @@ func (h *Handler) UpdateEpisodeProgress(w http.ResponseWriter, r *http.Request) 
 /*
 Function:	UpdateMovieProgress
 Purpose:	Save the current user's playback position in a movie, and how long they watched
-            since the last save
+since the last save
 Params:
   - w: http response writer to respond to the front end
   - r: http request coming from the frontend
@@ -956,7 +956,7 @@ const maxWatchedPerSave = 30
 /*
 Function:	watchedSeconds
 Purpose:	how much of a progress save's watched_secs to count: nothing for a bad value, and no
-            more than maxWatchedPerSave
+more than maxWatchedPerSave
 Params:
   - secs: the seconds the player says were watched since its last save
 */

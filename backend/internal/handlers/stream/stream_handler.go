@@ -1,8 +1,8 @@
 package stream
 
 import (
-	"errors"
 	"database/sql"
+	"errors"
 	"io"
 	"net/http"
 	"net/url"
@@ -17,8 +17,8 @@ import (
 	"github.com/Mantie7553/MediaHub/backend/internal/clients/aniskip"
 	"github.com/Mantie7553/MediaHub/backend/internal/musicfiles"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/auth"
-	"github.com/Mantie7553/MediaHub/backend/internal/platform/logger"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/cache"
+	"github.com/Mantie7553/MediaHub/backend/internal/platform/logger"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/utils"
 	"github.com/go-chi/chi/v5"
 )
@@ -42,11 +42,11 @@ var variantRe = regexp.MustCompile(`^a(-1|\d+)(-b\d+)?$`)
 /*
 Function:	StreamMedia
 Purpose:	Start (or reuse) the transcode of an episode or movie and return signed playlist and
-            subtitle URLs once enough of it exists to play from the optional ?start= position,
-            where ffmpeg starts when those segments don't exist yet.
-            ?audio= picks an audio stream, otherwise the user's preferred language is used.
-            ?burn= burns an image subtitle into the video, -1 for none; without it one is burned
-            in when it's the subtitle the user's preferences pick
+subtitle URLs once enough of it exists to play from the optional ?start= position,
+where ffmpeg starts when those segments don't exist yet.
+?audio= picks an audio stream, otherwise the user's preferred language is used.
+?burn= burns an image subtitle into the video, -1 for none; without it one is burned
+in when it's the subtitle the user's preferences pick
 Params:
   - w: http response writer to respond to the front end
   - r: http request coming from the frontend
@@ -159,7 +159,7 @@ func (h *Handler) videoFile(w http.ResponseWriter, mediaType, mediaID string) (s
 /*
 Function:	waitUntilReady
 Purpose:	wait for the segment at the start position and a few after it, so playback doesn't
-            stall straight away. Only the first is required, a slow machine gets what exists
+stall straight away. Only the first is required, a slow machine gets what exists
 Params:
   - tc: the transcode
   - start: the position (seconds) the player will start from
@@ -214,7 +214,7 @@ func hasAudioStream(streams []probeStream, index int) bool {
 /*
 Function:	writeStreamURLs
 Purpose:	respond with the playlist URL, the audio tracks to choose from, and the subtitle
-            tracks, all signed with a media token for this episode/movie
+tracks, all signed with a media token for this episode/movie
 Params:
   - w: http response writer to respond to the front end
   - r: http request coming from the frontend

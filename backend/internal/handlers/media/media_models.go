@@ -38,7 +38,7 @@ type progressRequest struct {
 }
 
 type markReadRequest struct {
-    Read bool `json:"read"`
+	Read bool `json:"read"`
 }
 
 type MediaItem struct {
@@ -69,14 +69,14 @@ type AnimeMetadata struct {
 }
 
 type Episode struct {
-    ID            string   `json:"id"`
-    SeasonNumber  int      `json:"season_number"`
-    EpisodeNumber int      `json:"episode_number"`
-    Title         *string  `json:"title"`
-    TitleLocked   bool     `json:"title_locked"`
-    Watched       bool     `json:"watched"`
-    PositionSecs  float64  `json:"position_secs"`
-    DurationSecs  float64  `json:"duration_secs"`
+	ID            string  `json:"id"`
+	SeasonNumber  int     `json:"season_number"`
+	EpisodeNumber int     `json:"episode_number"`
+	Title         *string `json:"title"`
+	TitleLocked   bool    `json:"title_locked"`
+	Watched       bool    `json:"watched"`
+	PositionSecs  float64 `json:"position_secs"`
+	DurationSecs  float64 `json:"duration_secs"`
 }
 
 // LIGHT NOVEL
@@ -87,11 +87,11 @@ type LightNovelMetadata struct {
 }
 
 type LightNovelVolume struct {
-	ID           	string   `json:"id"`
-	VolumeNumber 	int      `json:"volume_number"`
-	Title        	*string  `json:"title"`
-	Completed    	bool     `json:"completed"`
-	ScrollPosition	*float64 `json:"scroll_position"`
+	ID             string   `json:"id"`
+	VolumeNumber   int      `json:"volume_number"`
+	Title          *string  `json:"title"`
+	Completed      bool     `json:"completed"`
+	ScrollPosition *float64 `json:"scroll_position"`
 }
 
 type LightNovelDetail struct {
@@ -115,7 +115,7 @@ type MangaChapter struct {
 	FilePath      *string    `json:"file_path"`
 	PageCount     *int       `json:"page_count"`
 	CreatedAt     *time.Time `json:"created_at"`
-	Completed 	  bool 	     `json:"completed"`
+	Completed     bool       `json:"completed"`
 	LastPageRead  *int       `json:"last_page_read"`
 }
 
@@ -135,13 +135,13 @@ type MangaDetail struct {
 
 // MOVIE
 type MovieMetadata struct {
-	RuntimeMins  *int     `json:"runtime_mins"`
-	Director     *string  `json:"director"`
-	Genres       []string `json:"genres"`
-	FilePath     *string  `json:"file_path"`
+	RuntimeMins *int     `json:"runtime_mins"`
+	Director    *string  `json:"director"`
+	Genres      []string `json:"genres"`
+	FilePath    *string  `json:"file_path"`
 	// the current user's saved playback position
-	PositionSecs float64  `json:"position_secs"`
-	DurationSecs float64  `json:"duration_secs"`
+	PositionSecs float64 `json:"position_secs"`
+	DurationSecs float64 `json:"duration_secs"`
 }
 
 // MUSIC

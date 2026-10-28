@@ -66,7 +66,6 @@ type deleteError struct {
 
 func (e *deleteError) Error() string { return e.message }
 
-
 // every table that records a title's files, so the queries below don't depend on the type
 const filesUnion = `
 	SELECT media_item_id, file_path FROM episodes
@@ -78,7 +77,7 @@ const filesUnion = `
 /*
 Function:	DeleteMedia
 Purpose:	permanently delete an anime, movie, manga, light novel or music track: its Sonarr /
-            Radarr entry, files and database rows (lists and progress of every user included)
+Radarr entry, files and database rows (lists and progress of every user included)
 Params:
   - w: http response writer to respond to the front end
   - r: http request coming from the frontend
@@ -242,7 +241,7 @@ func (h *Handler) remove(w http.ResponseWriter, r *http.Request, t target) {
 /*
 Function:	checkNoDownload
 Purpose:	refuse while a download for the target is queued or running, its tool would keep
-            writing into the folders being removed
+writing into the folders being removed
 Params:
   - t: what to delete
 */
@@ -265,7 +264,7 @@ func (h *Handler) checkNoDownload(t target) error {
 /*
 Function:	removeFromArr
 Purpose:	delete the Sonarr series or Radarr movie (and its files) behind an item, so it is not
-            downloaded again. Skipped when another item uses the same series or movie
+downloaded again. Skipped when another item uses the same series or movie
 Params:
   - id: the media item
   - mediaType: its type, only anime and movies are managed by Sonarr / Radarr
@@ -331,7 +330,7 @@ func (h *Handler) otherFilesIn(folder string, ids []string) (bool, error) {
 /*
 Function:	respondError
 Purpose:	send err to the client: a deleteError with its status and message, anything else as a
-            500. Returns false when there is no error
+500. Returns false when there is no error
 Params:
   - w: http response writer to respond to the front end
   - err: the error, or nil

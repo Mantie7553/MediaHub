@@ -354,7 +354,7 @@ func (c *ArrClient) GetMovieFilePath(movieFileID int) (string, error) {
 /*
 Function:	DeleteSeries
 Purpose:	Remove a series from Sonarr along with its files, so it is neither monitored nor
-            downloaded again. A series that is already gone counts as deleted
+downloaded again. A series that is already gone counts as deleted
 Params:
   - seriesID: the Sonarr series id
 */
@@ -365,7 +365,7 @@ func (c *ArrClient) DeleteSeries(seriesID int) error {
 /*
 Function:	DeleteMovie
 Purpose:	Remove a movie from Radarr along with its files, so it is neither monitored nor
-            downloaded again. A movie that is already gone counts as deleted
+downloaded again. A movie that is already gone counts as deleted
 Params:
   - movieID: the Radarr movie id
 */
@@ -376,7 +376,7 @@ func (c *ArrClient) DeleteMovie(movieID int) error {
 /*
 Function:	UnmonitorEpisode
 Purpose:	tell Sonarr to stop watching for an episode, so removing its file doesn't make Sonarr
-            download it again
+download it again
 Params:
   - episodeID: the Sonarr episode id
 */
@@ -408,7 +408,7 @@ func (c *ArrClient) UnmonitorEpisode(episodeID int) error {
 /*
 Function:	EpisodeFileID
 Purpose:	the id of the file Sonarr has for an episode, 0 when it has none (or no longer knows
-            the episode)
+the episode)
 Params:
   - episodeID: the Sonarr episode id
 */
@@ -444,7 +444,7 @@ func (c *ArrClient) EpisodeFileID(episodeID int) (int, error) {
 /*
 Function:	DeleteEpisodeFile
 Purpose:	have Sonarr delete one episode's file from disk. A file that is already gone counts
-            as deleted
+as deleted
 Params:
   - episodeFileID: the Sonarr episode file id
 */

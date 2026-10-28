@@ -134,8 +134,8 @@ var (
 /*
 Function:	SignCoverURL
 Purpose:	Sign a stored music cover, admin uploaded cover or light novel volume image URL in place
-            so <img> tags can load it. Any other cover URL (external hosts, the MangaDex proxy) is
-            left unchanged
+so <img> tags can load it. Any other cover URL (external hosts, the MangaDex proxy) is
+left unchanged
 Params:
   - cover: the cover_image_url read from the database
   - userID: the id of the user the token is minted for

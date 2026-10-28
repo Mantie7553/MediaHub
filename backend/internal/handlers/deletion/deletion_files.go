@@ -14,8 +14,8 @@ import (
 /*
 Function:	libraryFolder
 Purpose:	the folder under MEDIA_ROOT a media type lives in, and how many levels below it a
-            title's own folder sits (TV Shows/<Series>, Music/<Artist>/<Album>). 0 means the
-            title has no folder of its own, only files (a single track in Music/<Artist>/Singles)
+title's own folder sits (TV Shows/<Series>, Music/<Artist>/<Album>). 0 means the
+title has no folder of its own, only files (a single track in Music/<Artist>/Singles)
 Params:
   - mediaType: the media_items type, or "music_album" for a whole album
 */
@@ -39,7 +39,7 @@ func libraryFolder(mediaType string) (string, int) {
 /*
 Function:	ownedFolders
 Purpose:	the title folders (depth levels below root) that hold the given files. Files outside
-            root, or not deep enough to have a title folder, are left out
+root, or not deep enough to have a title folder, are left out
 Params:
   - root: the media type's folder, e.g. MEDIA_ROOT/Manga
   - paths: the title's files
@@ -76,15 +76,16 @@ func ownedFolders(root string, paths []string, depth int) []string {
 /*
 Function:	deleteFiles
 Purpose:	remove a title's files. A title folder no other title uses is removed whole (with the
-            covers and metadata the download tools leave next to the files, which a sync would
-            otherwise import again); anything else is removed file by file, then emptied parent
-            folders up to root. Every path must be inside mediaRoot
+covers and metadata the download tools leave next to the files, which a sync would
+otherwise import again); anything else is removed file by file, then emptied parent
+folders up to root. Every path must be inside mediaRoot
 Params:
   - mediaRoot: MEDIA_ROOT
   - root: the media type's folder
   - paths: the title's files
   - depth: levels below root that make up a title folder, see libraryFolder
   - shared: reports whether another title has files in a folder
+
 Returns: the paths that could not be removed
 */
 func deleteFiles(mediaRoot, root string, paths []string, depth int, shared func(folder string) (bool, error)) []string {

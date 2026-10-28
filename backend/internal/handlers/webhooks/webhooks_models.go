@@ -19,9 +19,9 @@ type sonarrEpisode struct {
 }
 
 type radarrPayload struct {
-	EventType string           `json:"eventType"`
-	Movie     radarrMovie      `json:"movie"`
-	MovieFile radarrMovieFile  `json:"movieFile"`
+	EventType string          `json:"eventType"`
+	Movie     radarrMovie     `json:"movie"`
+	MovieFile radarrMovieFile `json:"movieFile"`
 }
 
 type radarrMovie struct {

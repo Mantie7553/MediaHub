@@ -1,15 +1,15 @@
 package music
 
 import (
-	"errors"
 	"database/sql"
+	"errors"
 	"io"
 	"net/http"
 
 	"github.com/Mantie7553/MediaHub/backend/internal/musicfiles"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/auth"
-	"github.com/Mantie7553/MediaHub/backend/internal/platform/logger"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/cache"
+	"github.com/Mantie7553/MediaHub/backend/internal/platform/logger"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/utils"
 	"github.com/lib/pq"
 )
@@ -70,7 +70,7 @@ Params:
 func (h *Handler) GetAlbums(w http.ResponseWriter, r *http.Request) {
 	rows, err := h.db.Query(`
 		SELECT a.id, a.title, a.artist,
-			`+albumCover+` AS cover_image_url,
+			` + albumCover + ` AS cover_image_url,
 			COUNT(mm.media_item_id) as track_count
 		FROM albums a
 		JOIN music_metadata mm ON mm.album_id = a.id AND mm.file_path IS NOT NULL

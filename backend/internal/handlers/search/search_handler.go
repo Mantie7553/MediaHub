@@ -64,9 +64,7 @@ type saveRequest struct {
 /*
 Function:	Save
 Purpose:	Save a media item to the database and add it to the user's list,
-
-	create a download request, or both
-
+create a download request, or both
 Params:
   - w: http response writer to respond to the front end
   - r: http request coming from the front end
