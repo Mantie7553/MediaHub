@@ -208,6 +208,7 @@ func (s *Server) routes() {
 			r.Put("/manga/{id}/read", mediaHandler.MarkMangaRead)
 			r.Put("/light-novels/volumes/{volumeId}/read", mediaHandler.MarkVolumeRead)
 			r.Put("/light-novels/volumes/{volumeId}/progress", mediaHandler.UpdateLightNovelProgress)
+			r.Put("/light-novels/volumes/{volumeId}/bookmark", mediaHandler.UpdateLightNovelBookmark)
 			r.Put("/light-novels/{id}/read", mediaHandler.MarkLightNovelRead)
 
 			//Music Handler Endpoints

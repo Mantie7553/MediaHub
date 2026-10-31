@@ -9,6 +9,8 @@ import { openViewer } from "../../utils/navigation";
 import { useMediaItem, useUserContent, useRemoveFromList } from "../../hooks";
 import DeleteFromServerButton from "../../components/DeleteFromServerButton";
 import api from "../../services/api";
+import { forgetCached, getCached } from "../../services/apiCache";
+import { savedPositionKey } from "../../utils/readerAnchor";
 import { BookOpen, CheckCheck, PencilLine, Undo2, Upload, ListPlus } from "lucide-react";
 import Format from "../../utils/format";
 import DetailsHero from "../../components/details/DetailsHero";
@@ -45,7 +47,8 @@ export default function LightNovelDetailsPage() {
         if (ln?.metadata?.volumes) {
             setReadVolumes(new Set(ln.metadata.volumes.filter(v => v.completed).map(v => v.id)));
             const initial = {};
-            ln.metadata.volumes.forEach(v => { initial[v.id] = v.scroll_position ?? 0; });
+            // the reader's last save in this tab can be newer than this copy of the title
+            ln.metadata.volumes.forEach(v => { initial[v.id] = getCached(savedPositionKey(v.id))?.pct ?? v.scroll_position ?? 0; });
             setScrollPosition(initial);
         }
     }
@@ -67,6 +70,8 @@ export default function LightNovelDetailsPage() {
                 updateStatus(status);
             })
             .catch(err => toast.error(err, "Could not update the volume"));
+        // a position with no anchor clears the old one and the bookmark, the reader opens from this
+        forgetCached(savedPositionKey(volume.id));
         api.put(`/light-novels/volumes/${volume.id}/progress`, { scroll_position: read ? 1 : 0 })
             .then(() => setScrollPosition(prev => ({ ...prev, [volume.id]: read ? 1 : 0 })))
             // the read mark above already reports a failure
@@ -79,7 +84,10 @@ export default function LightNovelDetailsPage() {
                 setReadVolumes(read ? new Set(ln.metadata.volumes.map(v => v.id)) : new Set());
                 updateStatus(read ? "completed" : "planned");
                 const newScrollPositions = {};
-                ln.metadata.volumes.forEach(v => { newScrollPositions[v.id] = read ? 1 : 0; });
+                ln.metadata.volumes.forEach(v => {
+                    newScrollPositions[v.id] = read ? 1 : 0;
+                    forgetCached(savedPositionKey(v.id));
+                });
                 setScrollPosition(newScrollPositions);
                 Promise.all(ln.metadata.volumes.map(v =>
                     api.put(`/light-novels/volumes/${v.id}/progress`, { scroll_position: read ? 1 : 0 })

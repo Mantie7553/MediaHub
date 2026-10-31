@@ -386,7 +386,8 @@ func (h *Handler) GetSpecific(w http.ResponseWriter, r *http.Request) {
 		volumeRows, err := h.db.Query(
 			`SELECT lnv.id, lnv.volume_number, lnv.title,
 			COALESCE(lnp.completed, false),
-			COALESCE(lnp.scroll_position, 0)
+			COALESCE(lnp.scroll_position, 0),
+			lnp.anchor_block, lnp.anchor_char, lnp.bookmark_block
 			FROM light_novel_volumes lnv
 			LEFT JOIN light_novel_progress lnp ON lnp.volume_id = lnv.id AND lnp.user_id = $2
 			WHERE lnv.media_item_id = $1 ORDER BY lnv.volume_number`,
@@ -399,7 +400,8 @@ func (h *Handler) GetSpecific(w http.ResponseWriter, r *http.Request) {
 
 		for volumeRows.Next() {
 			var volume LightNovelVolume
-			if err := volumeRows.Scan(&volume.ID, &volume.VolumeNumber, &volume.Title, &volume.Completed, &volume.ScrollPosition); utils.InternalError(w, err) {
+			if err := volumeRows.Scan(&volume.ID, &volume.VolumeNumber, &volume.Title, &volume.Completed, &volume.ScrollPosition,
+				&volume.AnchorBlock, &volume.AnchorChar, &volume.BookmarkBlock); utils.InternalError(w, err) {
 				return
 			}
 			volumes = append(volumes, volume)
@@ -455,9 +457,20 @@ func (h *Handler) MangaProgress(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+/*
+Function:	UpdateLightNovelProgress
+Purpose:	Save how far a user is through a volume. The reader sends the paragraph and character
+at the top of the screen with the percentage; a save without them (marking a volume read or
+unread) jumps the position, so the old anchor and bookmark are cleared
+Params:
+  - w: http response writer to respond to the front end
+  - r: http request coming from the frontend
+*/
 func (h *Handler) UpdateLightNovelProgress(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		ScrollPosition float64 `json:"scroll_position"`
+		AnchorBlock    *int    `json:"anchor_block"`
+		AnchorChar     *int    `json:"anchor_char"`
 	}
 	user := auth.GetUser(r)
 	volumeId, ok := utils.UUIDParam(w, r, "volumeId")
@@ -471,10 +484,52 @@ func (h *Handler) UpdateLightNovelProgress(w http.ResponseWriter, r *http.Reques
 
 	auth.MarkActiveToday(h.db, user.UserID)
 	_, err := h.db.Exec(
-		`INSERT INTO light_novel_progress (user_id, volume_id, media_item_id, scroll_position, updated_at)
+		`INSERT INTO light_novel_progress (user_id, volume_id, media_item_id, scroll_position, anchor_block, anchor_char, updated_at)
+        VALUES ($1, $2, (SELECT media_item_id FROM light_novel_volumes WHERE id = $2), $3, $4, $5, NOW())
+        ON CONFLICT (user_id, volume_id) DO UPDATE SET
+        scroll_position = $3, anchor_block = $4, anchor_char = $5,
+        bookmark_block = CASE WHEN $4::int IS NULL THEN NULL ELSE light_novel_progress.bookmark_block END,
+        updated_at = NOW()`,
+		user.UserID, volumeId, req.ScrollPosition, req.AnchorBlock, req.AnchorChar,
+	)
+
+	if utils.InternalError(w, err) {
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+/*
+Function:	UpdateLightNovelBookmark
+Purpose:	Set or clear the paragraph a user's bookmark sits above in a volume, a null block clears it
+Params:
+  - w: http response writer to respond to the front end
+  - r: http request coming from the frontend
+*/
+func (h *Handler) UpdateLightNovelBookmark(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Block *int `json:"block"`
+	}
+	user := auth.GetUser(r)
+	volumeId, ok := utils.UUIDParam(w, r, "volumeId")
+	if !ok {
+		return
+	}
+
+	if !utils.DecodeJSON(w, r, &req) {
+		return
+	}
+	if req.Block != nil && *req.Block < 0 {
+		utils.Error(w, http.StatusBadRequest, "block must not be negative")
+		return
+	}
+
+	_, err := h.db.Exec(
+		`INSERT INTO light_novel_progress (user_id, volume_id, media_item_id, bookmark_block, updated_at)
         VALUES ($1, $2, (SELECT media_item_id FROM light_novel_volumes WHERE id = $2), $3, NOW())
-        ON CONFLICT (user_id, volume_id) DO UPDATE SET scroll_position = $3, updated_at = NOW()`,
-		user.UserID, volumeId, req.ScrollPosition,
+        ON CONFLICT (user_id, volume_id) DO UPDATE SET bookmark_block = $3, updated_at = NOW()`,
+		user.UserID, volumeId, req.Block,
 	)
 
 	if utils.InternalError(w, err) {
