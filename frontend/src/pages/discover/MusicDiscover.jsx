@@ -8,6 +8,7 @@ import { ListSkeleton } from "../../components/states/Skeletons"
 import Cover from "../../components/Cover"
 import MusicRequestModal from "../../components/modals/MusicRequestModal"
 import AlbumList from "../../components/layout/AlbumList"
+import CollectionList from "../../components/layout/CollectionList"
 import { toast } from "../../stores/useToastStore"
 import SearchField from "../../components/SearchField"
 import SectionHeader from "../../components/layout/SectionHeader"
@@ -16,6 +17,8 @@ import Format from "../../utils/format"
 export default function MusicDiscover({ onListChange }) {
     const albums = useApi("/albums", { initial: [] });
     const recommended = useApi("/music/recommended", { initial: [] });
+    // a playlist per artist on the server
+    const artistPlaylists = useApi("/artist-playlists", { initial: [] });
     // suggestions for the request form; it still works without them
     const artists = useApi("/music/artists", { initial: [] });
     const [query, setQuery] = useState("");
@@ -112,6 +115,8 @@ export default function MusicDiscover({ onListChange }) {
             <AlbumList albums={albums.data} heading="Available Now" loading={albums.loading}
                 emptyText="No music yet" emptyHint="Search above and request tracks to download them." />
         )}
+        {/* like recommendations, they stay hidden when empty or failed */}
+        {artistPlaylists.data.length > 0 && <CollectionList collections={artistPlaylists.data} kind="playlist" heading="Artists" canCreate={false}/>}
         {/* recommendations are optional, they stay hidden when empty or failed */}
         {recommended.data.length > 0 && <AlbumList albums={recommended.data} heading="Recommended" />}
 

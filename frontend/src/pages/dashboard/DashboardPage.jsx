@@ -47,6 +47,8 @@ export default function DashboardPage() {
     const collections = useApi("/me/collections", { initial: [] });
     // playlists and collections admins picked for everyone
     const featured = useApi("/featured", { initial: [] });
+    // a playlist per artist on the server, filling itself as their tracks download
+    const artistPlaylists = useApi("/artist-playlists", { initial: [] });
     // adding something from a card's picker, or making a new one there, changes the rows
     const reloadCollections = collections.reload;
     useEffect(() => onCollectionsChanged(() => reloadCollections(true)), [reloadCollections]);
@@ -90,6 +92,7 @@ export default function DashboardPage() {
     const serverLightNovels = matching(library.data.filter(item => item.type === "light_novel")).sort(sortOrder);
 
     const serverAlbums = matching(albums.data);
+    const serverArtists = matching(artistPlaylists.data);
     // the playlists that fill themselves are always there, so they show only once something is
     // in them
     const playlists = matching(collections.data.filter(c => c.kind === "playlist" && (!c.smart || c.item_count > 0)));
@@ -136,6 +139,9 @@ export default function DashboardPage() {
         { key: "manga", count: serverManga.length, error: library.error, reload: library.reload, render: () => <ContentList items={serverManga} heading="Manga" {...available}/> },
         { key: "music", count: serverAlbums.length, error: albums.error, reload: albums.reload, render: () => <AlbumList albums={serverAlbums} heading="Music" loading={albums.loading} emptyText={searching ? available.emptyText : "No music yet"} emptyHint={available.emptyHint}/> },
         { key: "light_novel", count: serverLightNovels.length, error: library.error, reload: library.reload, render: () => <ContentList items={serverLightNovels} heading="Light Novels" {...available}/> },
+        { key: "playlist", count: serverArtists.length, error: artistPlaylists.error, reload: artistPlaylists.reload,
+            render: () => <CollectionList collections={serverArtists} kind="playlist" heading="Artists" loading={artistPlaylists.loading}
+                canCreate={false} emptyText={searching ? available.emptyText : "No music yet"}/> },
     ];
 
     return <div className="flex flex-col gap-10 sm:gap-14">
@@ -169,7 +175,7 @@ export default function DashboardPage() {
         />
         <DashboardSection
             title="Available Now"
-            loading={library.loading || albums.loading}
+            loading={library.loading || albums.loading || artistPlaylists.loading}
             rows={availableRows}
             empty={searching
                 ? <EmptyState compact icon={SearchX} title={available.emptyText} hint="Check the spelling, or request it from Discover."/>

@@ -34,7 +34,7 @@ func canSetImage(c stored, user *auth.UserContext) bool {
 // whether it answered
 func loadForImage(w http.ResponseWriter, h *Handler, id string, user *auth.UserContext) (stored, bool) {
 	if isSmart(id) {
-		utils.Error(w, http.StatusBadRequest, "this playlist fills itself from your list and can't be changed")
+		utils.Error(w, http.StatusBadRequest, smartRefusal(id))
 		return stored{}, true
 	}
 	c, err := load(h.db, id, user, false)

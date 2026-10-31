@@ -2,6 +2,7 @@ package collections
 
 import (
 	"database/sql"
+	"errors"
 	"strings"
 
 	"github.com/lib/pq"
@@ -135,6 +136,47 @@ var smartStatuses = map[string][]string{
 	smartUnlistened: {"planned", "wishlist", "current"},
 }
 
+// when album {alias} came out: its own date, or else its newest track's
+func albumReleased(alias string) string {
+	return `COALESCE(` + alias + `.release_date, (
+		SELECT MAX(mir.release_date) FROM music_metadata mmr
+		JOIN media_items mir ON mir.id = mmr.media_item_id
+		WHERE mmr.album_id = ` + alias + `.id))`
+}
+
+/*
+artistTracksQuery fills an artist's playlist: the downloaded tracks in the albums of the artist
+whose name hashes to $1, newest album first, each album in track order. Same columns as smartQuery
+*/
+var artistTracksQuery = `
+SELECT mi.id, mi.title, mm.artist,
+	COALESCE(` + albumCoverOf("ta", "t") + `, mi.cover_image_url),
+	mi.release_date, mi.external_source::text, mm.duration_secs, mm.album_id::text, ta.title
+FROM albums ta
+JOIN music_metadata mm ON mm.album_id = ta.id AND mm.file_path IS NOT NULL
+JOIN media_items mi ON mi.id = mm.media_item_id
+WHERE md5(ta.artist) = $1
+ORDER BY ` + albumReleased("ta") + ` DESC NULLS LAST, ta.title, ta.id, mm.track_number NULLS LAST, mi.title`
+
+/*
+artistSummariesQuery is every artist with something downloaded, by name: the md5 of their name,
+the name, how many tracks, and up to 4 album covers, newest album first
+*/
+var artistSummariesQuery = `
+SELECT md5(a.artist), a.artist, COUNT(*),
+	ARRAY(SELECT cover FROM (
+		SELECT ` + albumCoverOf("ac", "c") + ` AS cover, ` + albumReleased("ac") + ` AS released, ac.title
+		FROM albums ac
+		WHERE ac.artist = a.artist AND EXISTS (
+			SELECT 1 FROM music_metadata mmx WHERE mmx.album_id = ac.id AND mmx.file_path IS NOT NULL)
+	) covers
+	WHERE cover IS NOT NULL ORDER BY released DESC NULLS LAST, title LIMIT 4)
+FROM albums a
+JOIN music_metadata mm ON mm.album_id = a.id AND mm.file_path IS NOT NULL
+WHERE a.artist <> ''
+GROUP BY a.artist
+ORDER BY LOWER(a.artist)`
+
 // the computed playlists' names, in the order they're listed
 var smartNames = []struct{ id, name string }{
 	{smartListened, "Listened"},
@@ -188,7 +230,38 @@ Params:
   - id: smartListened or smartUnlistened
 */
 func loadSmart(db querier, userID, id string) ([]Entry, error) {
-	rows, err := db.Query(smartQuery, userID, pq.Array(smartStatuses[id]))
+	return loadTracks(db, smartQuery, userID, pq.Array(smartStatuses[id]))
+}
+
+/*
+Function:	loadArtist
+Purpose:	An artist's playlist: their name, and their downloaded tracks
+Params:
+  - db: where to look
+  - id: the playlist's id, artistPrefix and the md5 of their name
+
+Returns:	errNotFound when no artist with something downloaded has that name
+*/
+func loadArtist(db querier, id string) (string, []Entry, error) {
+	hash := strings.TrimPrefix(id, artistPrefix)
+	var name string
+	err := db.QueryRow(`SELECT artist FROM albums WHERE md5(artist) = $1 AND artist <> '' LIMIT 1`, hash).Scan(&name)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil, errNotFound
+	}
+	if err != nil {
+		return "", nil, err
+	}
+	tracks, err := loadTracks(db, artistTracksQuery, hash)
+	if err == nil && len(tracks) == 0 {
+		err = errNotFound
+	}
+	return name, tracks, err
+}
+
+// the tracks a computed playlist's query finds, with smartQuery's columns
+func loadTracks(db querier, query string, args ...any) ([]Entry, error) {
+	rows, err := db.Query(query, args...)
 	if err != nil {
 		return nil, err
 	}

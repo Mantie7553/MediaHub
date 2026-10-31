@@ -4,6 +4,9 @@ export const SMART_PLAYLISTS = {
     unlistened: "Tracks and albums you plan to listen to.",
 }
 
+// how an artist's playlist id starts; it fills itself from the library
+export const ARTIST_PLAYLIST_PREFIX = "artist-"
+
 /**
  * What the rules (backend/internal/handlers/collections/collections_rules.go) call an item
  * @param {object} item a title, track, list entry, album or playlist

@@ -206,16 +206,65 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 /*
+Function:	ListArtists
+Purpose:	Every artist's playlist, by name, for the Available Now and Discover rows. They fill
+themselves from the library, so a track downloaded into an artist's folder is in theirs straight away
+*/
+func (h *Handler) ListArtists(w http.ResponseWriter, r *http.Request) {
+	user := auth.GetUser(r)
+	rows, err := h.db.Query(artistSummariesQuery)
+	if utils.InternalError(w, err) {
+		return
+	}
+	defer rows.Close()
+
+	items := []Summary{}
+	for rows.Next() {
+		s := Summary{Kind: kindPlaylist, Smart: true}
+		var hash string
+		if utils.InternalError(w, rows.Scan(&hash, &s.Name, &s.ItemCount, pq.Array(&s.Covers))) {
+			return
+		}
+		s.ID = artistPrefix + hash
+		if s.Covers == nil {
+			s.Covers = []string{}
+		}
+		if utils.InternalError(w, signCovers(user.UserID, s.Covers)) {
+			return
+		}
+		items = append(items, s)
+	}
+	if utils.InternalError(w, rows.Err()) {
+		return
+	}
+	utils.JSON(w, items)
+}
+
+/*
 Function:	Get
 Purpose:	A playlist or collection with everything in it, in order. The computed playlists
-answer to their names ("listened", "unlistened")
+answer to their names ("listened", "unlistened"), and artists' to artistPrefix and the md5 of
+their name
 */
 func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	user := auth.GetUser(r)
 	id := chi.URLParam(r, "id")
 
 	var detail Detail
-	if isSmart(id) {
+	if isArtist(id) {
+		name, tracks, err := loadArtist(h.db, id)
+		if errors.Is(err, errNotFound) {
+			utils.Error(w, http.StatusNotFound, "not found")
+			return
+		}
+		if utils.InternalError(w, err) {
+			return
+		}
+		detail.Summary = smartSummary(id, name, tracks)
+		description := "Every track from " + name
+		detail.Description = &description
+		detail.Items = tracks
+	} else if isSmart(id) {
 		tracks, err := loadSmart(h.db, user.UserID, id)
 		if utils.InternalError(w, err) {
 			return
@@ -281,7 +330,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 // or isn't the user's to change. Returns whether it answered
 func refuseEdit(w http.ResponseWriter, id string, c stored, err error, userID string) bool {
 	if isSmart(id) {
-		utils.Error(w, http.StatusBadRequest, "this playlist fills itself from your list and can't be changed")
+		utils.Error(w, http.StatusBadRequest, smartRefusal(id))
 		return true
 	}
 	if errors.Is(err, errNotFound) {
