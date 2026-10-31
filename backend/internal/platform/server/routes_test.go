@@ -296,6 +296,7 @@ func TestFeaturingRoutes(t *testing.T) {
 
 	signedIn := []struct{ method, path string }{
 		{http.MethodGet, "/api/featured"},
+		{http.MethodGet, "/api/artist-playlists"},
 		{http.MethodPost, "/api/collections/" + id + "/submission"},
 		{http.MethodDelete, "/api/collections/" + id + "/submission"},
 		{http.MethodPost, "/api/collections/" + id + "/copy"},

@@ -2,6 +2,7 @@ package collections
 
 import (
 	"errors"
+	"strings"
 
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/auth"
 )
@@ -18,6 +19,10 @@ const (
 	smartUnlistened = "unlistened"
 )
 
+// every artist with something downloaded has a playlist of their tracks, filled from the library.
+// Its id is this followed by the md5 of the artist's name, which is their folder in the library
+const artistPrefix = "artist-"
+
 // how far apart new entries are placed, so one can move between two others without renumbering
 const positionStep int64 = 1024
 
@@ -28,7 +33,7 @@ var (
 	errWrongItem        = errors.New("that can't go in this")
 	errNestedCollection = errors.New("a collection can't go inside another collection")
 	errSelf             = errors.New("a collection can't go inside itself")
-	errSmartNested      = errors.New("the playlists that fill themselves from your list can't go in a collection")
+	errSmartNested      = errors.New("the playlists that fill themselves can't go in a collection")
 	errSeasonOfWhat     = errors.New("only an anime's seasons can be added on their own")
 	errWholeHeld        = errors.New("the whole anime is already in this collection; take it out to add its seasons one by one")
 	errSeasonsHeld      = errors.New("some of this anime's seasons are already in this collection; take them out to add the whole anime")
@@ -95,7 +100,29 @@ func expandsToTracks(kind, item string) bool {
 
 // whether an id is one of the computed playlists, which can be played but not changed
 func isSmart(id string) bool {
-	return id == smartListened || id == smartUnlistened
+	return id == smartListened || id == smartUnlistened || isArtist(id)
+}
+
+// whether an id is an artist's playlist: the prefix and the md5 of the artist's name, in hex
+func isArtist(id string) bool {
+	hash, ok := strings.CutPrefix(id, artistPrefix)
+	if !ok || len(hash) != 32 {
+		return false
+	}
+	for _, r := range hash {
+		if !(r >= '0' && r <= '9' || r >= 'a' && r <= 'f') {
+			return false
+		}
+	}
+	return true
+}
+
+// why a computed playlist can't be changed
+func smartRefusal(id string) string {
+	if isArtist(id) {
+		return "this playlist fills itself from the library and can't be changed"
+	}
+	return "this playlist fills itself from your list and can't be changed"
 }
 
 /*

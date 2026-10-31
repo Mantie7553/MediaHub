@@ -234,6 +234,8 @@ func (s *Server) routes() {
 			// featuring: users submit theirs, everyone sees the featured copies and can save one as
 			// their own
 			r.Get("/featured", collectionsHandler.ListFeatured)
+			// a playlist per artist, filled from the library
+			r.Get("/artist-playlists", collectionsHandler.ListArtists)
 			r.Post("/collections/{id}/submission", collectionsHandler.Submit)
 			r.Delete("/collections/{id}/submission", collectionsHandler.Withdraw)
 			r.Post("/collections/{id}/copy", collectionsHandler.SaveCopy)

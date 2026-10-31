@@ -57,6 +57,29 @@ func TestComputedPlaylistIDs(t *testing.T) {
 	}
 }
 
+func TestArtistPlaylistIDs(t *testing.T) {
+	id := artistPrefix + "0123456789abcdef0123456789abcdef"
+	if !isArtist(id) || !isSmart(id) {
+		t.Errorf("%q should be an artist's playlist, which is computed", id)
+	}
+	for _, id := range []string{
+		smartListened,
+		"6f1c2b9e-1d2a-4b3c-8d4e-5f6a7b8c9d0e",
+		artistPrefix,
+		artistPrefix + "0123456789abcdef",
+		artistPrefix + "0123456789ABCDEF0123456789ABCDEF",
+		artistPrefix + "0123456789abcdef0123456789abcdeg",
+		"0123456789abcdef0123456789abcdef",
+	} {
+		if isArtist(id) {
+			t.Errorf("%q isn't an artist's playlist", id)
+		}
+	}
+	if smartRefusal(id) == smartRefusal(smartListened) {
+		t.Error("an artist's playlist fills from the library, not the user's list")
+	}
+}
+
 func TestPrivateOnesAreTheOwners(t *testing.T) {
 	a := access{ownerID: "owner"}
 	owner := &auth.UserContext{UserID: "owner", Role: "user"}

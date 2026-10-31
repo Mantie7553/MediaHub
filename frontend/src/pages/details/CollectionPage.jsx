@@ -21,7 +21,7 @@ import NotFound from "../../components/states/NotFound"
 import { DetailsSkeleton } from "../../components/states/Skeletons"
 import { deleteCollection, featureNow, moveInCollection, onCollectionsChanged, removeCollectionImage, removeFromCollection, saveCopy, setCollectionImage, submitForFeaturing, updateCollection, withdrawSubmission } from "../../services/collectionsService"
 import { userIsAdmin } from "../../utils/auth"
-import { SMART_PLAYLISTS, applyMove, dropTarget, itemTitle, moveTarget } from "../../utils/collections"
+import { ARTIST_PLAYLIST_PREFIX, SMART_PLAYLISTS, applyMove, dropTarget, itemTitle, moveTarget } from "../../utils/collections"
 import { PlayButton, QueueModeButtons } from "../../components/details/PlaybackControls"
 
 // what each kind of entry is called on its own line
@@ -136,14 +136,16 @@ export default function CollectionPage() {
     const queue = playable.map(t => ({ id: t.id, title: t.title, artist: t.artist, thumbnail: t.cover_image_url }))
     const totalSecs = entries.reduce((sum, e) => sum + (e.type === "music_track" ? e.duration_secs ?? 0 : 0), 0)
     const count = entries.length
-    const description = data.smart ? SMART_PLAYLISTS[data.id] : data.description
+    // an artist's playlist describes itself; the user's own computed ones are described here
+    const description = data.description ?? SMART_PLAYLISTS[data.id]
+    const isArtist = data.id.startsWith(ARTIST_PLAYLIST_PREFIX)
 
     return <div className="flex flex-col gap-8">
         <DetailsHero
             cover={{ src: data.covers?.[0] }}
             square
             poster={<CollectionCover covers={data.covers} kind={data.kind} smart={data.smart} className="size-full"/>}
-            eyebrow={data.smart ? "Playlist · fills itself" : featured ? `Featured ${noun}` : isPlaylist ? "Playlist" : "Collection"}
+            eyebrow={data.smart && !isArtist ? "Playlist · fills itself" : featured ? `Featured ${noun}` : isPlaylist ? "Playlist" : "Collection"}
             title={data.name}
             meta={[
                 `${count} ${isPlaylist ? (count === 1 ? "track" : "tracks") : (count === 1 ? "item" : "items")}`,
@@ -184,7 +186,9 @@ export default function CollectionPage() {
         {count === 0 ? (
             <EmptyState compact
                 title={data.smart ? "Nothing here yet" : `This ${noun} is empty`}
-                hint={data.smart
+                hint={isArtist
+                    ? "Nothing by this artist is downloaded yet."
+                    : data.smart
                     ? "Add tracks or albums to your list as listened, or to listen to, and they show up here."
                     : isPlaylist
                         ? "Add tracks or whole albums with “Add to playlist” on an album page."
