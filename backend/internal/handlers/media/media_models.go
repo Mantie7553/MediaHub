@@ -92,6 +92,9 @@ type LightNovelVolume struct {
 	Title          *string  `json:"title"`
 	Completed      bool     `json:"completed"`
 	ScrollPosition *float64 `json:"scroll_position"`
+	AnchorBlock    *int     `json:"anchor_block"`
+	AnchorChar     *int     `json:"anchor_char"`
+	BookmarkBlock  *int     `json:"bookmark_block"`
 }
 
 type LightNovelDetail struct {
