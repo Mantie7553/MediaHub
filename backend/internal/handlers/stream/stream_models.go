@@ -70,7 +70,7 @@ type streamManifest struct {
 	VideoCodec    string          `json:"video_codec"`
 	AudioIndex    int             `json:"audio_index"`
 	AudioLanguage string          `json:"audio_language"`
-	BurnIndex     int             `json:"burn_index"` // image subtitle drawn into the video, -1 for none
+	BurnIndex     int             `json:"burn_index"` // subtitle drawn into the video, -1 for none
 	Subtitles     []subtitleTrack `json:"subtitles"`
 	Fonts         []fontFile      `json:"fonts"` // attached fonts the ASS tracks use
 }

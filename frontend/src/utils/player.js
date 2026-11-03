@@ -95,3 +95,23 @@ export function cueHtml(text) {
         })
         .join("")
 }
+
+/**
+ * When the media token in a signed URL runs out, read from the token itself (a JWT: no secret
+ * is needed to read it, only to make one). The player renews the URL a little before then
+ * while AirPlay has the stream, since the TV can't ask for a new one itself
+ * @param {string} url a URL with ?media_token=
+ * @returns the expiry in milliseconds since the epoch, null when there's no readable token
+ */
+export function tokenExpiry(url) {
+    try {
+        const token = new URL(url, "http://localhost").searchParams.get("media_token")
+        const payload = token?.split(".")[1]
+        if (!payload) return null
+        const json = atob(payload.replaceAll("-", "+").replaceAll("_", "/"))
+        const exp = JSON.parse(json).exp
+        return Number.isFinite(exp) ? exp * 1000 : null
+    } catch {
+        return null
+    }
+}

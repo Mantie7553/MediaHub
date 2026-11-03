@@ -1,4 +1,4 @@
-import { Maximize, Minimize, Pause, PictureInPicture2, Play, RotateCcw, RotateCw, SkipBack, SkipForward, Volume1, Volume2, VolumeX } from "lucide-react"
+import { Airplay, Maximize, Minimize, Pause, PictureInPicture2, Play, RotateCcw, RotateCw, SkipBack, SkipForward, Volume1, Volume2, VolumeX } from "lucide-react"
 import Format from "../../utils/format"
 
 const BUTTON = "btn btn-ghost btn-sm btn-square text-white hover:bg-white/10 border-0"
@@ -12,9 +12,11 @@ const BUTTON = "btn btn-ghost btn-sm btn-square text-white hover:bg-white/10 bor
  *  toggleFullscreen, togglePictureInPicture }, prev/next null when there's no such episode
  * @param {boolean} hasEpisodes playing an episode of a list, so the episode buttons show
  * @param {boolean} fullscreen the player is fullscreen
+ * @param {object} airPlay { available, active, prompt } from useAirPlay, the button shows when a
+ *  device is around
  * @param {any} children more buttons before Fullscreen, like the settings menu
  */
-export default function PlayerControls({ video, skipSecs, actions, hasEpisodes, fullscreen, children }) {
+export default function PlayerControls({ video, skipSecs, actions, hasEpisodes, fullscreen, airPlay, children }) {
     const VolumeIcon = video.muted || video.volume === 0 ? VolumeX : video.volume < 0.5 ? Volume1 : Volume2
 
     return <div className="flex items-center gap-1 sm:gap-1.5">
@@ -62,6 +64,12 @@ export default function PlayerControls({ video, skipSecs, actions, hasEpisodes, 
         {typeof document !== "undefined" && document.pictureInPictureEnabled && (
             <button className={`${BUTTON} hidden pointer-coarse:inline-flex`} onClick={actions.togglePictureInPicture} aria-label="Picture in picture">
                 <PictureInPicture2 size={18}/>
+            </button>
+        )}
+        {airPlay?.available && (
+            <button className={`${BUTTON} ${airPlay.active ? "text-primary" : ""}`} onClick={airPlay.prompt}
+                aria-label={airPlay.active ? "Playing on AirPlay, choose device" : "AirPlay"}>
+                <Airplay size={18}/>
             </button>
         )}
         <button className={BUTTON} onClick={actions.toggleFullscreen} aria-label={fullscreen ? "Exit fullscreen" : "Fullscreen"}>
