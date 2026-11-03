@@ -11,8 +11,8 @@ import Format from "../../utils/format"
 
 // how far into a track Previous restarts it instead of going back a track
 const RESTART_AFTER_SECS = 3
-// how far the lock screen and headphone skip buttons jump
-const SKIP_SECS = 10
+// how far the arrow keys move the focused progress bar
+const KEY_SEEK_SECS = 5
 // how often the position is remembered while playing, for picking up after a reload
 const SAVE_EVERY_SECS = 5
 
@@ -57,6 +57,8 @@ export default function AudioPlayer() {
     }, [visible])
     const [progress, setProgress] = useState(0)
     const [duration, setDuration] = useState(0)
+    // where a progress bar is being dragged to (0 to 1), null when it isn't
+    const [dragFraction, setDragFraction] = useState(null)
     const [volume, setVolume] = useState(() => {
         const stored = Number(readStored("mediahub.volume", "1"))
         return Number.isFinite(stored) ? Math.min(Math.max(stored, 0), 1) : 1
@@ -208,22 +210,25 @@ export default function AudioPlayer() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- togglePlay reads the store when the key is pressed
     }, [visible, inLayout])
 
-    // the lock screen, notification shade and headphone buttons control the bar too
+    // the lock screen, notification shade and headphone buttons control the bar too. There are no
+    // seek forward/backward actions: iOS (lock screen, Dynamic Island, CarPlay) shows those in place
+    // of the previous/next track buttons, so seeking is done by dragging the system progress bar
     useEffect(() => {
         if (!("mediaSession" in navigator) || !visible) return
         const session = navigator.mediaSession
-        const seekBy = secs => {
-            const audio = audioRef.current
-            if (audio) audio.currentTime = Math.min(Math.max(audio.currentTime + secs, 0), audio.duration || Infinity)
-        }
         const handlers = {
             play: resume,
             pause,
             previoustrack: handlePrev,
             nexttrack: handleNext,
-            seekbackward: e => seekBy(-(e.seekOffset || SKIP_SECS)),
-            seekforward: e => seekBy(e.seekOffset || SKIP_SECS),
-            seekto: e => { if (audioRef.current && e.seekTime != null) audioRef.current.currentTime = e.seekTime },
+            seekto: e => {
+                const audio = audioRef.current
+                if (!audio || e.seekTime == null) return
+                if (e.fastSeek && typeof audio.fastSeek === "function") audio.fastSeek(e.seekTime)
+                else audio.currentTime = e.seekTime
+                // move the system bar now, so it doesn't snap back until the next timeupdate
+                updatePositionState()
+            },
         }
         for (const [action, handler] of Object.entries(handlers)) {
             try {
@@ -270,24 +275,68 @@ export default function AudioPlayer() {
             lastSavedRef.current = audio.currentTime
             useAudioStore.getState().save(audio.currentTime)
         }
-        if ("mediaSession" in navigator && Number.isFinite(audio.duration) && audio.duration > 0) {
-            try {
-                navigator.mediaSession.setPositionState({
-                    duration: audio.duration,
-                    position: Math.min(audio.currentTime, audio.duration),
-                    playbackRate: audio.playbackRate,
-                })
-            } catch {
-                // the lock screen just doesn't show a position
-            }
+        updatePositionState()
+    }
+
+    // the lock screen's progress bar, which is also how it seeks
+    function updatePositionState() {
+        const audio = audioRef.current
+        if (!audio || !("mediaSession" in navigator) || !Number.isFinite(audio.duration) || audio.duration <= 0) return
+        try {
+            navigator.mediaSession.setPositionState({
+                duration: audio.duration,
+                position: Math.min(audio.currentTime, audio.duration),
+                playbackRate: audio.playbackRate,
+            })
+        } catch {
+            // the lock screen just doesn't show a position
         }
     }
 
-    function handleSeek(e) {
-        if (!audioRef.current || !duration) return
+    function seekTo(secs) {
+        const audio = audioRef.current
+        if (!audio || !duration) return
+        audio.currentTime = Math.min(Math.max(secs, 0), duration)
+        setProgress(audio.currentTime)
+        updatePositionState()
+    }
+
+    // where on the bar the pointer is, 0 to 1
+    function fractionAt(e) {
         const rect = e.currentTarget.getBoundingClientRect()
-        const pct = (e.clientX - rect.left) / rect.width
-        audioRef.current.currentTime = pct * duration
+        return rect.width ? Math.min(Math.max((e.clientX - rect.left) / rect.width, 0), 1) : 0
+    }
+
+    // the progress bars seek by tapping or dragging; while dragging the bar and time follow the
+    // finger, and the track jumps there on release
+    const seekBarProps = {
+        role: "slider",
+        tabIndex: 0,
+        "aria-label": "Seek",
+        "aria-valuemin": 0,
+        "aria-valuemax": Math.round(duration),
+        "aria-valuenow": Math.round(progress),
+        "aria-valuetext": `${Format.duration(progress)} of ${Format.duration(duration)}`,
+        onPointerDown: e => {
+            if (!duration || (e.pointerType === "mouse" && e.button !== 0)) return
+            e.currentTarget.setPointerCapture(e.pointerId)
+            setDragFraction(fractionAt(e))
+        },
+        onPointerMove: e => {
+            if (dragFraction !== null) setDragFraction(fractionAt(e))
+        },
+        onPointerUp: e => {
+            if (dragFraction === null) return
+            seekTo(fractionAt(e) * duration)
+            setDragFraction(null)
+        },
+        onPointerCancel: () => setDragFraction(null),
+        onKeyDown: e => {
+            const step = { ArrowLeft: -KEY_SEEK_SECS, ArrowRight: KEY_SEEK_SECS }[e.key]
+            if (step === undefined || !audioRef.current) return
+            e.preventDefault()
+            seekTo(audioRef.current.currentTime + step)
+        },
     }
 
     function changeVolume(value) {
@@ -303,7 +352,9 @@ export default function AudioPlayer() {
 
     if (!currentTrack) return null
 
-    const pct = duration ? (progress / duration) * 100 : 0
+    const dragging = dragFraction !== null
+    const shownTime = dragging ? dragFraction * duration : progress
+    const pct = duration ? (shownTime / duration) * 100 : 0
     const hasQueue = queue.length > 1
     const RepeatIcon = repeat === "one" ? Repeat1 : Repeat
     const repeatLabel = REPEAT_LABELS[repeat]
@@ -321,10 +372,12 @@ export default function AudioPlayer() {
             ${inLayout ? "bottom-[calc(4rem+env(safe-area-inset-bottom))] lg:bottom-0" : "bottom-0 pb-[env(safe-area-inset-bottom)]"}
             ${!inLayout ? "" : sidebarCollapsed ? "lg:left-[4.5rem]" : "lg:left-60"}
             bg-base-300/90 backdrop-blur-xl border-t border-white/5 shadow-[0_-12px_32px_-12px_rgb(0_0_0/0.6)]`}>
-            {/* phones: a thin progress line along the top edge, tap to seek */}
-            <div className="sm:hidden absolute inset-x-0 top-0 h-4 -translate-y-1/2 cursor-pointer" onClick={handleSeek}>
-                <div className="h-0.5 mt-[7px] bg-white/10">
-                    <div className="h-full bg-primary" style={{ width: `${pct}%` }}/>
+            {/* phones: a thin progress line along the top edge, tap or drag to seek */}
+            <div {...seekBarProps} className="sm:hidden absolute inset-x-0 top-0 h-6 -translate-y-1/2 cursor-pointer touch-none outline-none">
+                <div className={`${dragging ? "h-1 mt-[10px]" : "h-0.5 mt-[11px]"} bg-white/10 transition-all`}>
+                    <div className="relative h-full bg-primary" style={{ width: `${pct}%` }}>
+                        {dragging && <div className="absolute right-0 top-1/2 size-3 -translate-y-1/2 translate-x-1/2 rounded-full bg-primary shadow"/>}
+                    </div>
                 </div>
             </div>
 
@@ -377,10 +430,14 @@ export default function AudioPlayer() {
 
                     {/* Progress Bar */}
                     <div className="hidden sm:flex items-center gap-2 w-full max-w-lg">
-                        <span className="text-xs text-base-content/50 w-10 text-right tabular-nums">{Format.duration(progress)}</span>
-                        <div className="group/seek flex-1 py-1.5 cursor-pointer" onClick={handleSeek}>
-                            <div className="h-1 group-hover/seek:h-1.5 transition-all bg-white/15 rounded-full">
-                                <div className="h-full bg-primary rounded-full" style={{ width: `${pct}%` }} />
+                        <span className="text-xs text-base-content/50 w-10 text-right tabular-nums">{Format.duration(shownTime)}</span>
+                        <div {...seekBarProps}
+                            className="group/seek flex-1 py-1.5 cursor-pointer touch-none outline-none rounded-full focus-visible:ring-2 focus-visible:ring-primary/60">
+                            <div className={`${dragging ? "h-1.5" : "h-1"} group-hover/seek:h-1.5 transition-all bg-white/15 rounded-full`}>
+                                <div className="relative h-full bg-primary rounded-full" style={{ width: `${pct}%` }}>
+                                    <div className={`absolute right-0 top-1/2 size-3 -translate-y-1/2 translate-x-1/2 rounded-full bg-primary shadow transition-opacity
+                                        ${dragging ? "opacity-100" : "opacity-0 group-hover/seek:opacity-100 group-focus-visible/seek:opacity-100"}`}/>
+                                </div>
                             </div>
                         </div>
                         <span className="text-xs text-base-content/50 w-10 tabular-nums">{Format.duration(duration)}</span>
