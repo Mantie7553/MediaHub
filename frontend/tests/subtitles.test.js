@@ -22,6 +22,14 @@ describe("subtitleMode", () => {
         expect(subtitleMode(pgs, { videoFullscreen: true })).toBe("burn")
     })
 
+    it("treats a text track burned in for AirPlay as burned", () => {
+        withRenderer()
+        const burnedAss = { ...ass, index: 3 }
+        expect(subtitleMode(burnedAss, { assReady: true, burned: 3 })).toBe("burn")
+        expect(subtitleMode(burnedAss, { assReady: true, burned: 5 })).toBe("ass")
+        expect(subtitleMode(burnedAss, { assReady: true })).toBe("ass")
+    })
+
     it("renders ASS once its file is here", () => {
         withRenderer()
         expect(subtitleMode(ass, { assReady: true })).toBe("ass")
