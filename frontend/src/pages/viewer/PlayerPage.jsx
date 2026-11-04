@@ -32,8 +32,6 @@ const SKIP_NAMES = { op: "opening", ed: "ending", recap: "recap", preview: "prev
 // AirPlay TV (which can't ask for one itself) never loads a segment with an expired token
 const RENEW_BEFORE_MS = 5 * 60 * 1000
 const RENEW_MIN_WAIT_MS = 60 * 1000
-// an error this soon after reloading with a new token isn't the token, so it's shown
-const REMINT_RETRY_MS = 60 * 1000
 const NO_SEGMENTS = []
 
 export default function PlayerPage() {
@@ -237,9 +235,7 @@ export default function PlayerPage() {
         // Safari plays the playlist itself, which is what lets AirPlay hand the stream to a TV:
         // through hls.js (Managed Media Source on iPhones) it can't leave the device
         if (canAirPlay() && video.canPlayType("application/vnd.apple.mpegurl")) {
-            // when the last remint after an error was, so a stream that keeps failing stops
-            // instead of reloading over and over
-            let remintedAt = 0
+            let reminted = false
             let destroyed = false
             let renewTimer = null
             // where to put playback once a URL has loaded
@@ -271,20 +267,21 @@ export default function PlayerPage() {
                 if (resume.playing) video.play().catch(() => {})
             }
             // Safari doesn't say why a load failed: assume the token expired (asleep through
-            // the renewal) and try once with a new one. A failure soon after that one isn't the
-            // token: "playing" can fire in between, so it's timed rather than reset on play
+            // the renewal) and try once with a new one
             function onError() {
                 if (destroyed || !video.error) return
-                if (Date.now() - remintedAt < REMINT_RETRY_MS) {
+                if (reminted) {
                     setError("Couldn't load the video")
                     return
                 }
-                remintedAt = Date.now()
+                reminted = true
                 remint().catch(err => setError(err))
             }
+            const onPlaying = () => { reminted = false }
 
             video.addEventListener("loadedmetadata", onLoaded)
             video.addEventListener("error", onError)
+            video.addEventListener("playing", onPlaying)
             load(playlistUrl)
             return () => {
                 destroyed = true
@@ -292,6 +289,7 @@ export default function PlayerPage() {
                 ignoreTrackChangesRef.current = true
                 video.removeEventListener("loadedmetadata", onLoaded)
                 video.removeEventListener("error", onError)
+                video.removeEventListener("playing", onPlaying)
                 // the src is left for the next stream to replace: emptying it could end AirPlay
                 // on a switch of audio or subtitles. Leaving the page removes the video, which
                 // stops it
@@ -541,10 +539,8 @@ export default function PlayerPage() {
 
     // starting AirPlay burns the chosen text subtitle into the stream, as the TV only gets the
     // picture, and stopping it goes back to drawing it on the page with its styling
-    // Nothing is decided while a switch is still loading: the route flickers then, and acting on
-    // it would start another switch. This runs again once the switch is done
     useEffect(() => {
-        if (loading || switching) return
+        if (loading) return
         const track = subtitles[selectedSubtitle]
         if (!track || track.burn) return
         const burnedHere = burned === track.index
@@ -553,7 +549,7 @@ export default function PlayerPage() {
         restartStream(audio, airPlay.active ? track.index : -1, track.label,
             airPlay.active ? "Sending subtitles to the TV…" : "Switching subtitles…")
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only AirPlay starting or stopping switches the stream, the track choices are read as they are then
-    }, [airPlay.active, loading, switching])
+    }, [airPlay.active, loading])
 
     // the browser turns tracks on by itself as they're added: put the menu's choice back. While
     // the iPhone player has the video its captions menu can be used, so keep the menu in sync
