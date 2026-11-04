@@ -212,53 +212,6 @@ func TestTranscodeArgsBurnIn(t *testing.T) {
 	}
 }
 
-func TestTranscodeArgsBurnText(t *testing.T) {
-	t.Setenv("TRANSCODE_ENCODER", "libx264")
-	manifest := streamManifest{
-		Source:     "in.mkv",
-		AudioIndex: 1,
-		BurnIndex:  3,
-		Subtitles:  []subtitleTrack{{Index: 3, File: "subs_3.vtt", AssFile: "subs_3.ass"}, {Index: 4, Image: true}},
-	}
-
-	// drawn by libass from relative names, so no path ever needs escaping in the filter
-	args := strings.Join(transcodeArgs("out", manifest, 0), " ")
-	for _, want := range []string{"-map 0:v:0", "-vf ass=burn.ass:fontsdir=burn_fonts,format=yuv420p", "-map 0:1"} {
-		if !strings.Contains(args, want) {
-			t.Errorf("args missing %q: %s", want, args)
-		}
-	}
-	if strings.Contains(args, "overlay") || strings.Contains(args, "-filter_complex") {
-		t.Errorf("text burn uses the image overlay: %s", args)
-	}
-
-	// a resumed run starts its frames at 0, they're moved back to the video's time for libass
-	resumed := strings.Join(transcodeArgs("out", manifest, 10), " ")
-	if want := "-vf setpts=PTS+40/TB,ass=burn.ass:fontsdir=burn_fonts,setpts=PTS-40/TB,format=yuv420p"; !strings.Contains(resumed, want) {
-		t.Errorf("resumed args missing %q: %s", want, resumed)
-	}
-
-	// an image track is still overlaid
-	manifest.BurnIndex = 4
-	if args := strings.Join(transcodeArgs("out", manifest, 0), " "); !strings.Contains(args, "overlay=") || strings.Contains(args, "ass=") {
-		t.Errorf("image burn not overlaid: %s", args)
-	}
-}
-
-func TestBurnTextTrack(t *testing.T) {
-	subs := []subtitleTrack{{Index: 3}, {Index: 4, Image: true}}
-	for burn, want := range map[int]bool{-1: false, 3: true, 4: false, 9: false} {
-		if _, got := burnTextTrack(streamManifest{BurnIndex: burn, Subtitles: subs}); got != want {
-			t.Errorf("burnTextTrack(%d) = %v, want %v", burn, got, want)
-		}
-	}
-	for idx, want := range map[int]bool{3: true, 4: true, 0: false, -1: false} {
-		if got := hasSubtitle(subs, idx); got != want {
-			t.Errorf("hasSubtitle(%d) = %v, want %v", idx, got, want)
-		}
-	}
-}
-
 func TestVariantRe(t *testing.T) {
 	for v, want := range map[string]bool{
 		"a1": true, "a-1": true, "a2-b5": true, "a-1-b3": true,

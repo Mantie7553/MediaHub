@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react"
-import { Airplay, Play, Pause, X, Music, SkipBack, SkipForward, Shuffle, Repeat, Repeat1, Volume2, VolumeX } from "lucide-react"
+import { Play, Pause, X, Music, SkipBack, SkipForward, Shuffle, Repeat, Repeat1, Volume2, VolumeX } from "lucide-react"
 import useAudioStore, { REPEAT_LABELS } from "../../stores/useAudioStore"
 import useSidebarStore from "../../stores/useSidebarStore"
 import api from "../../services/api"
@@ -8,7 +8,6 @@ import { readStored, writeStored } from "../../utils/storage"
 import { keyForFocused } from "../../utils/keys"
 import { trackListening } from "../../utils/playCount"
 import Format from "../../utils/format"
-import useAirPlay from "../../hooks/useAirPlay"
 
 // how far into a track Previous restarts it instead of going back a track
 const RESTART_AFTER_SECS = 3
@@ -34,9 +33,7 @@ export default function AudioPlayer() {
     // the video player, readers and login page fill the screen: no tab bar or sidebar to sit beside
     const { pathname } = useLocation()
     const onLogin = pathname === "/login"
-    // the video player has the lock screen controls while it's open, it gives them back on leaving
-    const videoOpen = pathname.startsWith("/watch/")
-    const inLayout = !videoOpen && !pathname.endsWith("/read") && !onLogin
+    const inLayout = !pathname.startsWith("/watch/") && !pathname.endsWith("/read") && !onLogin
     const audioRef = useRef(null)
     const barRef = useRef(null)
     const visible = currentTrack !== null
@@ -69,8 +66,6 @@ export default function AudioPlayer() {
     const [muted, setMuted] = useState(() => readStored("mediahub.muted", "false") === "true")
     // a cover that failed to load, its signed link may have expired since the queue was saved
     const [failedThumb, setFailedThumb] = useState(null)
-    // the <audio> only exists while a track is loaded, so the listeners attach once it does
-    const airPlay = useAirPlay(audioRef, !!currentTrack)
 
     const remintedRef = useRef(false)
     const lastSavedRef = useRef(0)
@@ -219,7 +214,7 @@ export default function AudioPlayer() {
     // seek forward/backward actions: iOS (lock screen, Dynamic Island, CarPlay) shows those in place
     // of the previous/next track buttons, so seeking is done by dragging the system progress bar
     useEffect(() => {
-        if (!("mediaSession" in navigator) || !visible || videoOpen) return
+        if (!("mediaSession" in navigator) || !visible) return
         const session = navigator.mediaSession
         const handlers = {
             play: resume,
@@ -248,20 +243,20 @@ export default function AudioPlayer() {
             }
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the handlers read the store and audio element when they run
-    }, [visible, videoOpen])
+    }, [visible])
 
     useEffect(() => {
-        if (!("mediaSession" in navigator) || videoOpen) return
+        if (!("mediaSession" in navigator)) return
         navigator.mediaSession.metadata = currentTrack ? new window.MediaMetadata({
             title: currentTrack.title,
             artist: currentTrack.artist ?? "",
             artwork: currentTrack.thumbnail ? [{ src: new URL(currentTrack.thumbnail, window.location.href).href }] : [],
         }) : null
-    }, [currentTrack, videoOpen])
+    }, [currentTrack])
 
     useEffect(() => {
-        if ("mediaSession" in navigator && !videoOpen) navigator.mediaSession.playbackState = !visible ? "none" : isPlaying ? "playing" : "paused"
-    }, [isPlaying, visible, videoOpen])
+        if ("mediaSession" in navigator) navigator.mediaSession.playbackState = !visible ? "none" : isPlaying ? "playing" : "paused"
+    }, [isPlaying, visible])
 
     function handleTimeUpdate() {
         const audio = audioRef.current
@@ -366,7 +361,6 @@ export default function AudioPlayer() {
 
     return <>
         <audio
-            x-webkit-airplay="allow"
             ref={audioRef}
             onTimeUpdate={handleTimeUpdate}
             onEnded={handleEnded}
@@ -459,14 +453,6 @@ export default function AudioPlayer() {
                         onChange={e => changeVolume(Number(e.target.value))}
                         className="range range-primary range-xs flex-1" aria-label="Volume" />
                 </div>
-
-                {/* AirPlay: Safari only, once a speaker or TV is on the network */}
-                {airPlay.available && (
-                    <button className={`btn btn-ghost btn-sm btn-circle ${airPlay.active ? "text-primary" : "text-base-content/60"}`}
-                        onClick={airPlay.prompt} aria-label={airPlay.active ? "Playing on AirPlay, choose device" : "AirPlay"}>
-                        <Airplay size={16} />
-                    </button>
-                )}
 
                 {/* Close */}
                 <button className="btn btn-ghost btn-sm btn-circle" onClick={stop} aria-label="Close player">
