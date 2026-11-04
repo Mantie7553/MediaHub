@@ -11,14 +11,13 @@ import useApi from "../../hooks/useApi"
 import useAssRenderer from "../../hooks/useAssRenderer"
 import { subtitleMode } from "../../utils/subtitles"
 import { watchedBetween } from "../../utils/watchTime"
-import { pictureRect, subtitleLift, tokenExpiry } from "../../utils/player"
+import { pictureRect, subtitleLift } from "../../utils/player"
 import useVideoState from "../../hooks/useVideoState"
 import usePlayerChrome from "../../hooks/usePlayerChrome"
-import useAirPlay, { canAirPlay } from "../../hooks/useAirPlay"
 import SeekBar from "../../components/player/SeekBar"
 import PlayerControls, { CenterControls } from "../../components/player/PlayerControls"
 import SubtitleOverlay from "../../components/player/SubtitleOverlay"
-import { Airplay, ArrowLeft, FastForward, Settings, X } from "lucide-react"
+import { ArrowLeft, FastForward, Settings, X } from "lucide-react"
 
 // how long the next episode waits after one ends, and how far the arrow keys and skip buttons go
 const UP_NEXT_SECS = 5
@@ -28,12 +27,6 @@ const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2]
 const SKIP_TO_END_SECS = 2
 // what the skip button and the auto skip message call each part
 const SKIP_NAMES = { op: "opening", ed: "ending", recap: "recap", preview: "preview" }
-// a natively played stream gets a new URL this long before its media token runs out, so an
-// AirPlay TV (which can't ask for one itself) never loads a segment with an expired token
-const RENEW_BEFORE_MS = 5 * 60 * 1000
-const RENEW_MIN_WAIT_MS = 60 * 1000
-// an error this soon after reloading with a new token isn't the token, so it's shown
-const REMINT_RETRY_MS = 60 * 1000
 const NO_SEGMENTS = []
 
 export default function PlayerPage() {
@@ -108,9 +101,6 @@ export default function PlayerPage() {
     // the user's preference to skip them without asking
     const { data: prefs } = useApi("/me/preferences");
     const autoSkip = !!prefs?.auto_skip;
-
-    // AirPlay to a TV, where the phone stays the remote
-    const airPlay = useAirPlay(videoRef);
 
     const initialPosition = location.state?.position ?? 0;
     const animeId = location.state?.animeId ?? null;
@@ -234,70 +224,6 @@ export default function PlayerPage() {
 
         const video = videoRef.current;
 
-        // Safari plays the playlist itself, which is what lets AirPlay hand the stream to a TV:
-        // through hls.js (Managed Media Source on iPhones) it can't leave the device
-        if (canAirPlay() && video.canPlayType("application/vnd.apple.mpegurl")) {
-            // when the last remint after an error was, so a stream that keeps failing stops
-            // instead of reloading over and over
-            let remintedAt = 0
-            let destroyed = false
-            let renewTimer = null
-            // where to put playback once a URL has loaded
-            let resume = { position: startAtRef.current, playing: autoplayRef.current }
-
-            // absolute, as an AirPlay TV is given the URL as it is
-            function load(url) {
-                video.src = new URL(url, window.location.href).href
-                // the media token stays short lived (architecture.md, Media tokens): rather than
-                // a longer one, the page swaps in a fresh URL before this one runs out
-                clearTimeout(renewTimer)
-                const expiry = tokenExpiry(url)
-                if (expiry) {
-                    const wait = Math.max(expiry - RENEW_BEFORE_MS - Date.now(), RENEW_MIN_WAIT_MS)
-                    renewTimer = setTimeout(() => remint().catch(() => {}), wait)
-                }
-            }
-            // the same stream with a new token, carrying on from where it is
-            function remint() {
-                resume = { position: video.currentTime, playing: !video.paused }
-                const { audio, subtitle, burn } = choicesRef.current
-                return fetchStream(video.currentTime, audio, subtitle, burn)
-                    .then(url => { if (!destroyed) load(url) })
-            }
-            function onLoaded() {
-                ignoreTrackChangesRef.current = false
-                setSwitching("")
-                if (resume.position > 0) video.currentTime = resume.position
-                if (resume.playing) video.play().catch(() => {})
-            }
-            // Safari doesn't say why a load failed: assume the token expired (asleep through
-            // the renewal) and try once with a new one. A failure soon after that one isn't the
-            // token: "playing" can fire in between, so it's timed rather than reset on play
-            function onError() {
-                if (destroyed || !video.error) return
-                if (Date.now() - remintedAt < REMINT_RETRY_MS) {
-                    setError("Couldn't load the video")
-                    return
-                }
-                remintedAt = Date.now()
-                remint().catch(err => setError(err))
-            }
-
-            video.addEventListener("loadedmetadata", onLoaded)
-            video.addEventListener("error", onError)
-            load(playlistUrl)
-            return () => {
-                destroyed = true
-                clearTimeout(renewTimer)
-                ignoreTrackChangesRef.current = true
-                video.removeEventListener("loadedmetadata", onLoaded)
-                video.removeEventListener("error", onError)
-                // the src is left for the next stream to replace: emptying it could end AirPlay
-                // on a switch of audio or subtitles. Leaving the page removes the video, which
-                // stops it
-            }
-        }
-
         if (Hls.isSupported()) {
             // the playlist lists every segment before ffmpeg writes them. Asking for one it
             // hasn't reached (a seek ahead) makes the server restart it there and hold the
@@ -401,8 +327,7 @@ export default function PlayerPage() {
     function chooseSubtitle(i) {
         const previous = selectedSubtitle
         const track = subtitles[i]
-        // AirPlay only takes the picture to the TV, so there every track is burned in
-        const burn = track && (track.burn || airPlay.active) ? track.index : -1
+        const burn = track?.burn ? track.index : -1
         setSelectedSubtitle(i)
         setPrefsMessage("")
         if (burn === burned) return
@@ -477,11 +402,9 @@ export default function PlayerPage() {
         assReady: !!assFiles[selectedTrack?.assUrl],
         assFailed: !!assFailed[selectedTrack?.assUrl],
         videoFullscreen: videoAlone,
-        burned,
     })
     const assCanvasRef = useRef(null)
-    // nothing drawn on the phone reaches an AirPlay TV
-    const assContent = mode === "ass" && !airPlay.active ? assFiles[selectedTrack.assUrl] : null
+    const assContent = mode === "ass" ? assFiles[selectedTrack.assUrl] : null
     useAssRenderer(videoRef, assCanvasRef, assContent, fonts, err => {
         console.warn("ASS subtitles could not be shown, using plain ones", err)
         setAssFailed(failed => ({ ...failed, [selectedTrack?.assUrl]: true }))
@@ -538,22 +461,6 @@ export default function PlayerPage() {
     }
 
     useEffect(applySubtitleSelection, [subtitles, subtitleFiles, selectedSubtitle, mode, videoAlone])
-
-    // starting AirPlay burns the chosen text subtitle into the stream, as the TV only gets the
-    // picture, and stopping it goes back to drawing it on the page with its styling
-    // Nothing is decided while a switch is still loading: the route flickers then, and acting on
-    // it would start another switch. This runs again once the switch is done
-    useEffect(() => {
-        if (loading || switching) return
-        const track = subtitles[selectedSubtitle]
-        if (!track || track.burn) return
-        const burnedHere = burned === track.index
-        if (airPlay.active === burnedHere) return
-        const audio = audioTracks.find(a => a.selected)?.index ?? null
-        restartStream(audio, airPlay.active ? track.index : -1, track.label,
-            airPlay.active ? "Sending subtitles to the TV…" : "Switching subtitles…")
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- only AirPlay starting or stopping switches the stream, the track choices are read as they are then
-    }, [airPlay.active, loading, switching])
 
     // the browser turns tracks on by itself as they're added: put the menu's choice back. While
     // the iPhone player has the video its captions menu can be used, so keep the menu in sync
@@ -726,8 +633,7 @@ export default function PlayerPage() {
     // the seek bar is being dragged, or a mouse is over the controls: they stay up meanwhile
     const [scrubbing, setScrubbing] = useState(false)
     const [overControls, setOverControls] = useState(false)
-    // on AirPlay the phone is the remote, so its controls stay up
-    const chrome = usePlayerChrome(loading || videoState.paused || languagesOpen || scrubbing || overControls || airPlay.active)
+    const chrome = usePlayerChrome(loading || videoState.paused || languagesOpen || scrubbing || overControls)
     const { show: showChrome, hide: hideChrome } = chrome
 
     // pausing brings the controls back
@@ -780,62 +686,6 @@ export default function PlayerPage() {
         return () => document.removeEventListener("keydown", onKeyDown)
     // eslint-disable-next-line react-hooks/exhaustive-deps -- goToEpisode only needs the episode it's given, the others read refs
     }, [nextEpisode, showChrome])
-
-    // the lock screen and Control Center control the video too, which is how the TV is
-    // paused and seeked while AirPlay has it and the phone is locked
-    useEffect(() => {
-        const video = videoRef.current
-        if (!("mediaSession" in navigator) || !video) return
-        const session = navigator.mediaSession
-
-        function updatePosition() {
-            if (!Number.isFinite(video.duration) || video.duration <= 0) return
-            try {
-                session.setPositionState({
-                    duration: video.duration,
-                    position: Math.min(video.currentTime, video.duration),
-                    playbackRate: video.playbackRate,
-                })
-            } catch {
-                // the lock screen just doesn't show a position
-            }
-        }
-        const onState = () => { session.playbackState = video.paused ? "paused" : "playing" }
-
-        const handlers = {
-            play: () => video.play().catch(() => {}),
-            pause: () => video.pause(),
-            seekbackward: e => seekBy(-(e.seekOffset || SKIP_SECS)),
-            seekforward: e => seekBy(e.seekOffset || SKIP_SECS),
-            seekto: e => {
-                if (e.seekTime == null) return
-                video.currentTime = e.seekTime
-                updatePosition()
-            },
-        }
-        for (const [action, handler] of Object.entries(handlers)) {
-            try { session.setActionHandler(action, handler) } catch { /* not supported here */ }
-        }
-        video.addEventListener("timeupdate", updatePosition)
-        video.addEventListener("play", onState)
-        video.addEventListener("pause", onState)
-        return () => {
-            for (const action of Object.keys(handlers)) {
-                try { session.setActionHandler(action, null) } catch { /* not supported here */ }
-            }
-            video.removeEventListener("timeupdate", updatePosition)
-            video.removeEventListener("play", onState)
-            video.removeEventListener("pause", onState)
-            session.playbackState = "none"
-        }
-    }, [])
-
-    const sessionTitle = playingEpisode ? playingEpisode.title ?? `Episode ${playingEpisode.episode_number}` : null
-    useEffect(() => {
-        if (!("mediaSession" in navigator)) return
-        navigator.mediaSession.metadata = new window.MediaMetadata({ title: sessionTitle ?? "MediaHub", artist: "MediaHub" })
-        return () => { navigator.mediaSession.metadata = null }
-    }, [sessionTitle])
 
     // the player's size and the bottom controls' height, to keep subtitles clear of the controls
     const bottomBarRef = useRef(null)
@@ -940,7 +790,6 @@ export default function PlayerPage() {
         <video
             ref={videoRef}
             playsInline
-            x-webkit-airplay="allow"
             disablePictureInPicture={!touchScreen}
             crossOrigin="anonymous"
             className={`absolute inset-0 w-full h-full object-contain ${loading ? "invisible" : ""}`}
@@ -961,7 +810,7 @@ export default function PlayerPage() {
         {assContent && <div className="absolute inset-0 pointer-events-none transition-transform duration-200 ease-out" style={{ transform: `translateY(${-lift}px)` }}>
             <canvas key={selectedTrack.assUrl} ref={assCanvasRef} className="absolute pointer-events-none" aria-hidden="true"/>
         </div>}
-        {mode === "vtt" && !videoAlone && !airPlay.active && (
+        {mode === "vtt" && !videoAlone && (
             <SubtitleOverlay
                 videoRef={videoRef}
                 trackUrl={selectedTrack?.url ?? null}
@@ -979,17 +828,6 @@ export default function PlayerPage() {
                         The first play of a video takes a little longer while the server gets it ready.
                     </p>
                 )}
-            </div>
-        )}
-        {airPlay.active && !loading && (
-            <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-black text-center px-6 pointer-events-none" role="status">
-                <span className="grid size-16 place-items-center rounded-full bg-white/10">
-                    <Airplay size={30}/>
-                </span>
-                <p className="font-medium">Playing on your TV</p>
-                <p className="text-sm text-white/60 max-w-xs">
-                    Keep this page open, it's the remote. Subtitles are drawn into the picture while AirPlay is on.
-                </p>
             </div>
         )}
         {!loading && buffering && (
@@ -1076,7 +914,7 @@ export default function PlayerPage() {
                     onSeek={t => { if (videoRef.current) videoRef.current.currentTime = t }}
                     onScrubbing={setScrubbing}
                 />
-                <PlayerControls video={videoState} skipSecs={SKIP_SECS} actions={actions} hasEpisodes={episodeList.length > 0} fullscreen={fullscreen} airPlay={airPlay}>
+                <PlayerControls video={videoState} skipSecs={SKIP_SECS} actions={actions} hasEpisodes={episodeList.length > 0} fullscreen={fullscreen}>
                     <div className="relative" ref={languagesRef}>
                         <button
                             className={`btn btn-ghost btn-sm btn-square text-white hover:bg-white/10 border-0 ${languagesOpen ? "bg-white/10" : ""}`}

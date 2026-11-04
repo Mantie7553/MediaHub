@@ -88,10 +88,8 @@ func (h *Handler) StreamMedia(w http.ResponseWriter, r *http.Request) {
 
 	manifest := buildManifest(filePath, probe, audioIndex, -1)
 	if requested := r.URL.Query().Get("burn"); requested != "" {
-		// any of the file's own subtitle tracks: an image one, or a text one the player asks
-		// to have drawn into the picture (AirPlay, where it can't draw over the video)
 		idx, err := strconv.Atoi(requested)
-		if err != nil || (idx != -1 && !hasSubtitle(manifest.Subtitles, idx)) {
+		if err != nil || (idx != -1 && !imageSubtitle(manifest.Subtitles, idx)) {
 			utils.Error(w, http.StatusBadRequest, "invalid subtitle track")
 			return
 		}

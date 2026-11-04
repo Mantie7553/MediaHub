@@ -25,10 +25,6 @@ const (
 	// ffmpeg's own playlist, never served: playlist.m3u8 lists every segment up front instead
 	ffmpegPlaylistFile = "ffmpeg.m3u8"
 	logFile            = "transcode.log"
-	// a text subtitle burned into the video (for AirPlay, where nothing can be drawn over the
-	// picture) as ASS, and the fonts it uses, in the transcode folder
-	burnSubtitleFile = "burn.ass"
-	burnFontsDir     = "burn_fonts"
 
 	segmentSecs = 4
 	// segments from the start position that must exist before the player is pointed at it
@@ -415,40 +411,7 @@ func (tc *transcode) startRun(seg int) error {
 	}
 	fmt.Fprintf(log, "--- %s starting at segment %d\n", time.Now().Format(time.RFC3339), seg)
 
-	// a burned in text subtitle has to be on disk before ffmpeg starts drawing it
-	if _, text := burnTextTrack(tc.manifest); text && !fileExists(filepath.Join(tc.dir, burnSubtitleFile)) {
-		if err := extractBurnSubtitle(tc.dir, tc.manifest); err != nil {
-			fmt.Fprintf(log, "burn subtitle extraction failed: %v\n", err)
-			log.Close()
-			return err
-		}
-	}
-
-	// ffmpeg runs in the folder, as the burn subtitle filter names its files relative to it, so
-	// every other path it's given has to be absolute
-	dir, err := filepath.Abs(tc.dir)
-	if err == nil {
-		manifest := tc.manifest
-		manifest.Source, err = filepath.Abs(manifest.Source)
-		if err == nil {
-			cmd := exec.Command("ffmpeg", transcodeArgs(dir, manifest, seg)...)
-			cmd.Dir = dir
-			return tc.startCmd(cmd, seg, log)
-		}
-	}
-	log.Close()
-	return err
-}
-
-/*
-Function:	startCmd
-Purpose:	start an ffmpeg run from startRun and watch for it exiting. tc.mu must be held
-Params:
-  - cmd: the ffmpeg command
-  - seg: the first segment it writes
-  - log: transcode.log, closed when the run exits
-*/
-func (tc *transcode) startCmd(cmd *exec.Cmd, seg int, log *os.File) error {
+	cmd := exec.Command("ffmpeg", transcodeArgs(tc.dir, tc.manifest, seg)...)
 	cmd.Stderr = log
 	if err := cmd.Start(); err != nil {
 		log.Close()
@@ -511,17 +474,7 @@ func transcodeArgs(dir string, manifest streamManifest, startSeg int) []string {
 	args = append(args, "-i", manifest.Source)
 
 	filter, codec := encoderArgs(encoder)
-	if _, text := burnTextTrack(manifest); text {
-		// a text subtitle is drawn by libass from the ASS copy extractBurnSubtitle writes. The
-		// names are relative to the transcode folder ffmpeg runs in, so the filter never holds
-		// a path that would need escaping. -ss starts the frames at 0, so they're moved back to
-		// the video's own time while libass draws them
-		draw := "ass=" + burnSubtitleFile + ":fontsdir=" + burnFontsDir
-		if startSeg > 0 {
-			draw = "setpts=PTS+" + offset + "/TB," + draw + ",setpts=PTS-" + offset + "/TB"
-		}
-		args = append(args, "-map", "0:v:0", "-vf", draw+","+filter)
-	} else if manifest.BurnIndex >= 0 {
+	if manifest.BurnIndex >= 0 {
 		// the subtitle is scaled to the video first, DVD subtitles are often a smaller canvas.
 		// The overlay runs on the CPU before any upload to the GPU
 		args = append(args, "-filter_complex", fmt.Sprintf(
@@ -724,57 +677,6 @@ func extractFonts(filePath, dir string, fonts []fontFile) {
 	for _, f := range fonts {
 		os.Rename(filepath.Join(dir, f.File+".tmp"), filepath.Join(dir, f.File))
 	}
-}
-
-/*
-Function:	burnTextTrack
-Purpose:	the text subtitle track burned into a transcode, false when none is or the burned
-one is an image track (drawn with overlay instead)
-Params:
-  - manifest: the transcode's tracks and the one burned in
-*/
-func burnTextTrack(manifest streamManifest) (subtitleTrack, bool) {
-	if manifest.BurnIndex < 0 {
-		return subtitleTrack{}, false
-	}
-	for _, t := range manifest.Subtitles {
-		if t.Index == manifest.BurnIndex {
-			return t, !t.Image
-		}
-	}
-	return subtitleTrack{}, false
-}
-
-/*
-Function:	extractBurnSubtitle
-Purpose:	write the burned in text subtitle as ASS (ffmpeg converts SRT and others) and the
-fonts attached to the file, for the ass filter. Written to .tmp and renamed, so a
-burn.ass that exists is complete
-Params:
-  - dir: the transcode folder
-  - manifest: the source file and the burned in track
-*/
-func extractBurnSubtitle(dir string, manifest streamManifest) error {
-	track, ok := burnTextTrack(manifest)
-	if !ok {
-		return errors.New("no text subtitle to burn in")
-	}
-	fontsDir := filepath.Join(dir, burnFontsDir)
-	if err := os.MkdirAll(fontsDir, 0755); err != nil {
-		return err
-	}
-	// libass picks the attached fonts the track names, the system's otherwise
-	extractFonts(manifest.Source, fontsDir, manifest.Fonts)
-
-	tmp := filepath.Join(dir, burnSubtitleFile+".tmp")
-	args := append([]string{"-v", "error", "-y"}, inputOnlyLocal...)
-	args = append(args, "-i", manifest.Source,
-		"-map", fmt.Sprintf("0:%d", track.Index), "-c:s", "ass", "-f", "ass", tmp)
-	if out, err := exec.Command("ffmpeg", args...).CombinedOutput(); err != nil {
-		os.Remove(tmp)
-		return fmt.Errorf("%w: %s", err, strings.TrimSpace(string(out)))
-	}
-	return os.Rename(tmp, filepath.Join(dir, burnSubtitleFile))
 }
 
 var (

@@ -10,13 +10,11 @@
  * @param {boolean} options.assReady the track's ASS file has downloaded
  * @param {boolean} options.assFailed the ASS renderer couldn't start for it
  * @param {boolean} options.videoFullscreen the video element (not the player) is fullscreen
- * @param {number} options.burned the stream index burned into the current stream, -1 for none.
- *  A text track is burned in too while AirPlay has the video, as the TV only gets the picture
  * @returns {"off"|"burn"|"ass"|"vtt"}
  */
-export function subtitleMode(track, { assReady = false, assFailed = false, videoFullscreen = false, burned = -1 } = {}) {
+export function subtitleMode(track, { assReady = false, assFailed = false, videoFullscreen = false } = {}) {
     if (!track) return "off"
-    if (track.burn || (burned >= 0 && track.index === burned)) return "burn"
+    if (track.burn) return "burn"
     if (track.assUrl && assReady && !assFailed && !videoFullscreen && canRenderAss()) return "ass"
     return "vtt"
 }

@@ -304,22 +304,6 @@ func imageSubtitle(tracks []subtitleTrack, index int) bool {
 }
 
 /*
-Function:	hasSubtitle
-Purpose:	whether index is one of the file's subtitle tracks, text or image, so it can be burned in
-Params:
-  - tracks: the subtitle tracks
-  - index: the stream index
-*/
-func hasSubtitle(tracks []subtitleTrack, index int) bool {
-	for _, t := range tracks {
-		if t.Index == index {
-			return true
-		}
-	}
-	return false
-}
-
-/*
 Function:	matchesLanguage
 Purpose:	whether a track is in the preferred language. English with honorifics (enm) counts as English
 Params:

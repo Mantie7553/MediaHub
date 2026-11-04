@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { bufferedEnd, cueHtml, pictureRect, seekFraction, segmentMarks, subtitleLift, tokenExpiry } from "../src/utils/player"
+import { bufferedEnd, cueHtml, pictureRect, seekFraction, segmentMarks, subtitleLift } from "../src/utils/player"
 
 function ranges(...pairs) {
     return { length: pairs.length, start: i => pairs[i][0], end: i => pairs[i][1] }
@@ -89,24 +89,5 @@ describe("cue html", () => {
     })
     it("breaks lines", () => {
         expect(cueHtml("one\ntwo")).toBe("one<br>two")
-    })
-})
-
-describe("tokenExpiry", () => {
-    // header.payload.signature, the payload base64url encoded without padding
-    function token(payload) {
-        const encoded = btoa(JSON.stringify(payload)).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "")
-        return `eyJhbGciOiJIUzI1NiJ9.${encoded}.c2ln`
-    }
-
-    it("reads exp from the media token in a relative URL", () => {
-        const url = `/api/stream/segments/episode/1/a1/playlist.m3u8?media_token=${token({ typ: "media", exp: 1800000000 })}`
-        expect(tokenExpiry(url)).toBe(1800000000 * 1000)
-    })
-
-    it("is null without a token or with one it can't read", () => {
-        expect(tokenExpiry("/api/stream/music/1")).toBeNull()
-        expect(tokenExpiry("/x?media_token=not-a-jwt")).toBeNull()
-        expect(tokenExpiry(`/x?media_token=${token({ typ: "media" })}`)).toBeNull()
     })
 })
