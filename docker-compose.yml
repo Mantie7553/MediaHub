@@ -175,8 +175,8 @@ services:
   # manga sources through Tachiyomi-style extensions. Extensions are third-party code running in
   # this container, so it is boxed in: its own network that only the backend shares, no media or
   # config mounts, a non-root user (the image's default), a pinned tag and no watchtower label.
-  # The web UI (for installing extensions) is reachable from this machine only:
-  # http://localhost:4567, login admin / SUWAYOMI_PASSWORD
+  # The web UI (for installing extensions) listens on SUWAYOMI_BIND only: this machine by default,
+  # or its Tailscale address to reach it over the VPN. Login admin / SUWAYOMI_PASSWORD
   suwayomi:
     image: ghcr.io/suwayomi/suwayomi-server:v2.4.2366-stable
     restart: unless-stopped
@@ -192,7 +192,7 @@ services:
       - suwayomi-data:/home/suwayomi/.local/share/Tachidesk
     networks: [suwayomi]
     ports:
-      - "127.0.0.1:4567:4567"
+      - "${SUWAYOMI_BIND:-127.0.0.1}:4567:4567"
 
   # one-shot: creates the media folders and connects Sonarr/Radarr/Prowlarr/qBittorrent/MediaHub.
   # Safe to re-run, it skips anything that already exists
