@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Mantie7553/MediaHub/backend/internal/clients/mangadex"
+	"github.com/Mantie7553/MediaHub/backend/internal/clients/suwayomi"
 	"github.com/Mantie7553/MediaHub/backend/internal/mangafiles"
 )
 
@@ -128,5 +130,49 @@ func TestPageExt(t *testing.T) {
 		if got := pageExt(img); got != want {
 			t.Errorf("pageExt(%q) = %q, want %q", img, got, want)
 		}
+	}
+}
+
+func TestMergeChaptersFillsOnlyWhatMangaDexLacks(t *testing.T) {
+	md := []mangadex.Chapter{{ID: "md1", Number: "1"}, {ID: "md2", Number: "2"}, {ID: "md3", Number: "3"}}
+	sw := []suwayomi.Chapter{{ID: 11, Number: 1}, {ID: 12, Number: 2}, {ID: 13, Number: 2.5, Title: "Extra"}, {ID: 14, Number: 4}}
+
+	got := mergeChapters(md, sw)
+	want := []plannedChapter{
+		{ID: "md1", Number: "1", Value: 1},
+		{ID: "md2", Number: "2", Value: 2},
+		{ID: "13", Number: "2.5", Value: 2.5, Title: "Extra", FromSuwayomi: true},
+		{ID: "md3", Number: "3", Value: 3},
+		{ID: "14", Number: "4", Value: 4, FromSuwayomi: true},
+	}
+	if len(got) != len(want) {
+		t.Fatalf("got %+v", got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("chapter %d = %+v, want %+v", i, got[i], want[i])
+		}
+	}
+
+	if got := mergeChapters(nil, sw); len(got) != 4 || !got[0].FromSuwayomi {
+		t.Errorf("Suwayomi alone = %+v", got)
+	}
+}
+
+func TestStaleLinkNote(t *testing.T) {
+	if got := staleLinkNote("MangaFire", 213, 213); got != "" {
+		t.Errorf("up to date = %q, want no note", got)
+	}
+	if got := staleLinkNote("MangaFire", 213, -1); got != "" {
+		t.Errorf("nothing known elsewhere = %q, want no note", got)
+	}
+	if got := staleLinkNote("MangaFire", 97, 213); !strings.Contains(got, "stops at ch. 97") || !strings.Contains(got, "ch. 213") {
+		t.Errorf("behind = %q", got)
+	}
+	if got := staleLinkNote("MangaFire", 52.5, 60); !strings.Contains(got, "ch. 52.5") {
+		t.Errorf("decimal chapter = %q", got)
+	}
+	if got := staleLinkNote("MangaFire", -1, 10); !strings.Contains(got, "has no chapters") {
+		t.Errorf("empty title = %q", got)
 	}
 }

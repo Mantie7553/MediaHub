@@ -54,9 +54,59 @@ export function uploadChapter(mangaId, file, number, onProgress) {
 }
 
 /**
- * Admin only: start a job that downloads the chapters MangaDex has that the library doesn't
+ * Admin only: start a job that downloads the chapters MangaDex and the manga's linked
+ * Suwayomi source have that the library doesn't
  * @param {string} mangaId the manga's media item id
  */
 export function checkForChapters(mangaId) {
     return api.post(`/admin/manga/${mangaId}/check`)
+}
+
+/**
+ * Admin only: whether Suwayomi is set up, and the source title a manga is linked to
+ * @param {string} mangaId the manga's media item id
+ * @returns {Promise} data is { configured, link: { source_name, manga_id, title } | null }
+ */
+export function getSuwayomiLink(mangaId) {
+    return api.get(`/admin/manga/${mangaId}/suwayomi`)
+}
+
+/**
+ * Admin only: search the installed Suwayomi sources for a title to link a manga to
+ * @param {string} mangaId the manga's media item id
+ * @param {string} query the search text, the manga's title when empty
+ * @returns {Promise} data is { query, sources, failed: [{ source, error }], results: [{ id, title,
+ *  source_name, exact, most_recent, checked, chapters: { latest, count } | null }] }. The exact
+ *  matches (or the first few results) come checked, newest first
+ */
+export function searchSuwayomi(mangaId, query) {
+    return api.get(`/admin/manga/${mangaId}/suwayomi/search`, { params: query ? { q: query } : {} })
+}
+
+/**
+ * Admin only: how far one Suwayomi title goes, for search results not looked up with the
+ * search and for the linked title
+ * @param {string} mangaId the manga's media item id
+ * @param {number} suwayomiMangaId the Suwayomi title's id
+ * @returns {Promise} data is { chapters: { latest, count } | null }
+ */
+export function suwayomiChapterStats(mangaId, suwayomiMangaId) {
+    return api.get(`/admin/manga/${mangaId}/suwayomi/chapters`, { params: { manga_id: suwayomiMangaId } })
+}
+
+/**
+ * Admin only: get a manga's missing chapters from this Suwayomi title from now on
+ * @param {string} mangaId the manga's media item id
+ * @param {number} suwayomiMangaId the search result's id
+ */
+export function linkSuwayomi(mangaId, suwayomiMangaId) {
+    return api.put(`/admin/manga/${mangaId}/suwayomi`, { manga_id: suwayomiMangaId })
+}
+
+/**
+ * Admin only: stop getting a manga's chapters from Suwayomi
+ * @param {string} mangaId the manga's media item id
+ */
+export function unlinkSuwayomi(mangaId) {
+    return api.delete(`/admin/manga/${mangaId}/suwayomi`)
 }
