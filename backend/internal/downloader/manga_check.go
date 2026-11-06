@@ -114,6 +114,12 @@ func CheckLibraryForNewChapters(db *sql.DB) {
 		if err != nil {
 			continue
 		}
+		// a stale link finds nothing new, so no job (and no note on the Downloads page) says so
+		if plan.link != nil && plan.swErr == nil {
+			if note := staleLinkNote(plan.link.SourceName, plan.swLatest, knownLatest(db, id, plan.chapters, have)); note != "" {
+				logger.Warn("%s: %s", plan.title, note[2:])
+			}
+		}
 		missing := false
 		for _, ch := range plan.chapters {
 			if !have[ch.Value] {

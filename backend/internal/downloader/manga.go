@@ -80,6 +80,52 @@ func mergeChapters(md []mangadex.Chapter, sw []suwayomi.Chapter) []plannedChapte
 }
 
 /*
+Function:	knownLatest
+Purpose:	The newest chapter MediaHub knows the series has reached, from anywhere but Suwayomi:
+MangaDex's chapters, the series' chapter total, and chapters already in the library
+*/
+func knownLatest(db *sql.DB, mediaItemID string, chapters []plannedChapter, have map[float64]bool) float64 {
+	latest := -1.0
+	for _, ch := range chapters {
+		if !ch.FromSuwayomi && ch.Value > latest {
+			latest = ch.Value
+		}
+	}
+	for n := range have {
+		if n > latest {
+			latest = n
+		}
+	}
+	var total sql.NullInt64
+	db.QueryRow(`SELECT total_chapters FROM manga_metadata WHERE media_item_id = $1`, mediaItemID).Scan(&total)
+	if total.Valid && float64(total.Int64) > latest {
+		latest = float64(total.Int64)
+	}
+	return latest
+}
+
+/*
+Function:	staleLinkNote
+Purpose:	A warning for the Downloads page when the linked Suwayomi title is behind what the
+series is known to have reached. Sources often list a title several times and stop updating
+all but one, so a link can go stale without anything failing. "" when it isn't behind
+Params:
+  - source: the linked source's name
+  - swLatest: the linked title's newest chapter, -1 when it has none
+  - known: the newest chapter known from elsewhere, -1 when nothing is known
+*/
+func staleLinkNote(source string, swLatest float64, known float64) string {
+	if swLatest < 0 {
+		return fmt.Sprintf(", the linked %s title has no chapters, re-link it from the manga's menu", source)
+	}
+	if known > swLatest {
+		return fmt.Sprintf(", the linked %s title stops at ch. %s but the series has reached ch. %s, re-link it from the manga's menu to get newer chapters",
+			source, strconv.FormatFloat(swLatest, 'f', -1, 64), strconv.FormatFloat(known, 'f', -1, 64))
+	}
+	return ""
+}
+
+/*
 suwayomiLink: the Suwayomi source and title an admin linked a manga to
 */
 type suwayomiLink struct {
@@ -113,6 +159,8 @@ type chapterPlan struct {
 	title    string
 	chapters []plannedChapter
 	link     *suwayomiLink
+	// the newest chapter the linked Suwayomi title has, -1 when it has none
+	swLatest float64
 	mangadex *mangadex.MangaDexClient
 	suwayomi *suwayomi.Client
 	mdErr    error
@@ -150,6 +198,7 @@ func listChapters(db *sql.DB, mediaItemID string) (*chapterPlan, error) {
 		}
 	}
 	var swChapters []suwayomi.Chapter
+	plan.swLatest = -1
 	if plan.link != nil {
 		if swChapters, plan.swErr = plan.suwayomi.Chapters(plan.link.MangaID); plan.swErr != nil {
 			logger.Error("%s: %s chapters: %s", plan.title, plan.link.SourceName, plan.swErr.Error())
@@ -163,6 +212,9 @@ func listChapters(db *sql.DB, mediaItemID string) (*chapterPlan, error) {
 		return nil, fmt.Errorf("could not list chapters: %w", reason)
 	}
 
+	if len(swChapters) > 0 {
+		plan.swLatest = swChapters[len(swChapters)-1].Number
+	}
 	plan.chapters = mergeChapters(mdChapters, swChapters)
 	if len(plan.chapters) == 0 {
 		if plan.link != nil {
@@ -283,6 +335,8 @@ func RunMangaDex(db *sql.DB, jobID string, mediaItemID string, dest string) {
 	}
 	if swErr != nil {
 		note += fmt.Sprintf(", %s couldn't be reached", link.SourceName)
+	} else if link != nil {
+		note += staleLinkNote(link.SourceName, plan.swLatest, knownLatest(db, mediaItemID, chapters, have))
 	}
 	db.Exec(`UPDATE download_jobs
 		SET status = 'complete', progress_pct = 100, completed_at = NOW(), error_message = $1

@@ -275,6 +275,7 @@ func (s *Server) routes() {
 			r.Post("/admin/manga/{id}/check", mangaHandler.CheckForChapters)
 			r.Get("/admin/manga/{id}/suwayomi", mangaHandler.GetSuwayomiLink)
 			r.Get("/admin/manga/{id}/suwayomi/search", mangaHandler.SearchSuwayomi)
+			r.Get("/admin/manga/{id}/suwayomi/chapters", mangaHandler.SuwayomiChapterStats)
 			r.Put("/admin/manga/{id}/suwayomi", mangaHandler.LinkSuwayomi)
 			r.Delete("/admin/manga/{id}/suwayomi", mangaHandler.UnlinkSuwayomi)
 

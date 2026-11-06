@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
-import { Check, Link2, Unlink } from "lucide-react";
+import { Check, Link2, ListOrdered, Unlink } from "lucide-react";
 import SearchField from "../SearchField";
 import { linkSuwayomi, unlinkSuwayomi } from "../../services/mediaService";
 import { toast } from "../../stores/useToastStore";
@@ -18,10 +18,13 @@ import { errorMessage } from "../../utils/errors";
  * @param {object|null} search the last search's answer
  * @param {boolean} searching a search is running
  * @param {any} error why the search failed
+ * @param {object} looked chapters looked up after the search, by Suwayomi title id:
+ *  { loading } | { chapters } | { error }
+ * @param {function} onLookUp looks up a title's chapters, by its Suwayomi id
  * @param {function} onLinked called with the new link
  * @param {function} onUnlinked called after the link is removed
  */
-export default function LinkSourceModal({ dialogRef, manga, link, query, onQueryChange, onSearch, search, searching, error, onLinked, onUnlinked }) {
+export default function LinkSourceModal({ dialogRef, manga, link, query, onQueryChange, onSearch, search, searching, error, looked, onLookUp, onLinked, onUnlinked }) {
     const [busy, setBusy] = useState(null);
 
     function pick(result) {
@@ -45,6 +48,9 @@ export default function LinkSourceModal({ dialogRef, manga, link, query, onQuery
 
     const results = search?.results ?? [];
     const isLinked = r => link && link.manga_id === r.id;
+    // a result's chapters: checked by the search, or looked up since. undefined when neither
+    const chaptersOf = r => r.checked ? { chapters: r.chapters } : looked[r.id];
+    const linkInfo = link ? looked[link.manga_id] : undefined;
 
     return createPortal(
         <dialog className="modal modal-bottom sm:modal-middle" ref={dialogRef} onClick={e => e.stopPropagation()}>
@@ -60,7 +66,10 @@ export default function LinkSourceModal({ dialogRef, manga, link, query, onQuery
                     <Link2 size={18} className="text-primary shrink-0"/>
                     <span className="flex-1 min-w-0">
                         <span className="block truncate text-sm font-medium">{link.title}</span>
-                        <span className="block text-xs text-base-content/50">Linked · {link.source_name}</span>
+                        <span className="block text-xs text-base-content/50">
+                            Linked · {link.source_name}
+                            {linkInfo && <> · <ChapterInfo info={linkInfo}/></>}
+                        </span>
                     </span>
                     <button type="button" className="btn btn-ghost btn-sm" disabled={busy !== null} onClick={unlink}>
                         {busy === "unlink" ? <span className="loading loading-spinner loading-xs"/> : <Unlink size={16}/>} Unlink
@@ -89,20 +98,31 @@ export default function LinkSourceModal({ dialogRef, manga, link, query, onQuery
                             Nothing found for “{search.query}”. Try a shorter or alternative title.
                         </p>}
                         {results.length > 0 && <ul className="flex flex-col gap-1 overflow-y-auto -mx-2 px-2">
-                            {results.map(r => <li key={`${r.source_id}-${r.id}`}>
-                                <button type="button" disabled={busy !== null || isLinked(r)} onClick={() => pick(r)}
-                                    className="w-full flex items-center gap-3 rounded-field p-2 text-left transition-colors hover:bg-white/5 disabled:hover:bg-transparent">
-                                    <span className="flex-1 min-w-0">
-                                        <span className="block truncate text-sm font-medium">{r.title}</span>
-                                        <span className="block text-xs text-base-content/50">
-                                            {r.source_name}{r.exact && <span className="text-primary"> · exact match</span>}
+                            {results.map(r => {
+                                const info = chaptersOf(r);
+                                return <li key={`${r.source_id}-${r.id}`} className="flex items-center gap-1">
+                                    <button type="button" disabled={busy !== null || isLinked(r)} onClick={() => pick(r)}
+                                        className="flex-1 min-w-0 flex items-center gap-3 rounded-field p-2 text-left transition-colors hover:bg-white/5 disabled:hover:bg-transparent">
+                                        <span className="flex-1 min-w-0">
+                                            <span className="flex items-center gap-2 min-w-0">
+                                                <span className="truncate text-sm font-medium">{r.title}</span>
+                                                {r.most_recent && <span className="badge badge-primary badge-sm shrink-0">Most recent</span>}
+                                            </span>
+                                            <span className="block text-xs text-base-content/50">
+                                                {r.source_name}{r.exact && <span className="text-primary"> · exact match</span>}
+                                                {info && <> · <ChapterInfo info={info}/></>}
+                                            </span>
                                         </span>
-                                    </span>
-                                    {busy === r.id
-                                        ? <span className="loading loading-spinner loading-xs"/>
-                                        : isLinked(r) ? <Check size={18} className="text-primary" aria-label="Linked"/> : <Link2 size={18} className="text-base-content/50"/>}
-                                </button>
-                            </li>)}
+                                        {busy === r.id
+                                            ? <span className="loading loading-spinner loading-xs"/>
+                                            : isLinked(r) ? <Check size={18} className="text-primary" aria-label="Linked"/> : <Link2 size={18} className="text-base-content/50"/>}
+                                    </button>
+                                    {!info && <button type="button" className="btn btn-ghost btn-sm btn-square shrink-0" onClick={() => onLookUp(r.id)}
+                                        aria-label={`Show the latest chapter of ${r.title} on ${r.source_name}`} title="Show latest chapter">
+                                        <ListOrdered size={16}/>
+                                    </button>}
+                                </li>
+                            })}
                         </ul>}
                     </>
                 )}
@@ -115,4 +135,16 @@ export default function LinkSourceModal({ dialogRef, manga, link, query, onQuery
         </dialog>,
         document.body
     );
+}
+
+/**
+ * How far a source's copy of a title goes, as "Latest ch. 213 · 213 chapters"
+ * @param {object} info { loading } | { chapters: { latest, count } | null } | { error }
+ */
+function ChapterInfo({ info }) {
+    if (info.loading) return <span className="loading loading-dots loading-xs align-middle" aria-label="Looking up chapters"/>;
+    if (info.error) return <span className="text-warning">chapters didn't load</span>;
+    if (!info.chapters) return <span className="text-warning">no numbered chapters</span>;
+    const { latest, count } = info.chapters;
+    return <span>Latest ch. {latest} · {count} {count === 1 ? "chapter" : "chapters"}</span>;
 }

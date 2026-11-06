@@ -1,6 +1,6 @@
 import { useRef, useState } from "react"
 import LinkSourceModal from "../components/modals/LinkSourceModal"
-import { searchSuwayomi } from "../services/mediaService"
+import { searchSuwayomi, suwayomiChapterStats } from "../services/mediaService"
 
 /**
  * Admin: the picker for the Suwayomi source title a manga's missing chapters come from.
@@ -17,8 +17,17 @@ export default function useLinkSource({ manga, link, onLinked, onUnlinked }) {
     const [search, setSearch] = useState(null)
     const [searching, setSearching] = useState(false)
     const [error, setError] = useState(null)
+    // chapters looked up after the search, by Suwayomi title id: { loading } | { chapters } | { error }
+    const [looked, setLooked] = useState({})
     // a slow answer for an earlier search is ignored
     const latestRef = useRef(0)
+
+    function lookUp(suwayomiId) {
+        setLooked(prev => ({ ...prev, [suwayomiId]: { loading: true } }))
+        suwayomiChapterStats(manga.id, suwayomiId)
+            .then(res => setLooked(prev => ({ ...prev, [suwayomiId]: { chapters: res.data.chapters } })))
+            .catch(err => setLooked(prev => ({ ...prev, [suwayomiId]: { error: err } })))
+    }
 
     function run(q) {
         const attempt = latestRef.current + 1
@@ -34,7 +43,10 @@ export default function useLinkSource({ manga, link, onLinked, onUnlinked }) {
     function open() {
         setQuery(manga.title)
         setSearch(null)
+        setLooked({})
         run(manga.title)
+        // how far the linked title goes, to see whether it has gone stale
+        if (link) lookUp(link.manga_id)
         dialogRef.current?.showModal()
     }
 
@@ -48,6 +60,8 @@ export default function useLinkSource({ manga, link, onLinked, onUnlinked }) {
         search={search}
         searching={searching}
         error={error}
+        looked={looked}
+        onLookUp={lookUp}
         onLinked={onLinked}
         onUnlinked={onUnlinked}
     />

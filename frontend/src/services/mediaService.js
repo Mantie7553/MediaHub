@@ -75,10 +75,23 @@ export function getSuwayomiLink(mangaId) {
  * Admin only: search the installed Suwayomi sources for a title to link a manga to
  * @param {string} mangaId the manga's media item id
  * @param {string} query the search text, the manga's title when empty
- * @returns {Promise} data is { query, sources, results: [{ id, title, source_name, exact }], failed: [{ source, error }] }
+ * @returns {Promise} data is { query, sources, failed: [{ source, error }], results: [{ id, title,
+ *  source_name, exact, most_recent, checked, chapters: { latest, count } | null }] }. The exact
+ *  matches (or the first few results) come checked, newest first
  */
 export function searchSuwayomi(mangaId, query) {
     return api.get(`/admin/manga/${mangaId}/suwayomi/search`, { params: query ? { q: query } : {} })
+}
+
+/**
+ * Admin only: how far one Suwayomi title goes, for search results not looked up with the
+ * search and for the linked title
+ * @param {string} mangaId the manga's media item id
+ * @param {number} suwayomiMangaId the Suwayomi title's id
+ * @returns {Promise} data is { chapters: { latest, count } | null }
+ */
+export function suwayomiChapterStats(mangaId, suwayomiMangaId) {
+    return api.get(`/admin/manga/${mangaId}/suwayomi/chapters`, { params: { manga_id: suwayomiMangaId } })
 }
 
 /**

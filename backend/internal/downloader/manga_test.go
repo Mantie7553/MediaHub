@@ -158,3 +158,21 @@ func TestMergeChaptersFillsOnlyWhatMangaDexLacks(t *testing.T) {
 		t.Errorf("Suwayomi alone = %+v", got)
 	}
 }
+
+func TestStaleLinkNote(t *testing.T) {
+	if got := staleLinkNote("MangaFire", 213, 213); got != "" {
+		t.Errorf("up to date = %q, want no note", got)
+	}
+	if got := staleLinkNote("MangaFire", 213, -1); got != "" {
+		t.Errorf("nothing known elsewhere = %q, want no note", got)
+	}
+	if got := staleLinkNote("MangaFire", 97, 213); !strings.Contains(got, "stops at ch. 97") || !strings.Contains(got, "ch. 213") {
+		t.Errorf("behind = %q", got)
+	}
+	if got := staleLinkNote("MangaFire", 52.5, 60); !strings.Contains(got, "ch. 52.5") {
+		t.Errorf("decimal chapter = %q", got)
+	}
+	if got := staleLinkNote("MangaFire", -1, 10); !strings.Contains(got, "has no chapters") {
+		t.Errorf("empty title = %q", got)
+	}
+}
