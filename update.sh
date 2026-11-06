@@ -7,6 +7,7 @@ DOCKER="docker"
 docker info >/dev/null 2>&1 || DOCKER="sudo docker"
 
 git pull --ff-only
+deploy/add-missing-secrets.sh
 case "$(grep -E '^COMPOSE_FILE=' .env | cut -d= -f2-)" in
   *docker-compose.smb.yml*) ;;  # Docker mounts the share itself
   *) deploy/check-media-mount.sh "$(grep -E '^MEDIA_HOST_PATH=' .env | cut -d= -f2-)" || exit 1 ;;
