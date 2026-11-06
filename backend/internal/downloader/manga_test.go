@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Mantie7553/MediaHub/backend/internal/clients/mangadex"
 	"github.com/Mantie7553/MediaHub/backend/internal/mangafiles"
 )
 
@@ -33,6 +32,14 @@ func (f *fakePages) Image(url string) ([]byte, error) {
 	return img, nil
 }
 
+// the first bytes of real image files, enough for the type sniffing
+var (
+	pngBytes  = []byte("\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR")
+	jpegBytes = []byte("\xff\xd8\xff\xe0\x00\x10JFIF\x00")
+	webpBytes = []byte("RIFF\x00\x00\x00\x00WEBPVP8 ")
+	avifBytes = []byte("\x00\x00\x00\x1cftypavif\x00\x00\x00\x00")
+)
+
 func noRetryWaits(t *testing.T) {
 	saved := imageRetryDelays
 	imageRetryDelays = []time.Duration{0, 0}
@@ -42,13 +49,14 @@ func noRetryWaits(t *testing.T) {
 func TestDownloadChapterWritesPagesInOrder(t *testing.T) {
 	noRetryWaits(t)
 	src := &fakePages{
+		// the third URL has no extension and the second lies about it: names come from the bytes
 		urls:     []string{"https://x/h/1-a.png", "https://x/h/2-b.jpg", "https://x/h/3-c"},
-		images:   map[string][]byte{"https://x/h/1-a.png": []byte("one"), "https://x/h/2-b.jpg": []byte("two"), "https://x/h/3-c": []byte("three")},
+		images:   map[string][]byte{"https://x/h/1-a.png": pngBytes, "https://x/h/2-b.jpg": webpBytes, "https://x/h/3-c": jpegBytes},
 		failures: map[string]int{"https://x/h/2-b.jpg": 1}, // works on the retry
 	}
 	path := filepath.Join(t.TempDir(), "[0001] Chapter 1.cbz")
 
-	pages, err := downloadChapter(src, mangadex.Chapter{ID: "c1", Number: "1"}, path)
+	pages, err := downloadChapter(src, "c1", path)
 	if err != nil {
 		t.Fatalf("downloadChapter: %v", err)
 	}
@@ -65,8 +73,8 @@ func TestDownloadChapterWritesPagesInOrder(t *testing.T) {
 	for _, f := range r.File {
 		names = append(names, f.Name)
 	}
-	if got := strings.Join(names, ","); got != "001.png,002.jpg,003.jpg" {
-		t.Errorf("entries = %s, want 001.png,002.jpg,003.jpg", got)
+	if got := strings.Join(names, ","); got != "001.png,002.webp,003.jpg" {
+		t.Errorf("entries = %s, want 001.png,002.webp,003.jpg", got)
 	}
 	if n := mangafiles.PageCount(path); n != 3 {
 		t.Errorf("PageCount = %d, want 3", n)
@@ -80,12 +88,12 @@ func TestFailedChapterLeavesNothingBehind(t *testing.T) {
 	noRetryWaits(t)
 	src := &fakePages{
 		urls:   []string{"https://x/h/1.png", "https://x/h/2.png"},
-		images: map[string][]byte{"https://x/h/1.png": []byte("one")}, // page 2 never loads
+		images: map[string][]byte{"https://x/h/1.png": pngBytes}, // page 2 never loads
 	}
 	dir := t.TempDir()
 	path := filepath.Join(dir, "[0002] Chapter 2.cbz")
 
-	if _, err := downloadChapter(src, mangadex.Chapter{ID: "c2", Number: "2"}, path); err == nil {
+	if _, err := downloadChapter(src, "c2", path); err == nil {
 		t.Fatal("a chapter with a missing page should fail")
 	}
 	entries, _ := os.ReadDir(dir)
@@ -94,5 +102,31 @@ func TestFailedChapterLeavesNothingBehind(t *testing.T) {
 	}
 	if mangafiles.ExistingChapter(dir, "2") != "" {
 		t.Error("a failed chapter must not look downloaded, or a retry would skip it")
+	}
+}
+
+func TestNonImagePageFailsTheChapter(t *testing.T) {
+	noRetryWaits(t)
+	src := &fakePages{
+		urls:   []string{"https://x/h/1.png", "https://x/h/2.png"},
+		images: map[string][]byte{"https://x/h/1.png": pngBytes, "https://x/h/2.png": []byte("<html>blocked</html>")},
+	}
+	dir := t.TempDir()
+	path := filepath.Join(dir, "[0003] Chapter 3.cbz")
+
+	if _, err := downloadChapter(src, "c3", path); err == nil || !strings.Contains(err.Error(), "not an image") {
+		t.Fatalf("err = %v, want a not-an-image failure", err)
+	}
+	if entries, _ := os.ReadDir(dir); len(entries) != 0 {
+		t.Errorf("files left behind: %v", entries)
+	}
+}
+
+func TestPageExt(t *testing.T) {
+	cases := map[string][]byte{".png": pngBytes, ".jpg": jpegBytes, ".webp": webpBytes, ".avif": avifBytes, "": []byte("hello")}
+	for want, img := range cases {
+		if got := pageExt(img); got != want {
+			t.Errorf("pageExt(%q) = %q, want %q", img, got, want)
+		}
 	}
 }

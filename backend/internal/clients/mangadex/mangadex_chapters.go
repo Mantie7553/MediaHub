@@ -17,6 +17,9 @@ const userAgent = "MediaHub (self-hosted media server)"
 // the feed endpoint's largest page
 const feedPageSize = 500
 
+// MaxPageBytes caps one page image; real pages are a few MB, anything bigger is refused
+const MaxPageBytes = 20 << 20
+
 /*
 Chapter: one chapter MangaDex hosts the pages for
   - Number: as MangaDex writes it ("12", "52.5"), empty for a oneshot
@@ -177,7 +180,14 @@ func (c *MangaDexClient) Image(imageURL string) ([]byte, error) {
 	if resp.StatusCode >= 400 {
 		return nil, fmt.Errorf("image server returned %d", resp.StatusCode)
 	}
-	return io.ReadAll(resp.Body)
+	img, err := io.ReadAll(io.LimitReader(resp.Body, MaxPageBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(img) > MaxPageBytes {
+		return nil, fmt.Errorf("page image is over %d MB", MaxPageBytes>>20)
+	}
+	return img, nil
 }
 
 /*

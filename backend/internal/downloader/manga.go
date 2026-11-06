@@ -2,11 +2,12 @@ package downloader
 
 import (
 	"archive/zip"
+	"bytes"
 	"database/sql"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/Mantie7553/MediaHub/backend/internal/clients/mangadex"
@@ -103,7 +104,7 @@ func RunMangaDex(db *sql.DB, jobID string, mediaItemID string, dest string) {
 			pages = mangafiles.PageCount(path)
 		} else {
 			path = filepath.Join(dir, mangafiles.FileName(ch.Number, ch.Title))
-			pages, chErr = downloadChapter(client, ch, path)
+			pages, chErr = downloadChapter(client, ch.ID, path)
 			if i < len(chapters)-1 {
 				time.Sleep(chapterDelay)
 			}
@@ -197,8 +198,8 @@ Purpose:	Fetch a chapter's pages and write them to a CBZ at path. It is written 
 temporary file first, so an interrupted download never leaves a broken chapter behind
 Returns:	the number of pages written
 */
-func downloadChapter(src pageSource, ch mangadex.Chapter, path string) (int, error) {
-	urls, err := src.PageURLs(ch.ID)
+func downloadChapter(src pageSource, chapterID string, path string) (int, error) {
+	urls, err := src.PageURLs(chapterID)
 	if err != nil {
 		return 0, err
 	}
@@ -226,8 +227,14 @@ func downloadChapter(src pageSource, ch mangadex.Chapter, path string) (int, err
 		if err != nil {
 			return 0, fmt.Errorf("page %d: %w", i+1, err)
 		}
+		// named from the bytes, not the URL: sources aren't trusted to send images, and
+		// some (Suwayomi) serve pages from URLs with no extension
+		ext := pageExt(img)
+		if ext == "" {
+			return 0, fmt.Errorf("page %d is not an image", i+1)
+		}
 		// zero padded so the pages sort in order
-		w, err := zw.CreateHeader(&zip.FileHeader{Name: fmt.Sprintf("%03d%s", i+1, pageExt(u)), Method: zip.Store})
+		w, err := zw.CreateHeader(&zip.FileHeader{Name: fmt.Sprintf("%03d%s", i+1, ext), Method: zip.Store})
 		if err != nil {
 			return 0, err
 		}
@@ -261,11 +268,23 @@ func fetchWithRetry(src pageSource, url string) ([]byte, error) {
 	return img, err
 }
 
-// pageExt is the image's extension from its URL, .jpg when it has none the reader knows
-func pageExt(url string) string {
-	ext := strings.ToLower(filepath.Ext(url))
-	if mangafiles.ImageType(ext) != "" {
-		return ext
+// pageExt is the extension for a page image, judged from its bytes. "" when it isn't an
+// image format the reader serves
+func pageExt(img []byte) string {
+	switch http.DetectContentType(img) {
+	case "image/jpeg":
+		return ".jpg"
+	case "image/png":
+		return ".png"
+	case "image/webp":
+		return ".webp"
+	case "image/gif":
+		return ".gif"
 	}
-	return ".jpg"
+	// Go's sniffer doesn't know AVIF: an ISO-BMFF "ftyp" box with an avif brand
+	if len(img) >= 12 && bytes.Equal(img[4:8], []byte("ftyp")) &&
+		(bytes.Equal(img[8:12], []byte("avif")) || bytes.Equal(img[8:12], []byte("avis"))) {
+		return ".avif"
+	}
+	return ""
 }
