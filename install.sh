@@ -113,10 +113,12 @@ if [ ! -f .env ]; then
     -e "s|^SONARR_API_KEY=.*|SONARR_API_KEY=$(secret 16)|" \
     -e "s|^RADARR_API_KEY=.*|RADARR_API_KEY=$(secret 16)|" \
     -e "s|^PROWLARR_API_KEY=.*|PROWLARR_API_KEY=$(secret 16)|" \
+    -e "s|^SUWAYOMI_PASSWORD=.*|SUWAYOMI_PASSWORD=$(secret 12)|" \
     .env.example > .env
   chmod 600 .env
 else
   say "Using existing .env"
+  deploy/add-missing-secrets.sh
 fi
 
 # ---- start ----

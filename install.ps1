@@ -79,6 +79,7 @@ if (-not (Test-Path .env)) {
         DB_PASSWORD = New-Secret; JWT_SECRET = New-Secret; MEDIA_SIGNING_SECRET = New-Secret
         WEBHOOK_SECRET = New-Secret; ADMIN_PASSWORD = New-Secret 12; ARR_PASSWORD = New-Secret 12
         SONARR_API_KEY = New-Secret 16; RADARR_API_KEY = New-Secret 16; PROWLARR_API_KEY = New-Secret 16
+        SUWAYOMI_PASSWORD = New-Secret 12
     }
 
     $media = Ask 'Media folder on this PC (holds TV Shows, Movies, Music...), or a share like \\nas\media' 'D:\Media'
@@ -116,6 +117,7 @@ if (-not (Test-Path .env)) {
     [IO.File]::WriteAllText((Join-Path $PWD '.env'), (($lines -join "`n") + "`n"), (New-Object Text.UTF8Encoding $false))
 } else {
     Say 'Using existing .env'
+    & (Join-Path $PSScriptRoot 'deploy\add-missing-secrets.ps1')
 }
 
 # ---- start ----

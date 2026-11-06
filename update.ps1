@@ -5,6 +5,7 @@ Set-Location $PSScriptRoot
 
 & git pull --ff-only
 if ($LASTEXITCODE -ne 0) { exit 1 }
+& (Join-Path $PSScriptRoot 'deploy\add-missing-secrets.ps1')
 & docker compose pull --ignore-pull-failures
 & docker compose up -d --remove-orphans
 if ($LASTEXITCODE -ne 0) { exit 1 }
