@@ -4,13 +4,17 @@ import (
 	"archive/zip"
 	"bytes"
 	"database/sql"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
+	"strconv"
 	"time"
 
 	"github.com/Mantie7553/MediaHub/backend/internal/clients/mangadex"
+	"github.com/Mantie7553/MediaHub/backend/internal/clients/suwayomi"
 	"github.com/Mantie7553/MediaHub/backend/internal/mangafiles"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/logger"
 )
@@ -18,14 +22,16 @@ import (
 // the language chapters are downloaded in
 const mangaLanguage = "en"
 
-// pause between chapters, MangaDex@Home allows about 40 chapter lookups a minute
+// pause between chapters, MangaDex@Home allows about 40 chapter lookups a minute; it also
+// keeps Suwayomi from hammering a source site
 var chapterDelay = 1500 * time.Millisecond
 
 // waits before retrying a failed page download
 var imageRetryDelays = []time.Duration{2 * time.Second, 5 * time.Second}
 
 /*
-pageSource: where a chapter's page images come from, the MangaDex client or a fake in tests
+pageSource: where a chapter's page images come from, the MangaDex or Suwayomi client, or a
+fake in tests
 */
 type pageSource interface {
 	PageURLs(chapterID string) ([]string, error)
@@ -33,10 +39,147 @@ type pageSource interface {
 }
 
 /*
+plannedChapter: one chapter a manga's sources have, and where to get it from
+  - Number: as written in file names ("12", "52.5"), empty for a oneshot
+  - FromSuwayomi: true when MangaDex doesn't host it
+*/
+type plannedChapter struct {
+	ID           string
+	Number       string
+	Value        float64
+	Title        string
+	FromSuwayomi bool
+}
+
+/*
+Function:	mergeChapters
+Purpose:	Every chapter number the sources have, in reading order. MangaDex's copy is used
+when it hosts one, Suwayomi only fills the numbers MangaDex doesn't have
+*/
+func mergeChapters(md []mangadex.Chapter, sw []suwayomi.Chapter) []plannedChapter {
+	planned := make([]plannedChapter, 0, len(md)+len(sw))
+	onMangaDex := map[float64]bool{}
+	for _, ch := range md {
+		onMangaDex[ch.NumberValue()] = true
+		planned = append(planned, plannedChapter{ID: ch.ID, Number: ch.Number, Value: ch.NumberValue(), Title: ch.Title})
+	}
+	for _, ch := range sw {
+		if onMangaDex[ch.Number] {
+			continue
+		}
+		planned = append(planned, plannedChapter{
+			ID:           strconv.Itoa(ch.ID),
+			Number:       strconv.FormatFloat(ch.Number, 'f', -1, 64),
+			Value:        ch.Number,
+			Title:        ch.Title,
+			FromSuwayomi: true,
+		})
+	}
+	sort.SliceStable(planned, func(i, j int) bool { return planned[i].Value < planned[j].Value })
+	return planned
+}
+
+/*
+suwayomiLink: the Suwayomi source and title an admin linked a manga to
+*/
+type suwayomiLink struct {
+	SourceName string
+	MangaID    int
+}
+
+/*
+Function:	SuwayomiLink
+Purpose:	The Suwayomi title a manga is linked to, nil when it has none
+*/
+func SuwayomiLink(db *sql.DB, mediaItemID string) (*suwayomiLink, error) {
+	var link suwayomiLink
+	err := db.QueryRow(
+		`SELECT source_name, suwayomi_manga_id FROM suwayomi_items WHERE media_item_id = $1`, mediaItemID,
+	).Scan(&link.SourceName, &link.MangaID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &link, nil
+}
+
+/*
+chapterPlan: what a manga's sources have, from listChapters
+  - mdErr, swErr: a source that failed while the other answered
+*/
+type chapterPlan struct {
+	title    string
+	chapters []plannedChapter
+	link     *suwayomiLink
+	mangadex *mangadex.MangaDexClient
+	suwayomi *suwayomi.Client
+	mdErr    error
+	swErr    error
+}
+
+/*
+Function:	listChapters
+Purpose:	Every chapter a manga's sources have: MangaDex, and its linked Suwayomi source for the
+numbers MangaDex doesn't host. One source being down doesn't stop the other. The error is
+written for the Downloads page
+*/
+func listChapters(db *sql.DB, mediaItemID string) (*chapterPlan, error) {
+	plan := &chapterPlan{
+		mangadex: mangadex.NewMangaDexClient("MANGADEX_URL"),
+		suwayomi: suwayomi.NewClient(),
+	}
+	var mangadexID sql.NullString
+	err := db.QueryRow(`SELECT title, external_id FROM media_items WHERE id = $1`, mediaItemID).Scan(&plan.title, &mangadexID)
+	if err != nil {
+		return nil, err
+	}
+	if plan.link, err = SuwayomiLink(db, mediaItemID); err != nil {
+		return nil, err
+	}
+	hasMangaDex := mangadexID.Valid && mangadexID.String != ""
+	if !hasMangaDex && plan.link == nil {
+		return nil, errors.New("this manga isn't linked to MangaDex or a Suwayomi source")
+	}
+
+	var mdChapters []mangadex.Chapter
+	if hasMangaDex {
+		if mdChapters, plan.mdErr = plan.mangadex.Chapters(mangadexID.String, mangaLanguage); plan.mdErr != nil {
+			logger.Error("%s: MangaDex chapters: %s", plan.title, plan.mdErr.Error())
+		}
+	}
+	var swChapters []suwayomi.Chapter
+	if plan.link != nil {
+		if swChapters, plan.swErr = plan.suwayomi.Chapters(plan.link.MangaID); plan.swErr != nil {
+			logger.Error("%s: %s chapters: %s", plan.title, plan.link.SourceName, plan.swErr.Error())
+		}
+	}
+	if (plan.mdErr != nil || !hasMangaDex) && (plan.swErr != nil || plan.link == nil) {
+		reason := plan.mdErr
+		if reason == nil {
+			reason = plan.swErr
+		}
+		return nil, fmt.Errorf("could not list chapters: %w", reason)
+	}
+
+	plan.chapters = mergeChapters(mdChapters, swChapters)
+	if len(plan.chapters) == 0 {
+		if plan.link != nil {
+			return nil, fmt.Errorf("neither MangaDex nor %s has chapters of this manga", plan.link.SourceName)
+		}
+		return nil, errors.New("MangaDex hosts no English chapters of this manga (licensed series often only link to the publisher). Link a Suwayomi source from the manga's menu to get them elsewhere")
+	}
+	return plan, nil
+}
+
+/*
 Function:	RunMangaDex
-Purpose:	Download every chapter MangaDex hosts for a manga that the library doesn't have
-yet, as CBZ files in the manga's folder, record them in manga_chapters and report progress
-on the job. Running it again only fetches what is missing, so it also picks up new chapters
+Purpose:	Download every chapter of a manga that the library doesn't have yet, as CBZ files in
+the manga's folder, record them in manga_chapters and report progress on the job. Chapters
+come from MangaDex, and from the manga's linked Suwayomi source for the numbers MangaDex doesn't
+host (licensed series). Running it again only fetches what is missing, so it also picks up new
+chapters
 
 Params:
   - db: a pointer to our database
@@ -45,34 +188,19 @@ Params:
   - dest: the Manga folder
 */
 func RunMangaDex(db *sql.DB, jobID string, mediaItemID string, dest string) {
-	logger.Info("MangaDex running job %s", jobID)
+	logger.Info("Manga download running job %s", jobID)
 	if _, err := db.Exec(`UPDATE download_jobs SET status = 'downloading', started_at = NOW() WHERE id = $1`, jobID); err != nil {
 		markFailed(db, jobID, err.Error())
 		return
 	}
 
-	var title string
-	var mangadexID sql.NullString
-	err := db.QueryRow(`SELECT title, external_id FROM media_items WHERE id = $1`, mediaItemID).Scan(&title, &mangadexID)
+	plan, err := listChapters(db, mediaItemID)
 	if err != nil {
 		markFailed(db, jobID, err.Error())
 		return
 	}
-	if !mangadexID.Valid || mangadexID.String == "" {
-		markFailed(db, jobID, "this manga has no MangaDex id to download from")
-		return
-	}
-
-	client := mangadex.NewMangaDexClient("MANGADEX_URL")
-	chapters, err := client.Chapters(mangadexID.String, mangaLanguage)
-	if err != nil {
-		markFailed(db, jobID, "could not list chapters: "+err.Error())
-		return
-	}
-	if len(chapters) == 0 {
-		markFailed(db, jobID, "MangaDex hosts no English chapters of this manga (licensed series often only link to the publisher)")
-		return
-	}
+	title, chapters, link := plan.title, plan.chapters, plan.link
+	mdClient, swClient, mdErr, swErr := plan.mangadex, plan.suwayomi, plan.mdErr, plan.swErr
 
 	have, err := ChapterNumbers(db, mediaItemID)
 	if err != nil {
@@ -85,18 +213,22 @@ func RunMangaDex(db *sql.DB, jobID string, mediaItemID string, dest string) {
 		return
 	}
 
-	added, failed, skipped := 0, 0, 0
+	added, fromSuwayomi, failed, skipped := 0, 0, 0, 0
 	for i, ch := range chapters {
 		progress := func() {
 			db.Exec(`UPDATE download_jobs SET progress_pct = $1 WHERE id = $2`, (i+1)*100/len(chapters), jobID)
 		}
 		// already in the library, whatever its file is called (uploads, imports)
-		if have[ch.NumberValue()] {
+		if have[ch.Value] {
 			skipped++
 			progress()
 			continue
 		}
 
+		var src pageSource = mdClient
+		if ch.FromSuwayomi {
+			src = swClient
+		}
 		path := mangafiles.ExistingChapter(dir, ch.Number)
 		pages := 0
 		var chErr error
@@ -104,7 +236,7 @@ func RunMangaDex(db *sql.DB, jobID string, mediaItemID string, dest string) {
 			pages = mangafiles.PageCount(path)
 		} else {
 			path = filepath.Join(dir, mangafiles.FileName(ch.Number, ch.Title))
-			pages, chErr = downloadChapter(client, ch.ID, path)
+			pages, chErr = downloadChapter(src, ch.ID, path)
 			if i < len(chapters)-1 {
 				time.Sleep(chapterDelay)
 			}
@@ -117,12 +249,15 @@ func RunMangaDex(db *sql.DB, jobID string, mediaItemID string, dest string) {
 			`INSERT INTO manga_chapters (media_item_id, chapter_number, title, file_path, page_count, created_at)
 			VALUES ($1, $2, NULLIF($3, ''), $4, $5, NOW())
 			ON CONFLICT (media_item_id, chapter_number) DO NOTHING`,
-			mediaItemID, ch.NumberValue(), ch.Title, path, pages,
+			mediaItemID, ch.Value, ch.Title, path, pages,
 		); dbErr != nil {
 			failed++
 			logger.Error("job %s: saving chapter %s failed: %s", jobID, ch.Number, dbErr.Error())
 		} else {
 			added++
+			if ch.FromSuwayomi {
+				fromSuwayomi++
+			}
 		}
 		progress()
 	}
@@ -134,16 +269,25 @@ func RunMangaDex(db *sql.DB, jobID string, mediaItemID string, dest string) {
 
 	// what happened, shown on the Downloads page
 	note := fmt.Sprintf("%d new chapters", added)
+	if fromSuwayomi > 0 {
+		note += fmt.Sprintf(" (%d from %s)", fromSuwayomi, link.SourceName)
+	}
 	if skipped > 0 {
 		note += fmt.Sprintf(", %d already in the library", skipped)
 	}
 	if failed > 0 {
 		note += fmt.Sprintf(", %d failed (check again to retry them)", failed)
 	}
+	if mdErr != nil {
+		note += ", MangaDex couldn't be reached"
+	}
+	if swErr != nil {
+		note += fmt.Sprintf(", %s couldn't be reached", link.SourceName)
+	}
 	db.Exec(`UPDATE download_jobs
 		SET status = 'complete', progress_pct = 100, completed_at = NOW(), error_message = $1
 		WHERE id = $2`, note, jobID)
-	logger.Info("MangaDex completed job %s: %s", jobID, note)
+	logger.Info("Manga download completed job %s: %s", jobID, note)
 }
 
 /*

@@ -8,6 +8,7 @@ import (
 	gosync "sync"
 	"time"
 
+	"github.com/Mantie7553/MediaHub/backend/internal/downloader"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/logger"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/utils"
 )
@@ -123,6 +124,12 @@ func (h *Handler) runFullSync(trigger string) {
 		h.runner.mu.Lock()
 		h.runner.status.Results = append(h.runner.status.Results, result)
 		h.runner.mu.Unlock()
+	}
+
+	// the nightly run also downloads new manga chapters, once the library is up to date. It runs
+	// on its own, so the sync shows as finished while chapters download
+	if trigger == "schedule" {
+		go downloader.CheckLibraryForNewChapters(h.db)
 	}
 }
 

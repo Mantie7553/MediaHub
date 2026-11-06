@@ -199,8 +199,8 @@ func saveChapter(src io.Reader, path string) (int, int, error) {
 
 /*
 Function:	CheckForChapters
-Purpose:	Admin: start a download job that fetches the chapters MangaDex has for a manga
-that the library doesn't, for picking up new releases or filling gaps. Progress shows on
+Purpose:	Admin: start a download job that fetches the chapters MangaDex, and the manga's linked
+Suwayomi source, have that the library doesn't, for picking up new releases or filling gaps. Progress shows on
 the Downloads page like any other job
 
 Params:
@@ -230,46 +230,25 @@ func (h *Handler) CheckForChapters(w http.ResponseWriter, r *http.Request) {
 		utils.Error(w, http.StatusBadRequest, "only manga can be checked for new chapters")
 		return
 	}
-	if externalSource.String != "mangadex" || externalID.String == "" {
-		utils.Error(w, http.StatusBadRequest, "this manga isn't linked to MangaDex")
-		return
-	}
-
-	var running bool
-	err = h.db.QueryRow(
-		`SELECT EXISTS (SELECT 1 FROM download_jobs WHERE media_item_id = $1 AND status IN ('queued', 'downloading'))`, id,
-	).Scan(&running)
+	link, err := downloader.SuwayomiLink(h.db, id)
 	if utils.InternalError(w, err) {
 		return
 	}
-	if running {
-		utils.Error(w, http.StatusConflict, "this manga is already downloading")
+	if (externalSource.String != "mangadex" || externalID.String == "") && link == nil {
+		utils.Error(w, http.StatusBadRequest, "this manga isn't linked to MangaDex or a Suwayomi source")
 		return
 	}
 
-	// a job belongs to a request: reuse the manga's latest one, or record one for this check
-	var requestID string
-	err = h.db.QueryRow(
-		`SELECT id FROM download_requests WHERE media_item_id = $1 ORDER BY requested_at DESC LIMIT 1`, id,
-	).Scan(&requestID)
-	if errors.Is(err, sql.ErrNoRows) {
-		err = h.db.QueryRow(
-			`INSERT INTO download_requests (requested_by, media_item_id, source_url, status, auto_approved, resolved_at)
-			VALUES ($1, $2, '', 'approved', TRUE, NOW())
-			RETURNING id`,
-			user.UserID, id,
-		).Scan(&requestID)
-	}
-	if utils.InternalError(w, err) {
+	jobID, err := downloader.NewChapterCheck(h.db, id, &user.UserID)
+	if errors.Is(err, downloader.ErrCheckRunning) {
+		utils.Error(w, http.StatusConflict, err.Error())
 		return
 	}
-
-	ext := externalID.String
-	jobID, err := downloader.Dispatch(h.db, requestID, id, "", "manga", &ext)
 	if err != nil {
 		logger.Error("checking %s for new chapters: %s", id, err.Error())
 		utils.Error(w, http.StatusInternalServerError, "could not start the check")
 		return
 	}
+	go downloader.RunMangaDex(h.db, jobID, id, downloader.MangaDest())
 	utils.JSON(w, map[string]string{"id": jobID}, http.StatusCreated)
 }

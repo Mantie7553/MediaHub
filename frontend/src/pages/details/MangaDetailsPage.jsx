@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { mangaBadge } from "../../utils/status";
 import ErrorState from "../../components/states/ErrorState";
@@ -10,7 +10,7 @@ import { openViewer } from "../../utils/navigation";
 import { useMediaItem, useUserContent, useRemoveFromList } from "../../hooks";
 import DeleteFromServerButton from "../../components/DeleteFromServerButton";
 import api from "../../services/api";
-import { BookOpen, CheckCheck, PencilLine, RefreshCw, Undo2, Upload, ListPlus } from "lucide-react";
+import { BookOpen, CheckCheck, Link2, PencilLine, RefreshCw, Undo2, Upload, ListPlus } from "lucide-react";
 import DetailsHero from "../../components/details/DetailsHero";
 import StatusPill from "../../components/StatusPill";
 import { ActionMenu, ActionMenuItem, ListStatusMenu } from "../../components/details/Menus";
@@ -19,7 +19,8 @@ import UploadChaptersModal from "../../components/modals/UploadChaptersModal";
 import EditDetailsModal from "../../components/modals/EditDetailsModal";
 import useAdminPieces from "../../hooks/useAdminPieces";
 import useCollectionPicker from "../../hooks/useCollectionPicker";
-import { checkForChapters, saveListEntry } from "../../services/mediaService";
+import useLinkSource from "../../hooks/useLinkSource";
+import { checkForChapters, getSuwayomiLink, saveListEntry } from "../../services/mediaService";
 import { userIsAdmin } from "../../utils/auth";
 
 export default function MangaDetailsPage() {
@@ -38,6 +39,23 @@ export default function MangaDetailsPage() {
     const isAdmin = userIsAdmin();
     const pieces = useAdminPieces(() => refetch(false));
     const picker = useCollectionPicker();
+    // admins: whether Suwayomi is set up, and the source title missing chapters come from
+    const [suwayomi, setSuwayomi] = useState({ configured: false, link: null });
+    useEffect(() => {
+        if (!isAdmin) return;
+        getSuwayomiLink(id).then(res => setSuwayomi(res.data)).catch(() => {});
+    }, [id, isAdmin]);
+    const linkSource = useLinkSource({
+        manga: { id, title: manga?.title ?? "" },
+        link: suwayomi.link,
+        onLinked: link => {
+            setSuwayomi(prev => ({ ...prev, link }));
+            checkForChapters(id)
+                .then(() => toast.success(`Linked to ${link.source_name}. Downloading the chapters you don't have, follow it on the Downloads page`))
+                .catch(err => toast.error(err, `Linked to ${link.source_name}, but the download didn't start`));
+        },
+        onUnlinked: () => setSuwayomi(prev => ({ ...prev, link: null })),
+    });
 
 
     // read state and pages start from each copy of the title that loads
@@ -93,9 +111,12 @@ export default function MangaDetailsPage() {
 
     function handleCheck() {
         checkForChapters(id)
-            .then(() => toast.success("Checking MangaDex for chapters you don't have yet. Follow it on the Downloads page"))
+            .then(() => toast.success(`Checking ${checkSources} for chapters you don't have yet. Follow it on the Downloads page`))
             .catch(err => toast.error(err, "Could not start the check"));
     }
+
+    const fromMangaDex = manga?.external_source === "mangadex";
+    const checkSources = [fromMangaDex && "MangaDex", suwayomi.link?.source_name].filter(Boolean).join(" and ");
 
     if (loading) return <DetailsSkeleton />
     if (notFound) return <NotFound title="Manga not found" hint="This manga isn't in the library any more. It may have been removed." />
@@ -142,7 +163,8 @@ export default function MangaDetailsPage() {
                         <ActionMenuItem icon={Undo2} label="Mark all unread" onClick={() => markAll(false)}/>
                         {isAdmin && <>
                             <ActionMenuItem icon={PencilLine} label="Edit details…" onClick={() => editRef.current.showModal()}/>
-                            {manga.external_source === "mangadex" && <ActionMenuItem icon={RefreshCw} label="Check MangaDex for new chapters" onClick={handleCheck}/>}
+                            {checkSources && <ActionMenuItem icon={RefreshCw} label={`Check ${checkSources} for new chapters`} onClick={handleCheck}/>}
+                            {suwayomi.configured && <ActionMenuItem icon={Link2} label={suwayomi.link ? "Change chapter source…" : "Link a chapter source…"} onClick={linkSource.open}/>}
                             <ActionMenuItem icon={Upload} label="Add chapter files…" onClick={() => uploadRef.current.showModal()}/>
                         </>}
                         <DeleteFromServerButton asMenuItem item={{ id, title: manga.title, type: manga.type }} />
@@ -180,6 +202,7 @@ export default function MangaDetailsPage() {
             {isAdmin && <EditDetailsModal dialogRef={editRef} item={manga} onSaved={({ cover }) => { setNewCover(cover ?? null); refetch(false); }}/>}
             {pieces.modals}
             {picker.modal}
+            {isAdmin && linkSource.modal}
             {isAdmin && <UploadChaptersModal
                 dialogRef={uploadRef}
                 manga={{ id, title: manga.title }}
