@@ -1,10 +1,12 @@
 import { Link } from "react-router-dom";
 import Format from "../../utils/format";
 import { mediaStatusDot } from "../../utils/status";
+import { progressMeta, progressPercent } from "../../utils/progress";
 import { useRef, useState } from "react";
 import api from "../../services/api";
 import AddToListModal from "../modals/AddToListModal";
 import DeleteMediaModal from "../modals/DeleteMediaModal";
+import { rateTitle } from "../../stores/useRatingStore";
 import { removeFromList, saveListEntry } from "../../services/mediaService";
 import { userIsAdmin } from "../../utils/auth";
 import { Plus, Check, Play } from "lucide-react";
@@ -105,6 +107,8 @@ function mediaInfo(item) {
             break
         }
         case "light_novel":
+            meta = progressMeta("light_novel", item)
+            progressPct = progressPercent(item)
             path="/light-novels/"
             break
         case "movie":
@@ -112,6 +116,8 @@ function mediaInfo(item) {
             path = "/movies/"
             break
         case "manga":
+            meta = progressMeta("manga", item)
+            progressPct = progressPercent(item)
             path = "/manga/"
             break
         case "music_track":
@@ -132,6 +138,8 @@ function ActionButtons({item, userEntry, onListChange, onDeleted}) {
     const [loading, setLoading] = useState(false);
     const dialogRef = useRef(null);
     const deleteRef = useRef(null);
+    // reloads the dialog's progress numbers each time it opens
+    const [openCount, setOpenCount] = useState(0);
     // list entries carry media_item_id, library items their own id; search results that
     // aren't in the library have neither
     const mediaId = item.media_item_id ?? item.id;
@@ -145,6 +153,7 @@ function ActionButtons({item, userEntry, onListChange, onDeleted}) {
     function handleOpenModal(e) {
         e.stopPropagation();
         e.preventDefault();
+        setOpenCount(n => n + 1);
         dialogRef.current.showModal();
     }
 
@@ -152,8 +161,15 @@ function ActionButtons({item, userEntry, onListChange, onDeleted}) {
         setLoading(true);
         if (userEntry || item.id) {
             // on their list already, or in the library — save the entry, no download
-            saveListEntry(userEntry, { media_item_id: item.id }, { status, rating: score === 0 ? null : score })
-            .then(() => { toast.success(userEntry ? "List updated" : "Added to your list"); onListChange?.(); })
+            saveListEntry(userEntry, { media_item_id: item.id }, { status, rating: score === 0 ? null : score, progress })
+            .then(res => {
+                toast.success(userEntry ? "List updated" : "Added to your list");
+                onListChange?.();
+                // just finished it without scoring it: ask once
+                if (status === "completed" && score === 0 && userEntry?.status !== "completed" && res.data?.id) {
+                    rateTitle({ entryId: res.data.id, title: item.media_title ?? item.title, rating: null, prompt: true, onSaved: onListChange });
+                }
+            })
             .catch(err => toast.error(err, "Could not update your list"))
             .finally(() => setLoading(false))
         } else if (item.external_source) {
@@ -187,6 +203,7 @@ function ActionButtons({item, userEntry, onListChange, onDeleted}) {
 
     return <>
         <AddToListModal item={item} onConfirm={handleConfirm} dialogRef={dialogRef} initialValues={userEntry} isLibraryItem={isLibraryItem}
+            mediaId={mediaId} openCount={openCount}
             onRemove={userEntry ? handleRemove : undefined}
             onDelete={canDelete ? () => deleteRef.current.showModal() : undefined}
             onAddToCollection={collectable ? () => picker.open(collectable) : undefined}/>

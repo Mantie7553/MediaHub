@@ -34,3 +34,71 @@ func TestNextStatus(t *testing.T) {
 		})
 	}
 }
+
+func TestProgressCountQueries(t *testing.T) {
+	tests := []struct {
+		mediaType string
+		want      []string
+	}{
+		{"manga", []string{setChaptersRead, setChaptersUnread}},
+		{"light_novel", []string{setVolumesRead, setVolumesUnread}},
+		{"anime", []string{setEpisodesWatched, setEpisodesUnwatched}},
+		{"movie", nil},
+		{"music_track", nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.mediaType, func(t *testing.T) {
+			got := progressCountQueries(tt.mediaType)
+			if len(got) != len(tt.want) {
+				t.Fatalf("got %d queries, want %d", len(got), len(tt.want))
+			}
+			for i := range got {
+				if got[i] != tt.want[i] {
+					t.Errorf("query %d differs", i)
+				}
+			}
+		})
+	}
+}
+
+func TestPartsTotal(t *testing.T) {
+	tests := []struct {
+		name  string
+		parts Parts
+		want  int
+	}{
+		{"the source has more than the library", Parts{Files: 20, Source: 100}, 100},
+		{"the library has more than the source says", Parts{Files: 12, Source: 10}, 12},
+		{"an unknown source total goes by the files", Parts{Files: 7}, 7},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.parts.Total(); got != tt.want {
+				t.Errorf("Total() = %d, want %d", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestPartsCountHolds(t *testing.T) {
+	tests := []struct {
+		name  string
+		parts Parts
+		count int
+		want  bool
+	}{
+		{"every file read, the count goes past them", Parts{Done: 20, Files: 20, Source: 100}, 50, true},
+		{"one file inside the count unread", Parts{Done: 19, Files: 20, Source: 100}, 50, false},
+		{"the count is inside the files and they're done", Parts{Done: 10, Files: 20}, 10, true},
+		{"a file inside a small count unread", Parts{Done: 9, Files: 20}, 10, false},
+		{"reading past the count keeps it", Parts{Done: 15, Files: 20}, 10, true},
+		{"no files yet", Parts{Source: 100}, 30, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.parts.CountHolds(tt.count); got != tt.want {
+				t.Errorf("CountHolds(%d) = %v, want %v", tt.count, got, tt.want)
+			}
+		})
+	}
+}

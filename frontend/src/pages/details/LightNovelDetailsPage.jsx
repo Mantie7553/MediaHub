@@ -1,4 +1,5 @@
 import { useState, useRef } from "react";
+import useRating from "../../hooks/useRating";
 import { useNavigate, useParams } from "react-router-dom";
 import ErrorState from "../../components/states/ErrorState";
 import NotFound from "../../components/states/NotFound";
@@ -25,10 +26,11 @@ import { userIsAdmin } from "../../utils/auth";
 
 export default function LightNovelDetailsPage() {
     const navigate = useNavigate();
-    const { userContentMap, refresh } = useUserContent();
+    const { userContentMap, loading: listLoading, refresh } = useUserContent();
     const { id } = useParams();
     const { item: ln, loading, error, notFound, refetch } = useMediaItem(id);
     const userEntry = userContentMap[id];
+    const rating = useRating(userEntry, !listLoading, ln?.title, refresh);
     const removeEntry = useRemoveFromList(userEntry, refresh);
     const [readVolumes, setReadVolumes] = useState(new Set());
     const [scrollPosition, setScrollPosition] = useState({});
@@ -140,6 +142,7 @@ export default function LightNovelDetailsPage() {
                         onSelect={updateStatus}
                         onRemove={removeEntry}
                     />
+                    {rating.button}
                     <ActionMenu>
                         <ActionMenuItem icon={ListPlus} label="Add to a collection…" onClick={() => picker.open({ id, type: ln.type, title: ln.title })}/>
                         <ActionMenuItem icon={CheckCheck} label="Mark all read" onClick={() => markAll(true)}/>

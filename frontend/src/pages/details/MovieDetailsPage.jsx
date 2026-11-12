@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import useRating from "../../hooks/useRating";
 import { useParams, useNavigate } from "react-router-dom";
 import ErrorState from "../../components/states/ErrorState";
 import NotFound from "../../components/states/NotFound";
@@ -19,12 +20,13 @@ import useCollectionPicker from "../../hooks/useCollectionPicker";
 
 export default function MovieDetailsPage() {
     const navigate = useNavigate();
-    const { userContentMap, refresh } = useUserContent();
+    const { userContentMap, loading: listLoading, refresh } = useUserContent();
     const { id } = useParams();
     const { item: movie, loading, error, notFound, refetch } = useMediaItem(id);
     const picker = useCollectionPicker();
     const userEntry = userContentMap[id];
     const removeEntry = useRemoveFromList(userEntry, refresh);
+    const rating = useRating(userEntry, !listLoading, movie?.title, refresh);
     const editRef = useRef(null);
     const uploadRef = useRef(null);
     // a cover just uploaded, with a version so the browser doesn't show the one it cached
@@ -89,6 +91,7 @@ export default function MovieDetailsPage() {
                         onSelect={updateStatus}
                         onRemove={removeEntry}
                     />
+                    {rating.button}
                     <ActionMenu>
                         <ActionMenuItem icon={ListPlus} label="Add to a collection…" onClick={() => picker.open({ id, type: movie.type, title: movie.title })}/>
                         {isAdmin && <>

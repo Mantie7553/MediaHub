@@ -3,6 +3,7 @@ package webhooks
 import (
 	"database/sql"
 	"errors"
+	"github.com/Mantie7553/MediaHub/backend/internal/tracking"
 	"net/http"
 
 	"github.com/Mantie7553/MediaHub/backend/internal/clients/arr"
@@ -81,6 +82,7 @@ func (h *Handler) SonarrWebhook(w http.ResponseWriter, r *http.Request) {
 			logger.Error("failed to upsert episode %d: %s", ep.ID, err.Error())
 		}
 	}
+	tracking.PartsAdded(h.db, mediaItemID)
 
 	w.WriteHeader(http.StatusOK)
 }

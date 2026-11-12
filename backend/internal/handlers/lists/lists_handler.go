@@ -40,6 +40,10 @@ func (h *Handler) Add(w http.ResponseWriter, r *http.Request) {
 		utils.Error(w, http.StatusBadRequest, "status is required")
 		return
 	}
+	if !validRating(req.Rating) {
+		utils.Error(w, http.StatusBadRequest, "rating must be 1 to 10")
+		return
+	}
 
 	tx, err := h.db.Begin()
 	if utils.InternalError(w, err) {
@@ -69,6 +73,10 @@ func (h *Handler) Add(w http.ResponseWriter, r *http.Request) {
 		if utils.InternalError(w, tracking.CompleteAll(tx, user.UserID, req.MediaItemId)) {
 			return
 		}
+	} else if req.Progress != nil && req.MediaItemId != "" {
+		if utils.InternalError(w, tracking.SetProgressCount(tx, user.UserID, req.MediaItemId, *req.Progress)) {
+			return
+		}
 	}
 
 	if utils.InternalError(w, tx.Commit()) {
@@ -95,7 +103,10 @@ func (h *Handler) GetAll(w http.ResponseWriter, r *http.Request) {
 	SELECT ums.id, ums.status, ums.rating, ums.updated_at, ums.album_id,
 		mi.id, mi.type, mi.title, mi.cover_image_url, mi.release_date, mi.external_id, mi.external_source,
 		mm.artist,
-		anime_progress.active_season, anime_progress.season_watched, anime_progress.season_total
+		anime_progress.active_season, anime_progress.season_watched, anime_progress.season_total,
+		-- how far through its parts: the files done, or the count given when that's further
+		GREATEST(parts.done, COALESCE(ums.progress_count, 0)),
+		GREATEST(parts.files, parts.source), parts.source > 0
 	FROM user_media_status ums
 	JOIN media_items mi ON mi.id = ums.media_item_id
 	LEFT JOIN music_metadata mm ON mm.media_item_id = mi.id
@@ -122,6 +133,29 @@ func (h *Handler) GetAll(w http.ResponseWriter, r *http.Request) {
 		)
 		GROUP BY e.season_number
 	) anime_progress ON true
+	-- episodes, chapters or volumes: done, the files there are, and the source's total (Sonarr
+	-- lists every episode, so an anime's rows are its total). Matches tracking.partsQuery
+	LEFT JOIN LATERAL (
+		SELECT COUNT(*) FILTER (WHERE p.watched) AS done, COUNT(*) AS files, COUNT(*) AS source
+		FROM episodes e
+		LEFT JOIN user_anime_progress p ON p.episode_id = e.id AND p.user_id = ums.user_id
+		WHERE e.media_item_id = mi.id
+		HAVING mi.type = 'anime'
+		UNION ALL
+		SELECT COUNT(*) FILTER (WHERE p.completed), COUNT(*),
+			COALESCE((SELECT total_chapters FROM manga_metadata WHERE media_item_id = mi.id), 0)
+		FROM manga_chapters c
+		LEFT JOIN manga_progress p ON p.chapter_id = c.id AND p.user_id = ums.user_id
+		WHERE c.media_item_id = mi.id
+		HAVING mi.type = 'manga'
+		UNION ALL
+		SELECT COUNT(*) FILTER (WHERE p.completed), COUNT(*),
+			COALESCE((SELECT total_volumes FROM light_novel_metadata WHERE media_item_id = mi.id), 0)
+		FROM light_novel_volumes v
+		LEFT JOIN light_novel_progress p ON p.volume_id = v.id AND p.user_id = ums.user_id
+		WHERE v.media_item_id = mi.id
+		HAVING mi.type = 'light_novel'
+	) parts ON mi.type IN ('anime', 'manga', 'light_novel')
 	WHERE ums.user_id = $1 AND ums.media_item_id IS NOT NULL
 
 	UNION ALL
@@ -129,6 +163,7 @@ func (h *Handler) GetAll(w http.ResponseWriter, r *http.Request) {
 	SELECT ums.id, ums.status, ums.rating, ums.updated_at, ums.album_id,
 		NULL, 'music_album', a.title, a.cover_image_url, NULL, NULL, NULL,
 		a.artist,
+		NULL, NULL, NULL,
 		NULL, NULL, NULL
 	FROM user_media_status ums
 	JOIN albums a ON a.id = ums.album_id
@@ -147,6 +182,7 @@ func (h *Handler) GetAll(w http.ResponseWriter, r *http.Request) {
 			&item.MediaItemID, &item.MediaType, &item.MediaTitle, &item.CoverImageURL,
 			&item.ReleaseDate, &item.ExternalID, &item.ExternalSource, &item.Artist,
 			&item.ActiveSeason, &item.SeasonWatched, &item.SeasonTotal,
+			&item.ProgressCount, &item.ProgressTotal, &item.ProgressTotalKnown,
 		)
 		if utils.InternalError(w, err) {
 			return
@@ -184,6 +220,16 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	if !utils.DecodeJSON(w, r, &req) {
 		return
 	}
+	if req.Status.Set && (req.Status.Value == nil || *req.Status.Value == "") {
+		utils.Error(w, http.StatusBadRequest, "status can't be empty")
+		return
+	}
+	if req.Rating.Set && !validRating(req.Rating.Value) {
+		utils.Error(w, http.StatusBadRequest, "rating must be 1 to 10")
+		return
+	}
+	// nil keeps the saved status (the column is an enum, so "" can't stand in for "unchanged")
+	status := req.Status.Value
 
 	tx, err := h.db.Begin()
 	if utils.InternalError(w, err) {
@@ -191,15 +237,17 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback()
 
-	// do the update
+	// do the update; a status or rating left out keeps the one saved
 	var mediaStatusId string
 	var mediaItemID sql.NullString
 	err = tx.QueryRow(
-		`UPDATE user_media_status 
-		SET status = $1, rating = $2, updated_at = NOW()
-		WHERE id = $3 AND user_id = $4
+		`UPDATE user_media_status
+		SET status = COALESCE($1, status),
+			rating = CASE WHEN $2 THEN $3 ELSE rating END,
+			updated_at = NOW()
+		WHERE id = $4 AND user_id = $5
 		RETURNING id, media_item_id`,
-		req.Status, req.Rating, entryID, user.UserID,
+		status, req.Rating.Set, req.Rating.Value, entryID, user.UserID,
 	).Scan(&mediaStatusId, &mediaItemID)
 
 	if errors.Is(err, sql.ErrNoRows) {
@@ -212,9 +260,13 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// completing a title completes every episode, chapter or volume; other statuses leave
-	// progress as it is
-	if req.Status == "completed" && mediaItemID.Valid {
+	// progress as it is unless a count was picked. The status picked stands either way
+	if status != nil && *status == "completed" && mediaItemID.Valid {
 		if utils.InternalError(w, tracking.CompleteAll(tx, user.UserID, mediaItemID.String)) {
+			return
+		}
+	} else if req.Progress != nil && mediaItemID.Valid {
+		if utils.InternalError(w, tracking.SetProgressCount(tx, user.UserID, mediaItemID.String, *req.Progress)) {
 			return
 		}
 	}
@@ -376,4 +428,34 @@ func (h *Handler) MarkShowWatched(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+/*
+Function:	GetProgress
+Purpose:	How far the user is through a title's episodes, chapters or volumes and how many it
+has, for the progress picker; the title doesn't have to be on their list. 404 for titles
+without parts
+Params:
+  - w: http response writer to respond to the front end
+  - r: http request with the media item id in the URL
+*/
+func (h *Handler) GetProgress(w http.ResponseWriter, r *http.Request) {
+	user := auth.GetUser(r)
+	id, ok := utils.UUIDParam(w, r, "id")
+	if !ok {
+		return
+	}
+	count, parts, has, err := tracking.ProgressOf(h.db, user.UserID, id)
+	if utils.InternalError(w, err) {
+		return
+	}
+	if !has {
+		utils.Error(w, http.StatusNotFound, "this title has no episodes, chapters or volumes")
+		return
+	}
+	utils.JSON(w, map[string]any{
+		"progress_count":       count,
+		"progress_total":       parts.Total(),
+		"progress_total_known": parts.Source > 0,
+	})
 }

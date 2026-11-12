@@ -1,4 +1,5 @@
 import { useRef, useState } from "react"
+import useRating from "../../hooks/useRating"
 import { useParams } from "react-router-dom"
 import { BookmarkPlus, Check, PencilLine, Upload, ListPlus } from "lucide-react"
 import { saveListEntry } from "../../services/mediaService"
@@ -31,10 +32,11 @@ export default function AlbumDetailsPage() {
     const [uploadedCover, setUploadedCover] = useState(null);
     const isAdmin = userIsAdmin();
     const { id } = useParams();
-    const { userContentMap, refresh } = useUserContent();
+    const { userContentMap, loading: listLoading, refresh } = useUserContent();
     const userContent = userContentMap[id];
     const removeEntry = useRemoveFromList(userContent, refresh);
     const { data: album, loading, error, notFound, reload } = useApi(`/albums/${id}`);
+    const rating = useRating(userContent, !listLoading, album?.title, refresh);
     const playAlbum = useAudioStore(state => state.playAlbum);
     const pieces = useAdminPieces(() => reload(true));
     const picker = useCollectionPicker();
@@ -79,6 +81,7 @@ export default function AlbumDetailsPage() {
                         {userContent ? <Check size={16} className="text-primary"/> : <BookmarkPlus size={16}/>}
                         {userContent ? Format.statusLabel(userContent.status, "music_album") : "Add to list"}
                     </button>
+                    {rating.button}
                     <QueueModeButtons/>
                     <ActionMenu>
                         <ActionMenuItem icon={ListPlus} label="Add to playlist or collection…" onClick={() => picker.open({ id, type: "album", title: album.title })}/>

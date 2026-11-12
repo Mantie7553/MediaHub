@@ -17,6 +17,7 @@ import (
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/cache"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/logger"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/utils"
+	"github.com/Mantie7553/MediaHub/backend/internal/tracking"
 	"github.com/lib/pq"
 )
 
@@ -44,6 +45,8 @@ type SearchResult struct {
 	Title          string `json:"title"`
 	CoverImageURL  string `json:"cover_image_url"`
 	Type           string `json:"type"`
+	// episodes or chapters the source says the title has, when it knows
+	TotalParts *int `json:"total_parts,omitempty"`
 }
 
 type saveRequest struct {
@@ -321,7 +324,7 @@ func (h *Handler) Save(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if req.Progress != nil && *req.Progress > 0 {
-			if utils.InternalError(w, saveListProgress(h.db, user.UserID, mediaItemID, req.Type, *req.Progress)) {
+			if utils.InternalError(w, tracking.SetProgressCount(h.db, user.UserID, mediaItemID, *req.Progress)) {
 				return
 			}
 		}
@@ -409,58 +412,4 @@ func (h *Handler) findOrCreate(req saveRequest) (string, bool, error) {
 		req.ExternalID, req.ExternalSource,
 	).Scan(&id)
 	return id, false, err
-}
-
-// the first episodes in order, specials (season 0) left out, marked watched. One already
-// watched keeps when it was
-const markEpisodesWatched = `
-INSERT INTO user_anime_progress (user_id, episode_id, watched, watched_at)
-SELECT $1, e.id, true, NOW()
-FROM episodes e
-WHERE e.media_item_id = $2 AND e.season_number > 0
-ORDER BY e.season_number, e.episode_number
-LIMIT $3
-ON CONFLICT (user_id, episode_id) DO UPDATE SET
-	watched = true,
-	watched_at = CASE WHEN user_anime_progress.watched THEN user_anime_progress.watched_at ELSE NOW() END`
-
-// the first chapters by number marked read, keeping the page anyone stopped on
-const markChaptersRead = `
-INSERT INTO manga_progress (user_id, chapter_id, media_item_id, completed, updated_at)
-SELECT $1, mc.id, mc.media_item_id, true, NOW()
-FROM manga_chapters mc
-WHERE mc.media_item_id = $2
-ORDER BY mc.chapter_number
-LIMIT $3
-ON CONFLICT (user_id, chapter_id) DO UPDATE SET completed = true, updated_at = NOW()`
-
-// a *sql.DB, or a *sql.Tx in tests
-type execer interface {
-	Exec(query string, args ...any) (sql.Result, error)
-}
-
-/*
-Function:	saveListProgress
-Purpose:	Record how far the user got with a title they're adding to their list, as watched
-episodes or read chapters, the progress the rest of the app reads. A title with no episodes or
-chapters yet (just requested) has nothing to mark, and other types don't track a count
-Params:
-  - db: where to write it
-  - userID: whose progress
-  - mediaItemID: the title
-  - mediaType: the title's type
-  - count: how many episodes or chapters, from the first
-*/
-func saveListProgress(db execer, userID, mediaItemID, mediaType string, count int) error {
-	var query string
-	switch mediaType {
-	case "anime":
-		query = markEpisodesWatched
-	case "manga":
-		query = markChaptersRead
-	default:
-		return nil
-	}
-	_, err := db.Exec(query, userID, mediaItemID, count)
-	return err
 }

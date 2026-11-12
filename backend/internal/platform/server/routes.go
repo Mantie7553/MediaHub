@@ -235,6 +235,7 @@ func (s *Server) routes() {
 			r.Post("/me/media", listsHandler.Add)
 			r.Get("/me/media", listsHandler.GetAll)
 			r.Get("/me/continue", listsHandler.GetContinue)
+			r.Get("/me/progress/{id}", listsHandler.GetProgress)
 			// playlists and collections; the computed playlists answer to /collections/listened and /unlistened
 			r.Get("/me/collections", collectionsHandler.List)
 			r.Post("/me/collections", collectionsHandler.Create)

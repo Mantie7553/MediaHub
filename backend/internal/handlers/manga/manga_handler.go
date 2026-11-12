@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/Mantie7553/MediaHub/backend/internal/tracking"
 	"io"
 	"net/http"
 	"os"
@@ -127,6 +128,7 @@ func (h *Handler) UploadChapter(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	tracking.PartsAdded(h.db, id)
 	logger.Info("added chapter %s of %s (%d pages) from an upload", chapter.Number, mangaTitle, pages)
 	utils.JSON(w, map[string]any{
 		"id":             chapterID,

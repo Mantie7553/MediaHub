@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/Mantie7553/MediaHub/backend/internal/tracking"
 	"net/http"
 	"os"
 	"os/exec"
@@ -112,6 +113,7 @@ func (h *Handler) AddEpisode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	added = true
+	tracking.PartsAdded(h.db, id)
 	logger.Info("user %s added %s to %s", auth.GetUser(r).UserID, filepath.Base(dest), series)
 	w.WriteHeader(http.StatusCreated)
 }
@@ -257,6 +259,7 @@ func (h *Handler) AddVolume(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	added = true
+	tracking.PartsAdded(h.db, id)
 
 	if req.VolumeNumber == 1 {
 		if cover, err := novelfiles.CoverHref(dest); err == nil && cover != "" {
