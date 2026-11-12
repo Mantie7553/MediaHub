@@ -58,6 +58,19 @@ export default function MusicDiscover({ onListChange }) {
     }
 
     return <div className="flex flex-col gap-10">
+        {/* what the server already has comes first, ahead of anything new to request */}
+        {albums.error ? (
+            <section>
+                <SectionHeader title="Available Now"/>
+                <ErrorState compact error={albums.error} onRetry={albums.reload} />
+            </section>
+        ) : (
+            <AlbumList albums={albums.data} heading="Available Now" loading={albums.loading} expandKey="discover:music:available"
+                emptyText="No music yet" emptyHint="Search below and request tracks to download them." />
+        )}
+        {/* like recommendations, they stay hidden when empty or failed */}
+        {artistPlaylists.data.length > 0 && <CollectionList collections={artistPlaylists.data} kind="playlist" heading="Artists" canCreate={false}/>}
+
         <SearchField
             value={query}
             onChange={setQuery}
@@ -106,17 +119,6 @@ export default function MusicDiscover({ onListChange }) {
         )}
         <MusicRequestModal dialogRef={dialogRef} track={selectedTrack} artists={artists.data} onConfirm={handleRequest} />
 
-        {albums.error ? (
-            <section>
-                <SectionHeader title="Available Now"/>
-                <ErrorState compact error={albums.error} onRetry={albums.reload} />
-            </section>
-        ) : (
-            <AlbumList albums={albums.data} heading="Available Now" loading={albums.loading}
-                emptyText="No music yet" emptyHint="Search above and request tracks to download them." />
-        )}
-        {/* like recommendations, they stay hidden when empty or failed */}
-        {artistPlaylists.data.length > 0 && <CollectionList collections={artistPlaylists.data} kind="playlist" heading="Artists" canCreate={false}/>}
         {/* recommendations are optional, they stay hidden when empty or failed */}
         {recommended.data.length > 0 && <AlbumList albums={recommended.data} heading="Recommended" />}
 

@@ -1,5 +1,8 @@
 import { BrowserRouter, Routes, Route, Outlet } from 'react-router-dom'
-import DashboardPage from './pages/dashboard/DashboardPage'
+import HomeRedirect from './pages/home/HomeRedirect'
+import OverviewPage from './pages/home/OverviewPage'
+import TypeHomePage from './pages/home/TypeHomePage'
+import { homePages } from './utils/homePages'
 import DownloadsPage from './pages/downloads/DownloadsPage'
 import Layout from './components/layout/Layout'
 import LoginPage from './pages/login/LoginPage'
@@ -31,7 +34,13 @@ function App() {
           <Route path='/manga/:id/chapters/:chapterId/read' element={<MangaReader/>} />
         </Route>
         <Route element={<ProtectedRoute><Layout><PageBoundary><Outlet /></PageBoundary></Layout></ProtectedRoute>}>
-          <Route path="/" element={<DashboardPage/>} />
+          {/* "/" opens the home page the user picked */}
+          <Route path="/" element={<HomeRedirect/>} />
+          <Route path="/home" element={<OverviewPage/>} />
+          {homePages.filter(page => page.type).map(page => (
+            // keyed so switching types starts the page fresh, search and all
+            <Route key={page.key} path={page.path} element={<TypeHomePage key={page.key} pageKey={page.key}/>} />
+          ))}
           <Route path="/downloads" element={<DownloadsPage />} />
           <Route path='/users' element={<UserManagementPage/>} />
           <Route path='/insights' element={<InsightsPage/>} />

@@ -1,6 +1,6 @@
 import { useState } from "react"
-import { useSearchParams } from "react-router-dom";
-import { BookOpen, Film, Music, Tv } from "lucide-react";
+import { Link, useSearchParams } from "react-router-dom";
+import { ArrowRight, BookOpen, BookText, Film, Music, Tv } from "lucide-react";
 import ErrorState from "../../components/states/ErrorState";
 import { CardGridSkeleton } from "../../components/states/Skeletons";
 import api from "../../services/api";
@@ -14,6 +14,7 @@ import SegmentedTabs from "../../components/SegmentedTabs";
 import SearchField from "../../components/SearchField";
 import SectionHeader from "../../components/layout/SectionHeader";
 import { readStored, writeStored } from "../../utils/storage";
+import { homePageForDiscover } from "../../utils/homePages";
 
 const emptySections = { trending: [], popular: [], top_rated: [] };
 
@@ -23,6 +24,8 @@ const tabs = [
     { key: "manga", type: "manga", label: "Manga", icon: BookOpen, noun: "manga" },
     { key: "movie", type: "movie", label: "Movies", icon: Film, noun: "movies" },
     { key: "music", type: "music_track", label: "Music", icon: Music, noun: "music" },
+    // nothing to search online: light novels come from the server's library folder
+    { key: "light_novel", type: "light_novel", label: "Light Novels", icon: BookText, noun: "light novels", libraryOnly: true },
 ];
 const TAB_STORAGE_KEY = "discover_tab";
 
@@ -39,7 +42,7 @@ export default function Discover() {
     const activeTab = tab.type;
     const [query, setQuery] = useState("");
     const isMusic = activeTab === "music_track";
-    const sections = useApi(isMusic ? null : `/search?type=${activeTab}`, { initial: emptySections });
+    const sections = useApi(isMusic || tab.libraryOnly ? null : `/search?type=${activeTab}`, { initial: emptySections });
     const library = useApi(isMusic ? null : `/media?available=true&type=${activeTab}`, { initial: [] });
     // the finished search: its query, results and error. null when not searching
     const [search, setSearch] = useState(null);
@@ -67,17 +70,38 @@ export default function Discover() {
 
     const listProps = { userContentMap, onListChange: refresh, loading: sections.loading };
     const topRatedHeading = activeTab === "manga" ? "Latest Updates" : "Top Rated";
+    // the user's own side of this type, so Discover and the type's home page link to each other
+    const home = homePageForDiscover(tabKey);
+    const homeLink = home && <Link to={home.path} className="btn btn-sm btn-ghost rounded-full bg-white/5 gap-1.5">
+        My {home.label} <ArrowRight size={14}/>
+    </Link>;
+
+    // what the server already has comes first, ahead of anything new to request
+    const availableNow = library.error ? (
+        <section>
+            <SectionHeader title="Available Now"/>
+            <ErrorState compact error={library.error} onRetry={library.reload} />
+        </section>
+    ) : (
+        <ContentList items={library.data} heading="Available Now" userContentMap={userContentMap} onListChange={refresh}
+            loading={library.loading} expandKey={`discover:${tabKey}:available`} emptyText="Nothing downloaded yet"
+            emptyHint={tab.libraryOnly ? "Light novels show up here once they're added to the server's library folder." : undefined} />
+    );
 
     return <div className="flex flex-col gap-10">
         <div>
-            <PageHeader title="Discover" subtitle="Find something new to watch, read or listen to."/>
+            <PageHeader title="Discover" subtitle="Find something new to watch, read or listen to." actions={homeLink}/>
             <SegmentedTabs options={tabs} value={tabKey} onChange={handleTabChange} label="Media type" size="lg"/>
         </div>
 
         {activeTab === "music_track" ? (
             <MusicDiscover onListChange={refresh}/>
+        ) : tab.libraryOnly ? (
+            availableNow
         ) : (
             <>
+                {availableNow}
+
                 <SearchField
                     value={query}
                     onChange={setQuery}
@@ -87,16 +111,6 @@ export default function Discover() {
                     placeholder={`Search ${tab.noun}…`}
                 />
 
-                {/* Available Now */}
-                {library.error ? (
-                    <section>
-                        <SectionHeader title="Available Now"/>
-                        <ErrorState compact error={library.error} onRetry={library.reload} />
-                    </section>
-                ) : (
-                    <ContentList items={library.data} heading="Available Now" userContentMap={userContentMap} onListChange={refresh}
-                        loading={library.loading} emptyText="Nothing downloaded yet" />
-                )}
 
                 {/* Search Results */}
                 {searching ? (

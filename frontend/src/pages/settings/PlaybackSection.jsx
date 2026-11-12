@@ -21,7 +21,12 @@ export default function PlaybackSection() {
 
     function toggleAutoSkip(on) {
         setSaving(true);
-        api.put("/me/preferences", { ...prefs, auto_skip: on })
+        // only what this panel changes, so it can't put back an old home page
+        api.put("/me/preferences", {
+            audio_language: prefs.audio_language,
+            subtitle_language: prefs.subtitle_language,
+            auto_skip: on,
+        })
             .then(res => setPrefs(res.data))
             .catch(err => toast.error(err, "Couldn't save your playback settings"))
             .finally(() => setSaving(false));

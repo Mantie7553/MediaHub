@@ -1,4 +1,4 @@
-import { NavLink, useNavigate } from "react-router-dom"
+import { NavLink, useLocation, useNavigate } from "react-router-dom"
 import { LogOut, PanelLeftClose, PanelLeftOpen } from "lucide-react"
 import { getRole, logout } from "../../utils/auth"
 import useMe from "../../hooks/useMe"
@@ -88,9 +88,12 @@ export function Avatar({ name, className = "size-9 text-sm" }) {
  * @param title the name displayed on the link
  * @param icon a lucide icon component
  * @param collapsed the sidebar is an icon rail, the title shows as a tooltip
+ * @param isActive optional (pathname) => whether to highlight it, instead of matching the path
  * @returns a NavLink to some page
  */
-function NavItem({path, title, icon: Icon, collapsed}) {
+function NavItem({path, title, icon: Icon, collapsed, isActive: matches}) {
+    const { pathname } = useLocation();
+    const lit = navActive => matches ? matches(pathname) : navActive;
     return (
         <RailTooltip label={title} enabled={collapsed}>
             <NavLink
@@ -99,19 +102,19 @@ function NavItem({path, title, icon: Icon, collapsed}) {
                 aria-label={title}
                 // closes the mobile drawer after picking a page
                 onClick={() => { const toggle = document.getElementById("my-drawer-3"); if (toggle) toggle.checked = false; }}
-                className={({ isActive }) => [
+                className={({ isActive: navActive }) => { const isActive = lit(navActive); return [
                     "relative flex items-center gap-3 h-11 lg:h-10 px-3 rounded-field text-sm transition-colors duration-150",
                     collapsed ? "lg:justify-center lg:px-0" : "",
                     isActive
                         ? "bg-primary/12 text-primary font-medium"
                         : "text-base-content/70 hover:text-base-content hover:bg-white/5",
-                ].join(" ")}
+                ].join(" ") }}
             >
-                {({ isActive }) => <>
+                {({ isActive: navActive }) => { const isActive = lit(navActive); return <>
                     {isActive && <span className="absolute -left-3 top-2 bottom-2 w-[3px] rounded-r-full bg-primary shadow-[0_0_12px_2px_rgb(242_89_18/0.6)]"></span>}
                     <Icon size={19} strokeWidth={isActive ? 2.25 : 1.75} className="shrink-0"/>
                     <span className={collapsed ? "lg:hidden" : ""}>{title}</span>
-                </>}
+                </> }}
             </NavLink>
         </RailTooltip>
     )
