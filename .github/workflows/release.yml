@@ -58,6 +58,8 @@ jobs:
       contents: read
       packages: write
     strategy:
+      # one image failing doesn't cancel the others mid-push
+      fail-fast: false
       matrix:
         include:
           - image: mediahub-backend
@@ -94,4 +96,6 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=${{ matrix.image }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+          # the cache only speeds builds up: an error saving it (GitHub's cache service drops
+          # blobs now and then) mustn't fail a release whose image is already pushed
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }},ignore-error=true
