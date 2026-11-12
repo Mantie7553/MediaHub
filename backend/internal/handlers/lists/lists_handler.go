@@ -7,6 +7,7 @@ import (
 
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/auth"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/utils"
+	"github.com/Mantie7553/MediaHub/backend/internal/tracking"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -40,9 +41,15 @@ func (h *Handler) Add(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	tx, err := h.db.Begin()
+	if utils.InternalError(w, err) {
+		return
+	}
+	defer tx.Rollback()
+
 	// add the new entry in the database
 	var statusId string
-	err := h.db.QueryRow(
+	err = tx.QueryRow(
 		`INSERT INTO user_media_status (user_id, media_item_id, album_id, status, rating)
 		VALUES ($1, $2, $3, $4, $5) 
 		RETURNING id`,
@@ -54,6 +61,17 @@ func (h *Handler) Add(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		utils.InternalError(w, err)
+		return
+	}
+
+	// a title added as completed has every episode, chapter or volume done too
+	if req.Status == "completed" && req.MediaItemId != "" {
+		if utils.InternalError(w, tracking.CompleteAll(tx, user.UserID, req.MediaItemId)) {
+			return
+		}
+	}
+
+	if utils.InternalError(w, tx.Commit()) {
 		return
 	}
 
@@ -89,11 +107,17 @@ func (h *Handler) GetAll(w http.ResponseWriter, r *http.Request) {
 		FROM episodes e
 		LEFT JOIN user_anime_progress uap ON uap.episode_id = e.id AND uap.user_id = ums.user_id
 		WHERE e.media_item_id = mi.id
+		-- the season shown: the last one once every episode is watched, otherwise the season of
+		-- the latest episode watched (the later season when a whole run was marked at once)
 		AND e.season_number = COALESCE(
+			(SELECT MAX(e3.season_number) FROM episodes e3
+			LEFT JOIN user_anime_progress uap3 ON uap3.episode_id = e3.id AND uap3.user_id = ums.user_id
+			WHERE e3.media_item_id = mi.id
+			HAVING COUNT(*) = COUNT(*) FILTER (WHERE uap3.watched)),
 			(SELECT e2.season_number FROM episodes e2
 			JOIN user_anime_progress uap2 ON uap2.episode_id = e2.id
 			WHERE e2.media_item_id = mi.id AND uap2.user_id = ums.user_id AND uap2.watched = true
-			ORDER BY uap2.watched_at DESC LIMIT 1),
+			ORDER BY uap2.watched_at DESC, e2.season_number DESC, e2.episode_number DESC LIMIT 1),
 			1
 		)
 		GROUP BY e.season_number
@@ -161,15 +185,22 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	tx, err := h.db.Begin()
+	if utils.InternalError(w, err) {
+		return
+	}
+	defer tx.Rollback()
+
 	// do the update
 	var mediaStatusId string
-	err := h.db.QueryRow(
+	var mediaItemID sql.NullString
+	err = tx.QueryRow(
 		`UPDATE user_media_status 
 		SET status = $1, rating = $2, updated_at = NOW()
 		WHERE id = $3 AND user_id = $4
-		RETURNING id`,
+		RETURNING id, media_item_id`,
 		req.Status, req.Rating, entryID, user.UserID,
-	).Scan(&mediaStatusId)
+	).Scan(&mediaStatusId, &mediaItemID)
 
 	if errors.Is(err, sql.ErrNoRows) {
 		utils.Error(w, http.StatusNotFound, "not found")
@@ -177,6 +208,18 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if utils.InternalError(w, err) {
+		return
+	}
+
+	// completing a title completes every episode, chapter or volume; other statuses leave
+	// progress as it is
+	if req.Status == "completed" && mediaItemID.Valid {
+		if utils.InternalError(w, tracking.CompleteAll(tx, user.UserID, mediaItemID.String)) {
+			return
+		}
+	}
+
+	if utils.InternalError(w, tx.Commit()) {
 		return
 	}
 
@@ -258,6 +301,10 @@ func (h *Handler) UpdateProgress(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if utils.InternalError(w, tracking.SyncStatusOf(h.db, user.UserID, tracking.EpisodeTitle, episodeID)) {
+		return
+	}
+
 	// return the id
 	utils.JSON(w, map[string]any{
 		"id": progressID,
@@ -291,6 +338,10 @@ func (h *Handler) MarkSeasonWatched(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if utils.InternalError(w, tracking.SyncStatus(h.db, user.UserID, id)) {
+		return
+	}
+
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -317,6 +368,10 @@ func (h *Handler) MarkShowWatched(w http.ResponseWriter, r *http.Request) {
 	)
 
 	if utils.InternalError(w, err) {
+		return
+	}
+
+	if utils.InternalError(w, tracking.SyncStatus(h.db, user.UserID, id)) {
 		return
 	}
 

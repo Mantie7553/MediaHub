@@ -22,6 +22,7 @@ import (
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/cache"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/logger"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/utils"
+	"github.com/Mantie7553/MediaHub/backend/internal/tracking"
 	"github.com/go-chi/chi/v5"
 	"github.com/lib/pq"
 )
@@ -452,6 +453,11 @@ func (h *Handler) MangaProgress(w http.ResponseWriter, r *http.Request) {
 	)
 
 	if utils.InternalError(w, err) {
+		return
+	}
+
+	// the reader saves every few pages, the status only moves when a chapter is finished
+	if req.Completed && utils.InternalError(w, tracking.SyncStatusOf(h.db, user.UserID, tracking.ChapterTitle, chapterId)) {
 		return
 	}
 
@@ -935,6 +941,9 @@ func (h *Handler) UpdateEpisodeProgress(w http.ResponseWriter, r *http.Request) 
 		if utils.InternalError(w, err) {
 			return
 		}
+		if utils.InternalError(w, tracking.SyncStatusOf(h.db, user.UserID, tracking.EpisodeTitle, episodeId)) {
+			return
+		}
 	}
 
 	err = h.recordWatching(user.UserID, `SELECT media_item_id FROM episodes WHERE id = $2`, episodeId, req.WatchedSecs)
@@ -1071,6 +1080,10 @@ func (h *Handler) MarkChapterRead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if utils.InternalError(w, tracking.SyncStatusOf(h.db, user.UserID, tracking.ChapterTitle, chapterId)) {
+		return
+	}
+
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -1094,6 +1107,10 @@ func (h *Handler) MarkMangaRead(w http.ResponseWriter, r *http.Request) {
 	)
 
 	if utils.InternalError(w, err) {
+		return
+	}
+
+	if utils.InternalError(w, tracking.SyncStatus(h.db, user.UserID, mediaId)) {
 		return
 	}
 
@@ -1124,6 +1141,10 @@ func (h *Handler) MarkVolumeRead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if utils.InternalError(w, tracking.SyncStatusOf(h.db, user.UserID, tracking.VolumeTitle, volumeId)) {
+		return
+	}
+
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -1147,6 +1168,10 @@ func (h *Handler) MarkLightNovelRead(w http.ResponseWriter, r *http.Request) {
 	)
 
 	if utils.InternalError(w, err) {
+		return
+	}
+
+	if utils.InternalError(w, tracking.SyncStatus(h.db, user.UserID, mediaId)) {
 		return
 	}
 

@@ -70,9 +70,13 @@ export default function MangaDetailsPage() {
         }
     }
 
+    // completing a title on the server completes every part of it too, so show those
     function updateStatus(status) {
         saveListEntry(userEntry, { media_item_id: id }, { status })
-            .then(() => refresh())
+            .then(() => {
+                refresh();
+                if (status === "completed") refetch(false);
+            })
             .catch(err => toast.error(err, "Could not update your list"));
     }
 
@@ -82,9 +86,9 @@ export default function MangaDetailsPage() {
             .then(() => {
                 const next = new Set(readChapters);
                 read ? next.add(chapter.id) : next.delete(chapter.id);
-                const status = next.size === manga.metadata.chapters.length ? "completed" : "current";
                 setReadChapters(next);
-                updateStatus(status);
+                // the server moves the list status along with what's read
+                refresh();
             })
             .catch(err => toast.error(err, "Could not update the chapter"));
         api.put(`/manga/${id}/chapters/${chapter.id}/progress`,
@@ -98,7 +102,7 @@ export default function MangaDetailsPage() {
         api.put(`/manga/${id}/read`, { read })
             .then(() => {
                 setReadChapters(read ? new Set(manga.metadata.chapters.map(c => c.id)) : new Set());
-                updateStatus(read ? "completed" : "planned");
+                refresh();
                 const newPageProgress = {};
                 manga.metadata.chapters.forEach(c => { newPageProgress[c.id] = read ? (c.page_count - 1) : 0; });
                 setPageProgress(newPageProgress);
