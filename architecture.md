@@ -132,7 +132,7 @@ Routes are defined in `App.jsx` with React Router. `/login` is public. Everythin
 | `music_plays`, `watch_time`, `user_active_days`, `storage_snapshots` | History for the Insights page: track plays, seconds watched per title and day, the days each user was around, and the library's size per day |
 | `anime_season_mal`, `skip_times` | The MyAnimeList entry for each Sonarr season, and the openings/endings AniSkip returned for an episode |
 
-See [`backend/migrations/`](backend/migrations/) for the full schema.
+See [`backend/migrations/`](backend/migrations/) for the full schema. Each migration needs its own version number: after rebasing on main, give a new one the next free number. Two files with the same number stop the server from starting, and a test fails on them.
 
 ## Key Flows
 
