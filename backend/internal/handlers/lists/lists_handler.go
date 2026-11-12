@@ -75,7 +75,7 @@ func (h *Handler) GetAll(w http.ResponseWriter, r *http.Request) {
 
 	queryString := `
 	SELECT ums.id, ums.status, ums.rating, ums.updated_at, ums.album_id,
-		mi.id, mi.type, mi.title, mi.cover_image_url, mi.release_date, mi.external_id,
+		mi.id, mi.type, mi.title, mi.cover_image_url, mi.release_date, mi.external_id, mi.external_source,
 		mm.artist,
 		anime_progress.active_season, anime_progress.season_watched, anime_progress.season_total
 	FROM user_media_status ums
@@ -103,7 +103,7 @@ func (h *Handler) GetAll(w http.ResponseWriter, r *http.Request) {
 	UNION ALL
 
 	SELECT ums.id, ums.status, ums.rating, ums.updated_at, ums.album_id,
-		NULL, 'music_album', a.title, a.cover_image_url, NULL, NULL,
+		NULL, 'music_album', a.title, a.cover_image_url, NULL, NULL, NULL,
 		a.artist,
 		NULL, NULL, NULL
 	FROM user_media_status ums
@@ -121,7 +121,7 @@ func (h *Handler) GetAll(w http.ResponseWriter, r *http.Request) {
 		err := rows.Scan(
 			&item.ID, &item.Status, &item.Rating, &item.UpdatedAt, &item.AlbumID,
 			&item.MediaItemID, &item.MediaType, &item.MediaTitle, &item.CoverImageURL,
-			&item.ReleaseDate, &item.ExternalID, &item.Artist,
+			&item.ReleaseDate, &item.ExternalID, &item.ExternalSource, &item.Artist,
 			&item.ActiveSeason, &item.SeasonWatched, &item.SeasonTotal,
 		)
 		if utils.InternalError(w, err) {

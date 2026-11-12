@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/Mantie7553/MediaHub/backend/internal/clients/mangadex"
+	"github.com/Mantie7553/MediaHub/backend/internal/covers"
 	"github.com/Mantie7553/MediaHub/backend/internal/mangafiles"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/auth"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/cache"
@@ -168,6 +169,7 @@ func (h *Handler) Upload(w http.ResponseWriter, r *http.Request) {
 	if utils.InternalError(w, tx.Commit()) {
 		return
 	}
+	covers.LocalizeLater(h.db, mediaID, req.CoverImageURL)
 
 	// return the id of the new item
 	utils.JSON(w, map[string]string{"id": mediaID}, http.StatusCreated)
@@ -1191,24 +1193,10 @@ func fetchCover(coverURL string) ([]byte, error) {
 		return nil, err
 	}
 	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK || !strings.HasPrefix(resp.Header.Get("Content-Type"), "image/") {
-		return nil, fmt.Errorf("cover fetch returned %d %s", resp.StatusCode, resp.Header.Get("Content-Type"))
-	}
-	data, err := io.ReadAll(io.LimitReader(resp.Body, maxCoverBytes+1))
-	if err != nil {
-		return nil, err
-	}
-	if len(data) > maxCoverBytes || !strings.HasPrefix(http.DetectContentType(data), "image/") {
-		return nil, fmt.Errorf("cover is too large or not an image")
-	}
-	return data, nil
+	return covers.ReadImage(resp)
 }
 
-const (
-	coverHost     = "uploads.mangadex.org"
-	maxCoverBytes = 20 << 20
-)
+const coverHost = "uploads.mangadex.org"
 
 var coverClient = &http.Client{
 	Timeout:       15 * time.Second,

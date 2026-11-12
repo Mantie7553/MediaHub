@@ -14,6 +14,7 @@ import (
 	"github.com/Mantie7553/MediaHub/backend/internal/clients/anilist"
 	"github.com/Mantie7553/MediaHub/backend/internal/clients/arr"
 	"github.com/Mantie7553/MediaHub/backend/internal/clients/mangadex"
+	"github.com/Mantie7553/MediaHub/backend/internal/covers"
 	"github.com/Mantie7553/MediaHub/backend/internal/locks"
 	"github.com/Mantie7553/MediaHub/backend/internal/mangafiles"
 	"github.com/Mantie7553/MediaHub/backend/internal/musicfiles"
@@ -90,7 +91,7 @@ func (h *Handler) syncSonarr() error {
 			h.db.Exec(
 				`UPDATE media_items SET
 				`+locks.Keep(locks.Title, "title", "$1")+`,
-				`+locks.Keep(locks.Cover, "cover_image_url", "$2")+`,
+				`+locks.Keep(locks.Cover, "cover_image_url", covers.KeepLocal("$2"))+`,
 				`+locks.Keep(locks.Description, "description", "COALESCE(description, $3)")+`,
 				`+locks.Keep(locks.ReleaseDate, "release_date", "COALESCE(release_date, $4)")+`
 				WHERE id = $5`,
@@ -289,7 +290,7 @@ func (h *Handler) syncRadarr() error {
 			h.db.Exec(
 				`UPDATE media_items SET
 				`+locks.Keep(locks.Title, "title", "$1")+`,
-				`+locks.Keep(locks.Cover, "cover_image_url", "$2")+`,
+				`+locks.Keep(locks.Cover, "cover_image_url", covers.KeepLocal("$2"))+`,
 				`+locks.Keep(locks.Description, "description", "COALESCE(description, $3)")+`,
 				`+locks.Keep(locks.ReleaseDate, "release_date", "COALESCE(release_date, $4)")+`
 				WHERE id = $5`,

@@ -118,29 +118,29 @@ export default function DashboardPage() {
     };
 
     const collectionRows = [
-        { key: "anime", count: userAnime.length, render: () => <ContentList items={userAnime} heading="Anime" {...tracked}/> },
-        { key: "movie", count: userMovies.length, render: () => <ContentList items={userMovies} heading="Movies" {...tracked}/> },
-        { key: "manga", count: userManga.length, render: () => <ContentList items={userManga} heading="Manga" {...tracked}/> },
-        { key: "music", count: userMusic.length, render: () => <AlbumList albums={userMusic} heading="Music" loading={userLoading} emptyText={searching ? tracked.emptyText : "No albums saved yet"} emptyAction={tracked.emptyAction}/> },
-        { key: "light_novel", count: userLightNovels.length, render: () => <ContentList items={userLightNovels} heading="Light Novels" {...tracked}/> },
+        { key: "anime", count: userAnime.length, render: () => <ContentList expandKey="dashboard:mine:anime" items={userAnime} heading="Anime" {...tracked}/> },
+        { key: "movie", count: userMovies.length, render: () => <ContentList expandKey="dashboard:mine:movie" items={userMovies} heading="Movies" {...tracked}/> },
+        { key: "manga", count: userManga.length, render: () => <ContentList expandKey="dashboard:mine:manga" items={userManga} heading="Manga" {...tracked}/> },
+        { key: "music", count: userMusic.length, render: () => <AlbumList expandKey="dashboard:mine:music" albums={userMusic} heading="Music" loading={userLoading} emptyText={searching ? tracked.emptyText : "No albums saved yet"} emptyAction={tracked.emptyAction}/> },
+        { key: "light_novel", count: userLightNovels.length, render: () => <ContentList expandKey="dashboard:mine:light_novel" items={userLightNovels} heading="Light Novels" {...tracked}/> },
         // like the other rows these show under "All" once they have something; their filter chips
         // show them empty too, with the card that makes a first one
         { key: "playlist", count: playlistCount, error: collections.error, reload: collections.reload,
-            render: () => <CollectionList collections={playlists} kind="playlist" heading="Playlists" loading={collections.loading}
+            render: () => <CollectionList expandKey="dashboard:mine:playlist" collections={playlists} kind="playlist" heading="Playlists" loading={collections.loading}
                 emptyText={searching ? tracked.emptyText : undefined}/> },
         { key: "collection", count: userCollections.length, error: collections.error, reload: collections.reload,
-            render: () => <CollectionList collections={userCollections} kind="collection" heading="Collections" loading={collections.loading}
+            render: () => <CollectionList expandKey="dashboard:mine:collection" collections={userCollections} kind="collection" heading="Collections" loading={collections.loading}
                 emptyText={searching ? tracked.emptyText : undefined}/> },
     ];
 
     const availableRows = [
-        { key: "anime", count: serverAnime.length, error: library.error, reload: library.reload, render: () => <ContentList items={serverAnime} heading="Anime" {...available}/> },
-        { key: "movie", count: serverMovies.length, error: library.error, reload: library.reload, render: () => <ContentList items={serverMovies} heading="Movies" {...available}/> },
-        { key: "manga", count: serverManga.length, error: library.error, reload: library.reload, render: () => <ContentList items={serverManga} heading="Manga" {...available}/> },
-        { key: "music", count: serverAlbums.length, error: albums.error, reload: albums.reload, render: () => <AlbumList albums={serverAlbums} heading="Music" loading={albums.loading} emptyText={searching ? available.emptyText : "No music yet"} emptyHint={available.emptyHint}/> },
-        { key: "light_novel", count: serverLightNovels.length, error: library.error, reload: library.reload, render: () => <ContentList items={serverLightNovels} heading="Light Novels" {...available}/> },
+        { key: "anime", count: serverAnime.length, error: library.error, reload: library.reload, render: () => <ContentList expandKey="dashboard:available:anime" items={serverAnime} heading="Anime" {...available}/> },
+        { key: "movie", count: serverMovies.length, error: library.error, reload: library.reload, render: () => <ContentList expandKey="dashboard:available:movie" items={serverMovies} heading="Movies" {...available}/> },
+        { key: "manga", count: serverManga.length, error: library.error, reload: library.reload, render: () => <ContentList expandKey="dashboard:available:manga" items={serverManga} heading="Manga" {...available}/> },
+        { key: "music", count: serverAlbums.length, error: albums.error, reload: albums.reload, render: () => <AlbumList expandKey="dashboard:available:music" albums={serverAlbums} heading="Music" loading={albums.loading} emptyText={searching ? available.emptyText : "No music yet"} emptyHint={available.emptyHint}/> },
+        { key: "light_novel", count: serverLightNovels.length, error: library.error, reload: library.reload, render: () => <ContentList expandKey="dashboard:available:light_novel" items={serverLightNovels} heading="Light Novels" {...available}/> },
         { key: "playlist", count: serverArtists.length, error: artistPlaylists.error, reload: artistPlaylists.reload,
-            render: () => <CollectionList collections={serverArtists} kind="playlist" heading="Artists" loading={artistPlaylists.loading}
+            render: () => <CollectionList expandKey="dashboard:available:playlist" collections={serverArtists} kind="playlist" heading="Artists" loading={artistPlaylists.loading}
                 canCreate={false} emptyText={searching ? available.emptyText : "No music yet"}/> },
     ];
 
@@ -155,12 +155,12 @@ export default function DashboardPage() {
         <HidingSearchBar value={query} onChange={setQuery} placeholder="Search your dashboard…" className="-mt-7 sm:-mt-11"/>
 
         {!continuing.loading && continueItems.length > 0 && (
-            <ContentList items={continueItems} heading="Continue" userContentMap={userContentMap}
+            <ContentList items={continueItems} heading="Continue" expandKey="dashboard:continue" userContentMap={userContentMap}
                 onListChange={() => { refresh(); continuing.reload(true); }}/>
         )}
 
         {!featured.loading && featuredItems.length > 0 && (
-            <CollectionList collections={featuredItems} heading="Featured" canCreate={false}/>
+            <CollectionList collections={featuredItems} heading="Featured" expandKey="dashboard:featured" canCreate={false}/>
         )}
 
         <DashboardSection
