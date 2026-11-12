@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/auth"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/utils"
@@ -13,6 +15,9 @@ import (
 
 // how many titles the Continue row shows
 const continueLimit = 20
+
+// the kinds of title continueQuery finds
+var continueKinds = []string{"anime", "movie", "manga", "light_novel"}
 
 /*
 continueQuery finds every title the user has started and not finished, newest activity first.
@@ -134,6 +139,7 @@ SELECT p.kind, mi.id, mi.title, mi.cover_image_url, mi.release_date, mi.external
 FROM progress p
 JOIN media_items mi ON mi.id = p.media_item_id
 WHERE p.last_activity IS NOT NULL
+	AND ($3::text IS NULL OR p.kind = $3)
 	AND NOT EXISTS (
 		SELECT 1 FROM user_media_status ums
 		WHERE ums.user_id = $1 AND ums.media_item_id = p.media_item_id
@@ -241,7 +247,8 @@ func number(raw string) string {
 /*
 Function:	GetContinue
 Purpose:	Get the titles the user started and hasn't finished, newest activity first, for the
-dashboard's Continue row
+home pages' Continue rows. ?type= keeps one kind (anime, movie, manga, light_novel), for a type's
+home page
 Params:
   - w: http response writer to respond to the front end
   - r: http request coming from the frontend
@@ -249,7 +256,16 @@ Params:
 func (h *Handler) GetContinue(w http.ResponseWriter, r *http.Request) {
 	user := auth.GetUser(r)
 
-	items, err := loadContinue(h.db, user.UserID)
+	var kind *string
+	if t := r.URL.Query().Get("type"); t != "" {
+		if !slices.Contains(continueKinds, t) {
+			utils.Error(w, http.StatusBadRequest, "type must be one of "+strings.Join(continueKinds, ", "))
+			return
+		}
+		kind = &t
+	}
+
+	items, err := loadContinue(h.db, user.UserID, kind)
 	if utils.InternalError(w, err) {
 		return
 	}
@@ -273,11 +289,12 @@ Purpose:	Run continueQuery for a user and turn each row into a card
 Params:
   - db: where to run it
   - userID: whose progress
+  - kind: keeps only this kind of title, nil for every kind
 */
-func loadContinue(db querier, userID string) ([]ContinueEntry, error) {
+func loadContinue(db querier, userID string, kind *string) ([]ContinueEntry, error) {
 	items := []ContinueEntry{}
 
-	rows, err := db.Query(continueQuery, userID, continueLimit)
+	rows, err := db.Query(continueQuery, userID, continueLimit, kind)
 	if err != nil {
 		return nil, err
 	}

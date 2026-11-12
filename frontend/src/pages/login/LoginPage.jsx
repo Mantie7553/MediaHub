@@ -32,7 +32,7 @@ export default function Login() {
      * Login a user
      *      - make the request for the tokens: the access token comes back, the session is
      *        an HttpOnly cookie the browser keeps
-     *      - send user to dashboard
+     *      - send user to their home page
      * @param {any} e the onClick event
      */
     function handleLogin(e) {
@@ -56,7 +56,7 @@ export default function Login() {
      * Sign up a user
      *      - confirm their password
      *      - make the request to add them to the database
-     *      - send user to dashboard
+     *      - send user to their home page
      * @param {any} e the onClick event
      * @returns
      */

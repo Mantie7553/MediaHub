@@ -193,7 +193,7 @@ export default function CollectionPage() {
                     : isPlaylist
                         ? "Add tracks or whole albums with “Add to playlist” on an album page."
                         : "Add titles, albums, tracks and playlists with “Add to a collection”."}
-                action={{ label: "Go to the dashboard", to: "/" }}
+                action={{ label: "Go home", to: "/" }}
             />
         ) : isPlaylist ? (
             <TrackList
