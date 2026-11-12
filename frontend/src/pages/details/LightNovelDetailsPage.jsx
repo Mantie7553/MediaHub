@@ -53,9 +53,13 @@ export default function LightNovelDetailsPage() {
         }
     }
 
+    // completing a title on the server completes every part of it too, so show those
     function updateStatus(status) {
         saveListEntry(userEntry, { media_item_id: id }, { status })
-            .then(() => refresh())
+            .then(() => {
+                refresh();
+                if (status === "completed") refetch(false);
+            })
             .catch(err => toast.error(err, "Could not update your list"));
     }
 
@@ -65,9 +69,9 @@ export default function LightNovelDetailsPage() {
             .then(() => {
                 const next = new Set(readVolumes);
                 read ? next.add(volume.id) : next.delete(volume.id);
-                const status = next.size === ln.metadata.volumes.length ? "completed" : "current";
                 setReadVolumes(next);
-                updateStatus(status);
+                // the server moves the list status along with what's read
+                refresh();
             })
             .catch(err => toast.error(err, "Could not update the volume"));
         // a position with no anchor clears the old one and the bookmark, the reader opens from this
@@ -82,7 +86,7 @@ export default function LightNovelDetailsPage() {
         api.put(`/light-novels/${id}/read`, { read })
             .then(() => {
                 setReadVolumes(read ? new Set(ln.metadata.volumes.map(v => v.id)) : new Set());
-                updateStatus(read ? "completed" : "planned");
+                refresh();
                 const newScrollPositions = {};
                 ln.metadata.volumes.forEach(v => {
                     newScrollPositions[v.id] = read ? 1 : 0;

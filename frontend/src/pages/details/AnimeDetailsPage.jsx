@@ -78,9 +78,13 @@ export default function AnimeDetailsPage() {
         setEpisodesAttempt(a => a + 1);
     }
 
+    // completing a title on the server completes every part of it too, so show those
     function updateStatus(status) {
         saveListEntry(userEntry, { media_item_id: id }, { status })
-            .then(() => refresh())
+            .then(() => {
+                refresh();
+                if (status === "completed") reloadEpisodes();
+            })
             .catch(err => toast.error(err, "Could not update your list"));
     }
 
@@ -90,9 +94,9 @@ export default function AnimeDetailsPage() {
             .then(() => {
                 const next = new Set(watchedEpisodes);
                 watched ? next.add(ep.id) : next.delete(ep.id);
-                const status = next.size === episodes.length ? "completed" : "current";
                 setWatchedEpisodes(next);
-                updateStatus(status);
+                // the server moves the list status along with what's watched
+                refresh();
             })
             .catch(err => toast.error(err, "Could not update the episode"))
     }
@@ -102,9 +106,8 @@ export default function AnimeDetailsPage() {
             .then(() => {
                 const next = new Set(watchedEpisodes);
                 eps.forEach(ep => watched ? next.add(ep.id) : next.delete(ep.id));
-                const status = next.size === episodes.length ? "completed" : watched ? "current" : "planned";
                 setWatchedEpisodes(next);
-                updateStatus(status);
+                refresh();
             })
             .catch(err => toast.error(err, `Could not update season ${seasonNum}`))
     }
@@ -113,7 +116,7 @@ export default function AnimeDetailsPage() {
         api.put(`/anime/${id}/watched`, { watched })
             .then(() => {
                 setWatchedEpisodes(watched ? new Set(episodes.map(ep => ep.id)) : new Set());
-                updateStatus(watched ? "completed" : "planned");
+                refresh();
             })
             .catch(err => toast.error(err, "Could not update the show"));
     }
