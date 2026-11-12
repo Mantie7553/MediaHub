@@ -9,6 +9,7 @@ import (
 	"github.com/Mantie7553/MediaHub/backend/internal/clients/anilist"
 	"github.com/Mantie7553/MediaHub/backend/internal/clients/mangadex"
 	"github.com/Mantie7553/MediaHub/backend/internal/clients/ytdlp"
+	"github.com/Mantie7553/MediaHub/backend/internal/covers"
 	"github.com/Mantie7553/MediaHub/backend/internal/downloader"
 	"github.com/Mantie7553/MediaHub/backend/internal/locks"
 	"github.com/Mantie7553/MediaHub/backend/internal/musicfiles"
@@ -124,6 +125,9 @@ func (h *Handler) Save(w http.ResponseWriter, r *http.Request) {
 	if utils.InternalError(w, err) {
 		return
 	}
+	if created {
+		covers.LocalizeLater(h.db, mediaItemID, req.CoverImageURL)
+	}
 	if !created {
 		if user.Role == "admin" {
 			h.db.Exec(
@@ -134,6 +138,8 @@ func (h *Handler) Save(w http.ResponseWriter, r *http.Request) {
 				WHERE id = $4`,
 				utils.NullString(req.ExternalID), utils.NullString(req.ExternalSource), utils.NullString(req.CoverImageURL), mediaItemID,
 			)
+			// does nothing unless that filled in a missing cover
+			covers.LocalizeLater(h.db, mediaItemID, req.CoverImageURL)
 		}
 		// metadata is fetched, and downloads dispatched, by the ids the library has for the
 		// title, never ones from the request

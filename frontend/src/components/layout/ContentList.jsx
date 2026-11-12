@@ -1,4 +1,4 @@
-import { useState } from "react"
+import useExpanded from "../../hooks/useExpanded"
 import { Card } from "../cards"
 import { CardRowSkeleton } from "../states/Skeletons"
 import EmptyState from "../states/EmptyState"
@@ -18,10 +18,11 @@ const ROW_LIMIT = 12
  * @param {string} emptyText what to say when there are no items
  * @param {string} emptyHint what the user can do about it
  * @param {object} emptyAction optional { label, to } shown when there are no items
+ * @param {string} expandKey remembers "See all" across reloads under this name (see useExpanded)
  * @returns
  */
-export default function ContentList({items, heading, userContentMap={}, onListChange, loading=false, emptyText="Nothing here yet", emptyHint, emptyAction}) {
-    const [expanded, setExpanded] = useState(false);
+export default function ContentList({items, heading, userContentMap={}, onListChange, loading=false, emptyText="Nothing here yet", emptyHint, emptyAction, expandKey}) {
+    const [expanded, setExpanded] = useExpanded(expandKey);
 
     if (loading) return <CardRowSkeleton heading={heading}/>
 

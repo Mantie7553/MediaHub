@@ -1,6 +1,7 @@
 package sync
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"os"
@@ -8,6 +9,7 @@ import (
 	gosync "sync"
 	"time"
 
+	"github.com/Mantie7553/MediaHub/backend/internal/covers"
 	"github.com/Mantie7553/MediaHub/backend/internal/downloader"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/logger"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/utils"
@@ -65,6 +67,14 @@ func (h *Handler) sources() []struct {
 		{"music", func() (string, error) {
 			n, err := h.syncMusic()
 			return fmt.Sprintf("%d tracks", n), err
+		}},
+		// last, so the covers the sources above just found are saved too
+		{"covers", func() (string, error) {
+			saved, failed, err := covers.LocalizeAll(context.Background(), h.db)
+			if failed > 0 {
+				return fmt.Sprintf("%d covers saved, %d couldn't be downloaded", saved, failed), err
+			}
+			return fmt.Sprintf("%d covers saved", saved), err
 		}},
 	}
 }

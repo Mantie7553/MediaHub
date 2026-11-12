@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"log"
@@ -8,6 +9,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/Mantie7553/MediaHub/backend/internal/covers"
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/collections"
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/curation"
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/deletion"
@@ -52,12 +54,22 @@ func New(db *sql.DB) *Server {
 /*
 Function:	StartBackgroundJobs
 Purpose:	start work that runs on its own schedule (the nightly library sync, the daily
-storage snapshot), and fetch Discover's lists so the first visit doesn't wait for them
+storage snapshot), fetch Discover's lists so the first visit doesn't wait for them, and save
+any covers still on other sites so they don't wait for the nightly sync
 */
 func (s *Server) StartBackgroundJobs() {
 	s.sync.StartSchedule()
 	s.search.WarmDiscovery()
 	s.insights.StartDailySnapshots()
+	go func() {
+		saved, failed, err := covers.LocalizeAll(context.Background(), s.db)
+		if err != nil {
+			logger.Warn("saving covers from other sites: %v", err)
+		}
+		if saved > 0 || failed > 0 {
+			logger.Info("saved %d covers from other sites, %d couldn't be downloaded", saved, failed)
+		}
+	}()
 }
 
 func (s *Server) Start(addr string) error {

@@ -1,4 +1,5 @@
-import { useRef, useState } from "react"
+import { useRef } from "react"
+import useExpanded from "../../hooks/useExpanded"
 import { useNavigate } from "react-router-dom"
 import { CollectionCard, NewCollectionCard } from "../cards"
 import { CardRowSkeleton } from "../states/Skeletons"
@@ -22,10 +23,11 @@ const ROW_LIMIT = 12
  * @param {string} emptyText shown instead of the row when there's nothing and no new card,
  *  e.g. while searching
  * @param {boolean} canCreate ends the row with a card that makes a new one (not for featured ones)
+ * @param {string} expandKey remembers "See all" across reloads under this name (see useExpanded)
  */
-export default function CollectionList({ collections, kind, heading, loading = false, emptyText, canCreate = true }) {
+export default function CollectionList({ collections, kind, heading, loading = false, emptyText, canCreate = true, expandKey }) {
     const navigate = useNavigate()
-    const [expanded, setExpanded] = useState(false)
+    const [expanded, setExpanded] = useExpanded(expandKey)
     const newRef = useRef(null)
 
     if (loading) return <CardRowSkeleton heading={heading} square/>
