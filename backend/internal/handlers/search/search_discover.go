@@ -175,6 +175,7 @@ func fromAnilist(media []anilist.Media, mediaType string) []SearchResult {
 			Title:          title,
 			CoverImageURL:  m.CoverImage.Large,
 			Type:           mediaType,
+			TotalParts:     m.Episodes,
 		})
 	}
 	return out
@@ -209,7 +210,16 @@ func fromMangaDex(manga []mangadex.Manga) []SearchResult {
 			Title:          title,
 			CoverImageURL:  coverURL,
 			Type:           "manga",
+			TotalParts:     knownCount(m.TotalChapters()),
 		})
 	}
 	return out
+}
+
+// a count the source gave, nil for 0 (MangaDex has no last chapter for most running series)
+func knownCount(n int) *int {
+	if n <= 0 {
+		return nil
+	}
+	return &n
 }

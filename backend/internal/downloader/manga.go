@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/Mantie7553/MediaHub/backend/internal/tracking"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -312,6 +313,10 @@ func RunMangaDex(db *sql.DB, jobID string, mediaItemID string, dest string) {
 			}
 		}
 		progress()
+	}
+
+	if added > 0 {
+		tracking.PartsAdded(db, mediaItemID)
 	}
 
 	if failed > 0 && added == 0 {

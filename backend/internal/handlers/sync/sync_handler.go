@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/Mantie7553/MediaHub/backend/internal/tracking"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -215,6 +216,7 @@ func (h *Handler) syncSonarr() error {
 			}
 		}
 
+		tracking.PartsAdded(h.db, mediaItemID)
 		h.saveSeasonMal(mediaItemID, s.TvdbID, episodes, seasonToMal)
 	}
 	return nil
@@ -503,6 +505,7 @@ func (h *Handler) syncManga() error {
 			)
 			return nil
 		})
+		tracking.PartsAdded(h.db, mediaItemID)
 	}
 
 	return nil
@@ -611,11 +614,15 @@ func (h *Handler) syncLightNovels() error {
 			continue
 		}
 
+		// AniList's volume count is the series' length, which the progress counts go up to;
+		// running series have none, which keeps the one there
 		_, err = h.db.Exec(
-			`INSERT INTO light_novel_metadata (media_item_id, genres)
-			VALUES ($1, $2)
-			ON CONFLICT (media_item_id) DO NOTHING`,
-			mediaItemID, pq.Array(lightNovel.Genres),
+			`INSERT INTO light_novel_metadata (media_item_id, genres, total_volumes)
+			VALUES ($1, $2, $3)
+			ON CONFLICT (media_item_id) DO UPDATE SET
+			`+locks.KeepMeta(locks.TotalVolumes, "light_novel_metadata", "total_volumes",
+				"COALESCE(EXCLUDED.total_volumes, light_novel_metadata.total_volumes)"),
+			mediaItemID, pq.Array(lightNovel.Genres), lightNovel.Volumes,
 		)
 		if err != nil {
 			logger.Warn("failed to insert or update metadata for %s: %v", entry.Name(), err)
@@ -668,7 +675,7 @@ func (h *Handler) syncLightNovels() error {
 			}
 
 		}
-
+		tracking.PartsAdded(h.db, mediaItemID)
 	}
 
 	return nil

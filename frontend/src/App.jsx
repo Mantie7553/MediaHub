@@ -19,6 +19,7 @@ import UserManagementPage from './pages/management/UserManagementPage'
 import InsightsPage from './pages/insights/InsightsPage'
 import AudioPlayer from './pages/viewer/AudioPlayer'
 import Toaster from './components/Toaster'
+import RatingPrompt from './components/RatingPrompt'
 import NotFound from './components/states/NotFound'
 import ErrorBoundary, { PageBoundary } from './components/states/ErrorBoundary'
 
@@ -58,6 +59,7 @@ function App() {
       </Routes>
       <ErrorBoundary><AudioPlayer/></ErrorBoundary>
       <Toaster/>
+      <RatingPrompt/>
     </BrowserRouter>
   )
 }

@@ -25,6 +25,11 @@ func TestContinueLabel(t *testing.T) {
 		{"a volume being read gives how far in", continueProgress{Kind: "light_novel", Number: str("2"), Scroll: secs(0.354), Completed: flag(false)}, "Vol 2 · 35%"},
 		{"an opened volume not scrolled yet", continueProgress{Kind: "light_novel", Number: str("2"), Scroll: secs(0), Completed: flag(false)}, "Vol 2"},
 		{"a finished volume points at the next", continueProgress{Kind: "light_novel", Number: str("2"), Completed: flag(true), NextNumber: str("3")}, "Next: Vol 3"},
+		{"an episode out of its season's length", continueProgress{Kind: "anime", Season: num(2), Seasons: num(3), Number: str("5"), SeasonTotal: num(12)}, "S2 · E5 / 12"},
+		{"a chapter out of the source's total", continueProgress{Kind: "manga", Number: str("12"), Page: num(5), Completed: flag(false), SourceTotal: num(100)}, "Ch 12 / 100 · p. 6"},
+		{"the next chapter out of the source's total", continueProgress{Kind: "manga", Number: str("12"), Completed: flag(true), NextNumber: str("13"), SourceTotal: num(100)}, "Next: Ch 13 / 100"},
+		{"a volume out of the source's total", continueProgress{Kind: "light_novel", Number: str("2"), Scroll: secs(0.5), Completed: flag(false), SourceTotal: num(12)}, "Vol 2 / 12 · 50%"},
+		{"an unknown total adds nothing", continueProgress{Kind: "manga", Number: str("12"), Completed: flag(false), SourceTotal: num(0)}, "Ch 12"},
 	}
 
 	for _, tt := range tests {
@@ -63,6 +68,9 @@ func TestContinuePct(t *testing.T) {
 		{"a series by finished parts", continueProgress{Kind: "anime", Done: num(3), Total: num(12)}, intPtr(25)},
 		{"nothing to measure against", continueProgress{Kind: "movie", PositionSecs: secs(1800)}, nil},
 		{"no parts with files", continueProgress{Kind: "manga", Done: num(0), Total: num(0)}, nil},
+		{"chapters measured against the source's total", continueProgress{Kind: "manga", Done: num(20), Total: num(25), SourceTotal: num(100)}, intPtr(20)},
+		{"the user's count when it's further than the files", continueProgress{Kind: "manga", Done: num(20), Total: num(25), SourceTotal: num(100), Counted: num(50)}, intPtr(50)},
+		{"more files than the source says", continueProgress{Kind: "light_novel", Done: num(5), Total: num(10), SourceTotal: num(8)}, intPtr(50)},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

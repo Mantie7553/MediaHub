@@ -40,7 +40,11 @@ progress AS (
 	SELECT 'anime' AS kind, a.media_item_id, a.last_activity,
 		NULL::float8 AS position_secs, NULL::float8 AS duration_secs,
 		a.done, a.total, nxt.season_number AS season, a.seasons, nxt.episode_number::text AS number,
-		NULL::int AS page, NULL::float8 AS scroll, NULL::bool AS completed, NULL::text AS next_number
+		NULL::int AS page, NULL::float8 AS scroll, NULL::bool AS completed, NULL::text AS next_number,
+		-- Sonarr lists every episode, downloaded or not
+		a.all_episodes AS source_total,
+		(SELECT COUNT(*) FROM episodes s WHERE s.media_item_id = a.media_item_id
+			AND s.season_number = nxt.season_number) AS season_total
 	FROM (
 		SELECT e.media_item_id,
 			MAX(GREATEST(
@@ -48,7 +52,8 @@ progress AS (
 				CASE WHEN uep.position_secs > 30 THEN uep.updated_at END)) AS last_activity,
 			COUNT(fe.id) FILTER (WHERE e.file_path IS NOT NULL) AS done,
 			COUNT(*) FILTER (WHERE e.file_path IS NOT NULL) AS total,
-			COUNT(DISTINCT e.season_number) AS seasons
+			COUNT(DISTINCT e.season_number) AS seasons,
+			COUNT(*) AS all_episodes
 		FROM episodes e
 		LEFT JOIN user_anime_progress uap ON uap.episode_id = e.id AND uap.user_id = $1
 		LEFT JOIN user_episode_progress uep ON uep.episode_id = e.id AND uep.user_id = $1
@@ -76,7 +81,7 @@ progress AS (
 	-- movies: started and not into the credits
 	SELECT 'movie', ump.media_item_id, ump.updated_at,
 		ump.position_secs, ump.duration_secs,
-		NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL
+		NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL
 	FROM user_movie_progress ump
 	WHERE ump.user_id = $1 AND ump.position_secs > 30
 		AND (ump.duration_secs = 0 OR ump.position_secs < ump.duration_secs - 120)
@@ -91,7 +96,8 @@ progress AS (
 			LEFT JOIN manga_progress mp ON mp.chapter_id = mc.id AND mp.user_id = $1
 			WHERE mc.media_item_id = last.media_item_id AND mc.file_path IS NOT NULL
 				AND mp.completed IS NOT TRUE AND mc.chapter_number > last.chapter_number
-			ORDER BY mc.chapter_number LIMIT 1)
+			ORDER BY mc.chapter_number LIMIT 1),
+		(SELECT mm.total_chapters::bigint FROM manga_metadata mm WHERE mm.media_item_id = last.media_item_id), NULL
 	FROM (
 		SELECT DISTINCT ON (mp.media_item_id) mp.media_item_id, mp.updated_at, mp.last_page_read,
 			COALESCE(mp.completed, false) AS completed, mc.chapter_number
@@ -117,7 +123,8 @@ progress AS (
 			LEFT JOIN light_novel_progress lp ON lp.volume_id = lv.id AND lp.user_id = $1
 			WHERE lv.media_item_id = last.media_item_id AND lv.file_path IS NOT NULL
 				AND lp.completed IS NOT TRUE AND lv.volume_number > last.volume_number
-			ORDER BY lv.volume_number LIMIT 1)
+			ORDER BY lv.volume_number LIMIT 1),
+		(SELECT lm.total_volumes::bigint FROM light_novel_metadata lm WHERE lm.media_item_id = last.media_item_id), NULL
 	FROM (
 		SELECT DISTINCT ON (lp.media_item_id) lp.media_item_id, lp.updated_at, lp.scroll_position,
 			lp.completed, lv.volume_number
@@ -135,7 +142,10 @@ progress AS (
 )
 SELECT p.kind, mi.id, mi.title, mi.cover_image_url, mi.release_date, mi.external_id, mi.external_source, p.last_activity,
 	p.position_secs, p.duration_secs, p.done, p.total, p.season, p.seasons, p.number,
-	p.page, p.scroll, p.completed, p.next_number
+	p.page, p.scroll, p.completed, p.next_number, p.source_total, p.season_total,
+	-- the count the user gave, for titles on their list
+	(SELECT ums.progress_count FROM user_media_status ums
+		WHERE ums.user_id = $1 AND ums.media_item_id = p.media_item_id)
 FROM progress p
 JOIN media_items mi ON mi.id = p.media_item_id
 WHERE p.last_activity IS NOT NULL
@@ -150,10 +160,15 @@ LIMIT $2`
 /*
 continueProgress is how far into a title the user is, as the query found it. Which fields are set
 depends on the kind:
-  - anime: Done/Total episodes, and Season/Number of the next one (Seasons tells whether to name the season)
+  - anime: Done/Total episodes, and Season/Number of the next one (Seasons tells whether to name the
+    season, SeasonTotal is how many episodes that season has)
   - movie: PositionSecs/DurationSecs
   - manga: Done/Total chapters, Number and Page of the one read last, and NextNumber after it
   - light_novel: Done/Total volumes, Number and Scroll of the one read last, and NextNumber after it
+
+Done and Total count files; SourceTotal is how many parts the title has according to its source
+(unknown for most running manga), and Counted the count the user gave when they're further than
+the files show. A title doesn't have to be on the user's list for any of these
 */
 type continueProgress struct {
 	Kind         string
@@ -168,6 +183,9 @@ type continueProgress struct {
 	Scroll       sql.NullFloat64
 	Completed    sql.NullBool
 	NextNumber   sql.NullString
+	SourceTotal  sql.NullInt64
+	SeasonTotal  sql.NullInt64
+	Counted      sql.NullInt64
 }
 
 /*
@@ -180,7 +198,8 @@ func (p continueProgress) pct() *int {
 	if p.Kind == "movie" {
 		part, whole = p.PositionSecs.Float64, p.DurationSecs.Float64
 	} else {
-		part, whole = float64(p.Done.Int64), float64(p.Total.Int64)
+		part = float64(max(p.Done.Int64, p.Counted.Int64))
+		whole = float64(max(p.Total.Int64, p.SourceTotal.Int64))
 	}
 	if whole <= 0 {
 		return nil
@@ -202,7 +221,7 @@ func (p continueProgress) label() *string {
 		if !p.Number.Valid {
 			return nil
 		}
-		s = "E" + number(p.Number.String)
+		s = "E" + number(p.Number.String) + of(p.SeasonTotal)
 		if p.Seasons.Int64 > 1 {
 			s = fmt.Sprintf("S%d · %s", p.Season.Int64, s)
 		}
@@ -218,21 +237,29 @@ func (p continueProgress) label() *string {
 		}
 		switch {
 		case p.Completed.Bool && p.NextNumber.Valid:
-			s = fmt.Sprintf("Next: %s %s", unit, number(p.NextNumber.String))
+			s = fmt.Sprintf("Next: %s %s%s", unit, number(p.NextNumber.String), of(p.SourceTotal))
 		case p.Completed.Bool || !p.Number.Valid:
 			// finished the one read last, and the next unread one is further back
 			return nil
 		case p.Kind == "manga" && p.Page.Valid:
-			s = fmt.Sprintf("Ch %s · p. %d", number(p.Number.String), p.Page.Int64+1)
+			s = fmt.Sprintf("Ch %s%s · p. %d", number(p.Number.String), of(p.SourceTotal), p.Page.Int64+1)
 		case p.Kind == "light_novel" && p.Scroll.Float64 > 0:
-			s = fmt.Sprintf("Vol %s · %d%%", number(p.Number.String), int(math.Round(p.Scroll.Float64*100)))
+			s = fmt.Sprintf("Vol %s%s · %d%%", number(p.Number.String), of(p.SourceTotal), int(math.Round(p.Scroll.Float64*100)))
 		default:
-			s = unit + " " + number(p.Number.String)
+			s = unit + " " + number(p.Number.String) + of(p.SourceTotal)
 		}
 	default:
 		return nil
 	}
 	return &s
+}
+
+// " / 24" after a part's number when the title's length is known, "" otherwise
+func of(total sql.NullInt64) string {
+	if total.Int64 <= 0 {
+		return ""
+	}
+	return fmt.Sprintf(" / %d", total.Int64)
 }
 
 // a chapter or volume number without trailing zeros, so 12.0 reads 12 and 10.50 reads 10.5
@@ -307,7 +334,7 @@ func loadContinue(db querier, userID string, kind *string) ([]ContinueEntry, err
 			&p.Kind, &item.MediaItemID, &item.MediaTitle, &item.CoverImageURL, &item.ReleaseDate,
 			&item.ExternalID, &item.ExternalSource, &item.LastActivityAt,
 			&p.PositionSecs, &p.DurationSecs, &p.Done, &p.Total, &p.Season, &p.Seasons, &p.Number,
-			&p.Page, &p.Scroll, &p.Completed, &p.NextNumber,
+			&p.Page, &p.Scroll, &p.Completed, &p.NextNumber, &p.SourceTotal, &p.SeasonTotal, &p.Counted,
 		)
 		if err != nil {
 			return nil, err

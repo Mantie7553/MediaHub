@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import useRating from "../../hooks/useRating";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import api from "../../services/api";
 import ErrorState from "../../components/states/ErrorState";
@@ -29,10 +30,11 @@ export default function AnimeDetailsPage() {
     // a collection's season entry links here with the season to open on
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
-    const { userContentMap, refresh } = useUserContent();
+    const { userContentMap, loading: listLoading, refresh } = useUserContent();
     const userEntry = userContentMap[id];
     const removeEntry = useRemoveFromList(userEntry, refresh);
     const { item: anime, loading, error, notFound, refetch } = useMediaItem(id);
+    const rating = useRating(userEntry, !listLoading, anime?.title, refresh);
     const [episodes, setEpisodes] = useState([]);
     const [watchedEpisodes, setWatchedEpisodes] = useState(new Set());
     const [episodeProgress, setEpisodeProgress] = useState({});
@@ -178,6 +180,7 @@ export default function AnimeDetailsPage() {
                         onSelect={updateStatus}
                         onRemove={removeEntry}
                     />
+                    {rating.button}
                     <ActionMenu>
                         <ActionMenuItem icon={ListPlus} label="Add to a collection…" onClick={() => picker.open({ id, type: anime.type, title: anime.title })}/>
                         <ActionMenuItem icon={CheckCheck} label="Mark all watched" onClick={() => markShow(true)}/>

@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from "react";
+import useRating from "../../hooks/useRating";
 import { useNavigate, useParams } from "react-router-dom";
 import { mangaBadge } from "../../utils/status";
 import ErrorState from "../../components/states/ErrorState";
@@ -25,10 +26,11 @@ import { userIsAdmin } from "../../utils/auth";
 
 export default function MangaDetailsPage() {
     const navigate = useNavigate();
-    const { userContentMap, refresh } = useUserContent();
+    const { userContentMap, loading: listLoading, refresh } = useUserContent();
     const { id } = useParams();
     const { item: manga, loading, error, notFound, refetch } = useMediaItem(id);
     const userEntry = userContentMap[id];
+    const rating = useRating(userEntry, !listLoading, manga?.title, refresh);
     const removeEntry = useRemoveFromList(userEntry, refresh);
     const [readChapters, setReadChapters] = useState(new Set());
     const [pageProgress, setPageProgress] = useState({});
@@ -161,6 +163,7 @@ export default function MangaDetailsPage() {
                         onSelect={updateStatus}
                         onRemove={removeEntry}
                     />
+                    {rating.button}
                     <ActionMenu>
                         <ActionMenuItem icon={ListPlus} label="Add to a collection…" onClick={() => picker.open({ id, type: manga.type, title: manga.title })}/>
                         <ActionMenuItem icon={CheckCheck} label="Mark all read" onClick={() => markAll(true)}/>
