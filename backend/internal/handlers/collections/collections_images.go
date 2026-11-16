@@ -100,7 +100,7 @@ func (h *Handler) SetImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if old != nil {
-		removeUnusedImages(h.db, *old)
+		covers.RemoveUnusedImages(h.db, *old)
 	}
 
 	coverURL := covers.URL(imageID)
@@ -130,7 +130,7 @@ func (h *Handler) RemoveImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if old != nil {
-		removeUnusedImages(h.db, *old)
+		covers.RemoveUnusedImages(h.db, *old)
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -161,26 +161,4 @@ func imagesOf(db querier, collectionID string) ([]string, error) {
 		ids = append(ids, id)
 	}
 	return ids, rows.Err()
-}
-
-/*
-Function:	removeUnusedImages
-Purpose:	Delete the files of images no collection uses any more. Called after the change that
-let go of them is saved; a file that can't be removed is only logged, since it no longer shows
-anywhere
-*/
-func removeUnusedImages(db querier, imageIDs ...string) {
-	for _, imageID := range imageIDs {
-		var used bool
-		if err := db.QueryRow(`SELECT EXISTS (SELECT 1 FROM collections WHERE image_id = $1)`, imageID).Scan(&used); err != nil {
-			logger.Error("checking whether collection image %s is still used: %s", imageID, err.Error())
-			continue
-		}
-		if used {
-			continue
-		}
-		if err := covers.Remove(imageID); err != nil {
-			logger.Error("removing collection image %s: %s", imageID, err.Error())
-		}
-	}
 }

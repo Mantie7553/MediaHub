@@ -9,6 +9,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/Mantie7553/MediaHub/backend/internal/covers"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/auth"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/utils"
 	"github.com/go-chi/chi/v5"
@@ -436,6 +437,6 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 	if utils.InternalError(w, err) {
 		return
 	}
-	removeUnusedImages(h.db, images...)
+	covers.RemoveUnusedImages(h.db, images...)
 	w.WriteHeader(http.StatusNoContent)
 }
