@@ -69,6 +69,8 @@ func (s *Server) StartBackgroundJobs() {
 		if saved > 0 || failed > 0 {
 			logger.Info("saved %d covers from other sites, %d couldn't be downloaded", saved, failed)
 		}
+		// after saving covers, so the sweep sees them in use
+		covers.StartSweeps(context.Background(), s.db)
 	}()
 }
 

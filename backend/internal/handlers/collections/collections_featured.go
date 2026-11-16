@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/Mantie7553/MediaHub/backend/internal/covers"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/auth"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/utils"
 	"github.com/go-chi/chi/v5"
@@ -317,7 +318,7 @@ func (h *Handler) Approve(w http.ResponseWriter, r *http.Request) {
 	if utils.InternalError(w, tx.Commit()) {
 		return
 	}
-	removeUnusedImages(h.db, images...)
+	covers.RemoveUnusedImages(h.db, images...)
 	utils.JSON(w, map[string]string{"featured_id": featuredID})
 }
 
@@ -400,6 +401,6 @@ func (h *Handler) Feature(w http.ResponseWriter, r *http.Request) {
 	if utils.InternalError(w, tx.Commit()) {
 		return
 	}
-	removeUnusedImages(h.db, images...)
+	covers.RemoveUnusedImages(h.db, images...)
 	utils.JSON(w, map[string]string{"featured_id": featuredID})
 }

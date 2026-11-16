@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"net/http"
 
+	"github.com/Mantie7553/MediaHub/backend/internal/covers"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/auth"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/utils"
 )
@@ -200,6 +201,13 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// their playlists and collections go with them, so note the images those used to remove
+	// the files afterwards if nothing else uses them
+	images, err := ownedImages(h.db, targetID)
+	if utils.InternalError(w, err) {
+		return
+	}
+
 	result, err := h.db.Exec(`DELETE FROM users WHERE id = $1`, targetID)
 	if utils.InternalError(w, err) {
 		return
@@ -210,6 +218,25 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 		utils.Error(w, http.StatusNotFound, "user not found")
 		return
 	}
+	covers.RemoveUnusedImages(h.db, images...)
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// the images of the playlists and collections a user owns
+func ownedImages(db *sql.DB, userID string) ([]string, error) {
+	rows, err := db.Query(`SELECT DISTINCT image_id::text FROM collections WHERE owner_id = $1 AND image_id IS NOT NULL`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
 }
