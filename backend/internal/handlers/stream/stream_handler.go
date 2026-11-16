@@ -397,8 +397,12 @@ func (h *Handler) ServeSegment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// the playlist lists every segment, so the player can ask for one ffmpeg hasn't written
-	if match := segmentNameRe.FindStringSubmatch(file); match != nil && !fileExists(filePath) {
-		tc, ok := h.loadTranscode(mediaType+"-"+mediaID+"-"+variant, tempDir)
+	key := mediaType + "-" + mediaID + "-" + variant
+	if match := segmentNameRe.FindStringSubmatch(file); match != nil && fileExists(filePath) {
+		seg, _ := strconv.Atoi(match[1])
+		h.touchSegment(key, seg)
+	} else if match != nil {
+		tc, ok := h.loadTranscode(key, tempDir)
 		if !ok {
 			utils.Error(w, http.StatusNotFound, "segment not found")
 			return

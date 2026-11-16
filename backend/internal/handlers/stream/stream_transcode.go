@@ -22,9 +22,7 @@ import (
 const (
 	manifestFile = "stream.json"
 	playlistFile = "playlist.m3u8"
-	// ffmpeg's own playlist, never served: playlist.m3u8 lists every segment up front instead
-	ffmpegPlaylistFile = "ffmpeg.m3u8"
-	logFile            = "transcode.log"
+	logFile      = "transcode.log"
 
 	segmentSecs = 4
 	// segments from the start position that must exist before the player is pointed at it
@@ -33,30 +31,40 @@ const (
 	// how long a segment request waits for ffmpeg, under the player's 40s first-byte timeout
 	segmentTimeout = 30 * time.Second
 	readyPoll      = 200 * time.Millisecond
-	// a request this many segments past what ffmpeg has written restarts it there instead of waiting
+	// a request this many segments past what a run has written starts a new run there instead of waiting
 	restartAheadSegments = 6
+	// ffmpeg runs one transcode may have at once, for viewers far apart in the same video.
+	// Consumer NVIDIA cards limit how many encodes run at the same time
+	maxRunsPerTranscode = 3
+	// a run no viewer has asked for segments from in this long is stopped
+	runIdleTimeout = 2 * time.Minute
+	// how often idle and caught up runs are looked for while no segment is requested
+	reapInterval = 15 * time.Second
 )
 
 var errSegmentMissing = errors.New("segment was not written")
 
-// a transcode folder for one media and audio track, shared by every request for it. ffmpeg
-// may be running, finished, or restarted at whichever segment the player asks for next
+// a transcode folder for one media and audio track, shared by every request for it. Viewers at
+// different places in the video each get an ffmpeg run writing from where they are
 type transcode struct {
 	dir      string
 	manifest streamManifest
 
-	mu  sync.Mutex
-	run *ffmpegRun // the current or last ffmpeg run, nil before the first
-	err error      // a run failed and the folder was removed, the next play starts over
+	mu      sync.Mutex
+	runs    []*ffmpegRun // running runs, and runs that wrote to the end by themselves
+	reaping bool         // reapIdle is running
+	err     error        // a run failed and the folder was removed, the next play starts over
 }
 
 // one ffmpeg process writing segments from start onwards
 type ffmpegRun struct {
-	cmd     *exec.Cmd
-	start   int
-	head    int  // last segment written without a gap from start
-	stopped bool // killed for a restart, so exiting isn't a failure
-	done    chan struct{}
+	cmd      *exec.Cmd
+	start    int
+	head     int // last segment written without a gap from start
+	limit    int // the first segment after start that is on disk or another run writes, segmentCount if none
+	lastUsed time.Time
+	stopped  bool // killed, so exiting isn't a failure
+	done     chan struct{}
 }
 
 /*
@@ -96,6 +104,23 @@ func (h *Handler) getTranscode(key, dir string, manifest streamManifest) (*trans
 	}
 	h.transcodes[key] = tc
 	return tc, nil
+}
+
+/*
+Function:	touchSegment
+Purpose:	note that a segment on disk was served, so the run writing ahead of that viewer isn't
+stopped as idle. Transcodes not in use are left alone
+Params:
+  - key: type-id-a<audio> of the media and audio track
+  - seg: the segment served
+*/
+func (h *Handler) touchSegment(key string, seg int) {
+	h.mu.Lock()
+	tc := h.transcodes[key]
+	h.mu.Unlock()
+	if tc != nil {
+		tc.touch(seg)
+	}
 }
 
 /*
@@ -257,48 +282,50 @@ type action int
 
 const (
 	actionWait action = iota
-	actionRestart
+	actionStart
 	actionMissing
 )
 
-// what waitForSegment knows about the latest ffmpeg run
+// what waitForSegment knows about an ffmpeg run
 type runState struct {
-	exists   bool // ffmpeg has run since the transcode was loaded
 	running  bool
 	finished bool // exited by itself after writing from start to the end
 	start    int
 	head     int
+	limit    int
 }
 
 /*
 Function:	segmentAction
-Purpose:	what to do about a segment that doesn't exist yet: wait for ffmpeg to reach it, restart
-ffmpeg there (it isn't running, or is behind or too far before the segment), or give
-up because a finished run passed it without writing it
+Purpose:	what to do about a segment that doesn't exist yet: wait for the run that will write it
+soon, start a new run there (no run is close before it), or give up because a finished run
+passed it without writing it. Returns the index of the run to wait on
 Params:
   - seg: the segment wanted
-  - run: the latest ffmpeg run
+  - runs: the transcode's runs
 */
-func segmentAction(seg int, run runState) action {
-	switch {
-	case !run.exists:
-		return actionRestart
-	case run.running:
-		if seg < run.start || seg > run.head+restartAheadSegments {
-			return actionRestart
+func segmentAction(seg int, runs []runState) (action, int) {
+	wait := -1
+	for i, run := range runs {
+		covers := run.running && seg >= run.start && seg < run.limit && seg <= run.head+restartAheadSegments
+		if covers && (wait < 0 || run.head > runs[wait].head) {
+			wait = i
 		}
-		return actionWait
-	case run.finished && seg >= run.start:
-		return actionMissing
-	default:
-		return actionRestart
 	}
+	if wait >= 0 {
+		return actionWait, wait
+	}
+	for _, run := range runs {
+		if run.finished && seg >= run.start {
+			return actionMissing, -1
+		}
+	}
+	return actionStart, -1
 }
 
 /*
 Function:	waitForSegment
-Purpose:	block until a segment exists, starting or restarting ffmpeg at it when waiting
-wouldn't get there soon
+Purpose:	block until a segment exists, starting an ffmpeg run at it when no run would get there soon
 Params:
   - seg: the segment wanted
   - deadline: when to give up
@@ -320,17 +347,23 @@ func (tc *transcode) waitForSegment(seg int, deadline time.Time) error {
 			tc.mu.Unlock()
 			return err
 		}
-		switch segmentAction(seg, tc.state()) {
+		now := time.Now()
+		var run *ffmpegRun
+		switch act, i := segmentAction(seg, tc.refresh(now)); act {
 		case actionMissing:
 			tc.mu.Unlock()
 			return errSegmentMissing
-		case actionRestart:
-			if err := tc.startRun(seg); err != nil {
+		case actionStart:
+			var err error
+			if run, err = tc.startRun(seg, now); err != nil {
 				tc.mu.Unlock()
 				return err
 			}
+		default:
+			run = tc.runs[i]
+			run.lastUsed = now
 		}
-		done := tc.run.done
+		done := run.done
 		tc.mu.Unlock()
 
 		select {
@@ -344,82 +377,227 @@ func (tc *transcode) waitForSegment(seg int, deadline time.Time) error {
 }
 
 /*
-Function:	state
-Purpose:	the latest run's progress, moving its head past any segments written since. tc.mu must be held
+Function:	touch
+Purpose:	note that a viewer asked for a segment already on disk, so the run writing ahead of them
+isn't stopped as idle
+Params:
+  - seg: the segment served
 */
-func (tc *transcode) state() runState {
-	run := tc.run
-	if run == nil {
-		return runState{}
+func (tc *transcode) touch(seg int) {
+	tc.mu.Lock()
+	defer tc.mu.Unlock()
+	now := time.Now()
+	for _, run := range tc.runs {
+		if seg >= run.start && seg < run.limit {
+			run.lastUsed = now
+		}
 	}
-	for fileExists(filepath.Join(tc.dir, segmentName(run.head+1))) {
-		run.head++
+}
+
+/*
+Function:	refresh
+Purpose:	move each run's head past segments written since, stop runs that reached segments
+already on disk or written by another run, or that no viewer has used in a while, and
+drop runs that were stopped or failed. Returns the state of the runs left. tc.mu must be held
+Params:
+  - now: the current time
+*/
+func (tc *transcode) refresh(now time.Time) []runState {
+	count := segmentCount(tc.manifest.Duration)
+	for _, run := range tc.runs {
+		for run.head+1 < run.limit && fileExists(filepath.Join(tc.dir, segmentName(run.head+1))) {
+			run.head++
+		}
+		if run.live() && (caughtUp(run, count) || now.Sub(run.lastUsed) > runIdleTimeout) {
+			tc.killRun(run)
+		}
 	}
-	state := runState{exists: true, start: run.start, head: run.head}
+	tc.prune()
+
+	states := make([]runState, len(tc.runs))
+	for i, run := range tc.runs {
+		states[i] = runState{start: run.start, head: run.head, limit: run.limit}
+		if run.live() {
+			states[i].running = true
+		} else {
+			states[i].finished = true
+		}
+	}
+	return states
+}
+
+/*
+Function:	caughtUp
+Purpose:	whether a run has written up to segments that are on disk or written by another run,
+so going on would only write them again
+Params:
+  - run: the run
+  - count: segments in the video
+*/
+func caughtUp(run *ffmpegRun, count int) bool {
+	return run.limit < count && run.head+1 >= run.limit
+}
+
+/*
+Function:	prune
+Purpose:	drop runs that were stopped or failed, keeping running ones and ones that wrote to the
+end by themselves. tc.mu must be held
+*/
+func (tc *transcode) prune() {
+	kept := tc.runs[:0]
+	for _, run := range tc.runs {
+		if run.live() || run.finished() {
+			kept = append(kept, run)
+		}
+	}
+	clear(tc.runs[len(kept):])
+	tc.runs = kept
+}
+
+/*
+Function:	live
+Purpose:	whether ffmpeg is still running
+*/
+func (run *ffmpegRun) live() bool {
 	select {
 	case <-run.done:
-		state.finished = !run.stopped && run.cmd.ProcessState.Success()
+		return false
 	default:
-		state.running = true
+		return true
 	}
-	return state
+}
+
+/*
+Function:	finished
+Purpose:	whether ffmpeg exited by itself without an error
+*/
+func (run *ffmpegRun) finished() bool {
+	return !run.live() && !run.stopped && run.cmd.ProcessState != nil && run.cmd.ProcessState.Success()
+}
+
+/*
+Function:	leastRecentlyUsed
+Purpose:	the running run no viewer has used for the longest, nil if none is running
+Params:
+  - runs: the transcode's runs
+*/
+func leastRecentlyUsed(runs []*ffmpegRun) *ffmpegRun {
+	var oldest *ffmpegRun
+	for _, run := range runs {
+		if run.live() && (oldest == nil || run.lastUsed.Before(oldest.lastUsed)) {
+			oldest = run
+		}
+	}
+	return oldest
+}
+
+/*
+Function:	runLimit
+Purpose:	the first segment after seg a new run would only write again: one on disk or the start
+of a later run, segmentCount if there is none
+Params:
+  - dir: the transcode folder
+  - seg: where the new run starts
+  - count: segments in the video
+  - runs: the transcode's runs
+*/
+func runLimit(dir string, seg, count int, runs []*ffmpegRun) int {
+	limit := count
+	// one listing instead of a stat per segment, the folder may be on the NAS
+	entries, _ := os.ReadDir(dir)
+	for _, entry := range entries {
+		if match := segmentNameRe.FindStringSubmatch(entry.Name()); match != nil {
+			if n, _ := strconv.Atoi(match[1]); n > seg && n < limit {
+				limit = n
+			}
+		}
+	}
+	for _, run := range runs {
+		if run.live() && run.start > seg && run.start < limit {
+			limit = run.start
+		}
+	}
+	return limit
 }
 
 /*
 Function:	stop
-Purpose:	kill ffmpeg if it's running
+Purpose:	kill every ffmpeg run
 */
 func (tc *transcode) stop() {
 	tc.mu.Lock()
 	defer tc.mu.Unlock()
-	tc.killRun()
+	for _, run := range tc.runs {
+		tc.killRun(run)
+	}
+	tc.prune()
 }
 
 /*
 Function:	killRun
-Purpose:	kill ffmpeg if it's running and wait for it to exit. tc.mu must be held
+Purpose:	kill a run if it's running and wait for it to exit. tc.mu must be held
+Params:
+  - run: the run
 */
-func (tc *transcode) killRun() {
-	run := tc.run
-	if run == nil {
+func (tc *transcode) killRun(run *ffmpegRun) {
+	if !run.live() {
 		return
 	}
-	select {
-	case <-run.done:
-	default:
-		run.stopped = true
-		run.cmd.Process.Kill()
-		// done closes before the exit handler locks tc.mu, so this can't deadlock
-		<-run.done
-	}
+	run.stopped = true
+	run.cmd.Process.Kill()
+	// done closes before the exit handler locks tc.mu, so this can't deadlock
+	<-run.done
 }
 
 /*
 Function:	startRun
-Purpose:	stop any running ffmpeg and start one writing segments from seg. Segments already on disk
-are kept. tc.mu must be held
+Purpose:	start an ffmpeg run writing segments from seg, stopping the least recently used run
+first when there are already maxRunsPerTranscode. Other runs keep going, a run before seg
+now stops when it gets there. tc.mu must be held
 Params:
   - seg: the first segment to write
+  - now: the current time
 */
-func (tc *transcode) startRun(seg int) error {
-	tc.killRun()
+func (tc *transcode) startRun(seg int, now time.Time) (*ffmpegRun, error) {
+	live := 0
+	for _, run := range tc.runs {
+		if run.live() {
+			live++
+		}
+	}
+	if live >= maxRunsPerTranscode {
+		tc.killRun(leastRecentlyUsed(tc.runs))
+		tc.prune()
+	}
 
-	// every run appends, so the log shows each restart
+	// every run appends, so the log shows each start. Runs at the same time interleave their warnings
 	log, err := os.OpenFile(filepath.Join(tc.dir, logFile), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	fmt.Fprintf(log, "--- %s starting at segment %d\n", time.Now().Format(time.RFC3339), seg)
+	fmt.Fprintf(log, "--- %s starting at segment %d\n", now.Format(time.RFC3339), seg)
 
 	cmd := exec.Command("ffmpeg", transcodeArgs(tc.dir, tc.manifest, seg)...)
 	cmd.Stderr = log
 	if err := cmd.Start(); err != nil {
 		log.Close()
-		return err
+		return nil, err
 	}
 
-	run := &ffmpegRun{cmd: cmd, start: seg, head: seg - 1, done: make(chan struct{})}
-	tc.run = run
+	count := segmentCount(tc.manifest.Duration)
+	run := &ffmpegRun{cmd: cmd, start: seg, head: seg - 1, limit: runLimit(tc.dir, seg, count, tc.runs),
+		lastUsed: now, done: make(chan struct{})}
+	for _, other := range tc.runs {
+		if other.live() && other.start < seg && seg < other.limit {
+			other.limit = seg
+		}
+	}
+	tc.runs = append(tc.runs, run)
+	if !tc.reaping {
+		tc.reaping = true
+		go tc.reapIdle()
+	}
+
 	go func() {
 		err := cmd.Wait()
 		log.Close()
@@ -430,10 +608,39 @@ func (tc *transcode) startRun(seg int) error {
 		if err != nil && !run.stopped {
 			logger.Error("transcode %s failed: %v\n%s", tc.dir, err, tailFile(filepath.Join(tc.dir, logFile), 2048))
 			tc.err = err
+			// the others must not write into the folder once it's gone
+			for _, other := range tc.runs {
+				tc.killRun(other)
+			}
+			tc.prune()
 			os.RemoveAll(tc.dir)
 		}
 	}()
-	return nil
+	return run, nil
+}
+
+/*
+Function:	reapIdle
+Purpose:	while runs are going, stop the ones no viewer uses any more (the tab was closed) or that
+caught up with segments already written, even when no segment is requested
+*/
+func (tc *transcode) reapIdle() {
+	ticker := time.NewTicker(reapInterval)
+	defer ticker.Stop()
+	for range ticker.C {
+		tc.mu.Lock()
+		tc.refresh(time.Now())
+		running := false
+		for _, run := range tc.runs {
+			running = running || run.live()
+		}
+		if !running {
+			tc.reaping = false
+			tc.mu.Unlock()
+			return
+		}
+		tc.mu.Unlock()
+	}
 }
 
 /*
@@ -503,7 +710,9 @@ func transcodeArgs(dir string, manifest streamManifest, startSeg int) []string {
 		// segments are written to .tmp and renamed, so one that exists is complete
 		"-hls_flags", "temp_file",
 		"-f", "hls",
-		filepath.Join(dir, ffmpegPlaylistFile),
+		// ffmpeg's own playlist, never served (playlist.m3u8 lists every segment up front).
+		// One per run, so runs at the same time don't write the same file
+		filepath.Join(dir, fmt.Sprintf("ffmpeg-%d.m3u8", startSeg)),
 	)
 	return args
 }
