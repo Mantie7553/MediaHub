@@ -55,26 +55,127 @@ func TestVodPlaylist(t *testing.T) {
 }
 
 func TestSegmentAction(t *testing.T) {
+	running := func(start, head, limit int) runState {
+		return runState{running: true, start: start, head: head, limit: limit}
+	}
 	tests := []struct {
-		name string
-		seg  int
-		run  runState
-		want action
+		name    string
+		seg     int
+		runs    []runState
+		want    action
+		wantRun int
 	}{
-		{"nothing running yet", 10, runState{}, actionRestart},
-		{"next segment", 10, runState{exists: true, running: true, start: 0, head: 9}, actionWait},
-		{"a little ahead", 15, runState{exists: true, running: true, start: 0, head: 9}, actionWait},
-		{"seek far ahead", 16, runState{exists: true, running: true, start: 0, head: 9}, actionRestart},
-		{"seek back before the run", 3, runState{exists: true, running: true, start: 50, head: 60}, actionRestart},
-		{"just restarted there", 50, runState{exists: true, running: true, start: 50, head: 49}, actionWait},
-		{"gap before a finished run", 3, runState{exists: true, finished: true, start: 50, head: 400}, actionRestart},
-		{"finished run never wrote it", 401, runState{exists: true, finished: true, start: 50, head: 400}, actionMissing},
-		{"killed run", 401, runState{exists: true, start: 50, head: 60}, actionRestart},
+		{"nothing running yet", 10, nil, actionStart, -1},
+		{"next segment", 10, []runState{running(0, 9, 500)}, actionWait, 0},
+		{"a little ahead", 15, []runState{running(0, 9, 500)}, actionWait, 0},
+		{"seek far ahead", 16, []runState{running(0, 9, 500)}, actionStart, -1},
+		{"seek back before the run", 3, []runState{running(50, 60, 500)}, actionStart, -1},
+		{"just started there", 50, []runState{running(50, 49, 500)}, actionWait, 0},
+		// a second viewer far from the first gets their own run, the first keeps going
+		{"waits on the run near it", 205, []runState{running(0, 30, 200), running(200, 203, 500)}, actionWait, 1},
+		{"past a run's limit", 201, []runState{running(0, 199, 200)}, actionStart, -1},
+		{"picks the run furthest along", 12, []runState{running(0, 8, 500), running(10, 11, 500)}, actionWait, 1},
+		{"gap before a finished run", 3, []runState{{finished: true, start: 50, head: 400, limit: 401}}, actionStart, -1},
+		{"finished run never wrote it", 401, []runState{{finished: true, start: 50, head: 400, limit: 402}}, actionMissing, -1},
 	}
 	for _, tt := range tests {
-		if got := segmentAction(tt.seg, tt.run); got != tt.want {
-			t.Errorf("%s: got %v, want %v", tt.name, got, tt.want)
+		got, run := segmentAction(tt.seg, tt.runs)
+		if got != tt.want || run != tt.wantRun {
+			t.Errorf("%s: got %v run %d, want %v run %d", tt.name, got, run, tt.want, tt.wantRun)
 		}
+	}
+}
+
+// a run whose ffmpeg is still going, or has exited when done is closed
+func testRun(start, head, limit int, lastUsed time.Time, exited bool) *ffmpegRun {
+	run := &ffmpegRun{start: start, head: head, limit: limit, lastUsed: lastUsed, done: make(chan struct{})}
+	if exited {
+		close(run.done)
+	}
+	return run
+}
+
+func TestLeastRecentlyUsed(t *testing.T) {
+	now := time.Now()
+	recent := testRun(0, 10, 100, now, false)
+	old := testRun(100, 110, 200, now.Add(-time.Minute), false)
+	exited := testRun(200, 210, 300, now.Add(-time.Hour), true)
+	if got := leastRecentlyUsed([]*ffmpegRun{recent, old, exited}); got != old {
+		t.Errorf("got run from %d, want the oldest running one from 100", got.start)
+	}
+	if got := leastRecentlyUsed([]*ffmpegRun{exited}); got != nil {
+		t.Errorf("got a run that already exited")
+	}
+}
+
+func TestCaughtUp(t *testing.T) {
+	if caughtUp(testRun(0, 98, 100, time.Now(), false), 500) {
+		t.Error("caught up before reaching its limit")
+	}
+	if !caughtUp(testRun(0, 99, 100, time.Now(), false), 500) {
+		t.Error("not caught up at the segment before its limit")
+	}
+	// the last segment is the end of the video, not another run's segments
+	if caughtUp(testRun(0, 499, 500, time.Now(), false), 500) {
+		t.Error("a run at the end of the video counted as caught up")
+	}
+}
+
+func TestRunLimit(t *testing.T) {
+	dir := t.TempDir()
+	for _, seg := range []int{3, 40, 41} {
+		if err := os.WriteFile(filepath.Join(dir, segmentName(seg)), []byte("ts"), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	now := time.Now()
+	runs := []*ffmpegRun{testRun(30, 32, 40, now, false), testRun(20, 25, 30, now, true)}
+
+	if got := runLimit(dir, 10, 100, runs); got != 30 {
+		t.Errorf("limit from 10 = %d, want 30 where a later run starts", got)
+	}
+	// an exited run's start doesn't count, segments on disk do
+	if got := runLimit(dir, 15, 100, runs[1:]); got != 40 {
+		t.Errorf("limit from 15 = %d, want 40 where segments are on disk", got)
+	}
+	if got := runLimit(dir, 50, 100, runs); got != 100 {
+		t.Errorf("limit from 50 = %d, want the segment count", got)
+	}
+}
+
+func TestRefreshAndTouch(t *testing.T) {
+	dir := t.TempDir()
+	for _, seg := range []int{10, 11, 12} {
+		if err := os.WriteFile(filepath.Join(dir, segmentName(seg)), []byte("ts"), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	now := time.Now()
+	tc := &transcode{dir: dir, manifest: streamManifest{Duration: 400}}
+	run := testRun(10, 9, 50, now.Add(-time.Minute), false)
+	tc.runs = []*ffmpegRun{run}
+
+	states := tc.refresh(now)
+	if len(states) != 1 || !states[0].running || states[0].head != 12 {
+		t.Fatalf("states = %+v, want one running run with head 12", states)
+	}
+
+	// a viewer served segments already on disk keeps their run from going idle
+	tc.touch(11)
+	if !run.lastUsed.After(now.Add(-time.Second)) {
+		t.Errorf("touching a segment of the run didn't mark it used")
+	}
+	before := run.lastUsed
+	tc.touch(60)
+	if run.lastUsed != before {
+		t.Errorf("touching a segment past the run's limit marked it used")
+	}
+
+	// exited runs that didn't finish by themselves are dropped
+	tc.runs = append(tc.runs, testRun(100, 99, 200, now, true))
+	tc.runs[1].stopped = true
+	if states := tc.refresh(now); len(states) != 1 {
+		t.Errorf("kept a stopped run: %+v", states)
 	}
 }
 
@@ -89,7 +190,7 @@ func TestWaitForSegment(t *testing.T) {
 	if err := tc.waitForSegment(2, time.Now().Add(time.Second)); err != nil {
 		t.Fatal(err)
 	}
-	if tc.run != nil {
+	if len(tc.runs) != 0 {
 		t.Fatal("started ffmpeg for a segment on disk")
 	}
 	for _, seg := range []int{-1, 5} {
@@ -126,6 +227,10 @@ func TestTranscodeArgs(t *testing.T) {
 	}
 
 	resumed := strings.Join(transcodeArgs("out", streamManifest{Source: "in.mkv", BurnIndex: -1, AudioIndex: 2}, 150), " ")
+	// each run has its own ffmpeg playlist, so runs at the same time don't share one
+	if !strings.HasSuffix(args, "ffmpeg-0.m3u8") || !strings.HasSuffix(resumed, "ffmpeg-150.m3u8") {
+		t.Errorf("runs don't write their own ffmpeg playlist: %s / %s", args, resumed)
+	}
 	for _, want := range []string{"-ss 600 -protocol_whitelist file -i in.mkv", "-output_ts_offset 600", "-start_number 150"} {
 		if !strings.Contains(resumed, want) {
 			t.Errorf("resumed args missing %q: %s", want, resumed)
