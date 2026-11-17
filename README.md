@@ -122,6 +122,8 @@ MediaHub's catalog is built from Sonarr, Radarr and the `Manga`, `Light Novels` 
 - **Files deleted or renamed in Sonarr/Radarr** are updated through the webhook too. A deleted episode or movie keeps its place, and everyone's progress, but shows as not available until a file comes back.
 - **Everything else** (files added by hand, a Sonarr/Radarr *Library Import*) is picked up by the **library sync**. It runs every night at `LIBRARY_SYNC_HOUR` (default 4 am), or on demand from *Settings → Library Sync → Sync Library* (admins only).
 
+Music is filed by folder (`Music/Artist/Album/track.mp3`). The sync fills in a track's number, length and genres and its album's year from the file's ID3 tags when MediaHub doesn't have them, and never changes titles, artists or albums an admin has edited. Manga and light novel folders already in the library are only checked for new files; MangaDex/AniList are asked again only for new folders, or (light novels) once their data is a week old.
+
 For an existing collection, first add it to Sonarr/Radarr (*Series/Movies → Library Import*, **Anime** profile), then run the sync.
 
 **Removing titles.** Anyone can take a title off their own list (the status menu on its page, or the card's list dialog). Admins can also **Delete from server**, which deletes the files, removes the series/movie from Sonarr/Radarr so it isn't downloaded again, and clears it from everyone's lists. It asks you to type the title first and can't be undone.
