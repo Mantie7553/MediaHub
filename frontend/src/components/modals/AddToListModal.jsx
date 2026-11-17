@@ -9,14 +9,13 @@ import { hasParts, partsLabel, progressRange } from "../../utils/progress";
  * @param {function} onConfirm called with { status, score, progress }; progress is undefined
  *  unless it was changed, so chapters read out of order aren't redone
  * @param {object} initialValues the user's list entry, when the title is already on their list
- * @param {boolean} isLibraryItem the title is in the library (no wishlist option then)
  * @param {function} onRemove takes the title off the user's list, shown for titles on it
  * @param {function} onDelete admins: opens the permanent delete confirmation
  * @param {function} onAddToCollection opens the playlist / collection picker, for titles in the library
  * @param {string} mediaId the title's id in the library, to load the user's progress through it
  * @param {number} openCount goes up each time the dialog opens, which reloads that progress
  */
-export default function AddToListModal({item, onConfirm, dialogRef, initialValues, isLibraryItem, onRemove, onDelete, onAddToCollection, mediaId, openCount = 0}) {
+export default function AddToListModal({item, onConfirm, dialogRef, initialValues, onRemove, onDelete, onAddToCollection, mediaId, openCount = 0}) {
     const type = item.type || item.media_type;
     const [status, setStatus] = useState(initialValues?.status ?? 'planned');
     const [score, setScore] = useState(initialValues?.rating ?? 0);
@@ -55,12 +54,13 @@ export default function AddToListModal({item, onConfirm, dialogRef, initialValue
     const shownProgress = progress ?? startProgress;
     const progressChanged = progress !== null && progress !== startProgress;
 
+    // adding to a list only tracks a title; the wishlist is what asks for it to be downloaded
+    // (the server does nothing for one that is already downloaded or requested)
     function statusOptions(type) {
-        const withWishlist = !isLibraryItem;
         switch(type) {
             case "music_album": return ["completed", "planned"]
-            case "movie": return ["completed", "current", ...(withWishlist ? ["wishlist"] : [])]
-            default: return ["completed", "current", "dropped", "planned", ...(withWishlist ? ["wishlist"] : [])]
+            case "movie": return ["completed", "current", "wishlist"]
+            default: return ["completed", "current", "dropped", "planned", "wishlist"]
         }
     }
 

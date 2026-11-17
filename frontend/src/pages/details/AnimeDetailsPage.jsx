@@ -176,7 +176,9 @@ export default function AnimeDetailsPage() {
                     <ListStatusMenu
                         status={userEntry?.status}
                         type={anime.type}
-                        options={["current", "completed", "dropped", "planned"]}
+                        options={["current", "completed", "dropped", "planned",
+                            // wishlisting a title that has no episodes yet downloads it
+                            ...((episodesLoaded && episodes.length === 0) || userEntry?.status === "wishlist" ? ["wishlist"] : [])]}
                         onSelect={updateStatus}
                         onRemove={removeEntry}
                     />

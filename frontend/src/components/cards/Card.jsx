@@ -173,14 +173,15 @@ function ActionButtons({item, userEntry, onListChange, onDeleted}) {
             .catch(err => toast.error(err, "Could not update your list"))
             .finally(() => setLoading(false))
         } else if (item.external_source) {
-            // not in DB yet — save and dispatch download if permitted
+            // not in DB yet: save it to the list. Only a wishlist entry downloads it, the server
+            // asks for that (started at once for users allowed to download)
             api.post("/search/save", {
                 external_id: item.external_id,
                 external_source: item.external_source,
                 title: item.title,
                 cover_image_url: item.cover_image_url,
                 type: item.type,
-                action: status === "wishlist" ? "both" : "list",
+                action: "list",
                 status,
                 rating: score === 0 ? null : score,
                 progress,
@@ -199,10 +200,8 @@ function ActionButtons({item, userEntry, onListChange, onDeleted}) {
             .finally(() => setLoading(false))
     }
 
-    const isLibraryItem = !!(userEntry || item.id);
-
     return <>
-        <AddToListModal item={item} onConfirm={handleConfirm} dialogRef={dialogRef} initialValues={userEntry} isLibraryItem={isLibraryItem}
+        <AddToListModal item={item} onConfirm={handleConfirm} dialogRef={dialogRef} initialValues={userEntry}
             mediaId={mediaId} openCount={openCount}
             onRemove={userEntry ? handleRemove : undefined}
             onDelete={canDelete ? () => deleteRef.current.showModal() : undefined}

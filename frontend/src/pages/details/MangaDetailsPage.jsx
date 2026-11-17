@@ -159,7 +159,9 @@ export default function MangaDetailsPage() {
                     <ListStatusMenu
                         status={userEntry?.status}
                         type={manga.type}
-                        options={["current", "completed", "dropped", "planned"]}
+                        options={["current", "completed", "dropped", "planned",
+                            // wishlisting a manga that has no chapters yet downloads it
+                            ...(chapters.length === 0 || userEntry?.status === "wishlist" ? ["wishlist"] : [])]}
                         onSelect={updateStatus}
                         onRemove={removeEntry}
                     />

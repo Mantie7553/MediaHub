@@ -5,7 +5,9 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/Mantie7553/MediaHub/backend/internal/downloader"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/auth"
+	"github.com/Mantie7553/MediaHub/backend/internal/platform/logger"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/utils"
 	"github.com/Mantie7553/MediaHub/backend/internal/tracking"
 	"github.com/go-chi/chi/v5"
@@ -81,6 +83,9 @@ func (h *Handler) Add(w http.ResponseWriter, r *http.Request) {
 
 	if utils.InternalError(w, tx.Commit()) {
 		return
+	}
+	if req.Status == "wishlist" && req.MediaItemId != "" {
+		h.requestWishlisted(user.UserID, req.MediaItemId)
 	}
 
 	// return the id of the new entry
@@ -274,9 +279,29 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	if utils.InternalError(w, tx.Commit()) {
 		return
 	}
+	if status != nil && *status == "wishlist" && mediaItemID.Valid {
+		h.requestWishlisted(user.UserID, mediaItemID.String)
+	}
 
 	// return the id for the updated status
 	utils.JSON(w, map[string]string{"id": mediaStatusId})
+}
+
+/*
+Function:	requestWishlisted
+Purpose:	download a title the user just wishlisted, if it isn't downloaded or requested yet. In
+the background: starting a Sonarr / Radarr download can take a few seconds, and the list entry
+is saved whether it works or not
+Params:
+  - userID: the user
+  - mediaItemID: the title
+*/
+func (h *Handler) requestWishlisted(userID, mediaItemID string) {
+	go func() {
+		if err := downloader.RequestWishlisted(h.db, userID, mediaItemID); err != nil {
+			logger.Error("download request for wishlisted %s failed: %s", mediaItemID, err.Error())
+		}
+	}()
 }
 
 /*
