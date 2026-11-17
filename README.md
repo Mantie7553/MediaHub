@@ -90,7 +90,7 @@ What the first-run `bootstrap` container sets up (re-running it changes nothing)
 - In Sonarr and Radarr:
   - root folders `<media>/TV Shows` and `<media>/Movies`
   - qBittorrent as the download client, with completed and failed downloads removed
-  - the MediaHub webhook with `X-MediaHub-Secret`
+  - the MediaHub webhook with `X-MediaHub-Secret`, sent on import, upgrade, rename and file/title deletes. These events are re-applied on every run, so an older install picks them up
   - login
   - the custom formats and the **Anime** quality profile from `deploy/bootstrap/arr-settings.json`
 - In Prowlarr: Sonarr and Radarr as apps.
@@ -118,7 +118,8 @@ Qualities are grouped as SD / 720p / 1080p. Within a resolution the score decide
 
 ## Keeping the library in sync
 MediaHub's catalog is built from Sonarr, Radarr and the `Manga`, `Light Novels` and `Music` folders:
-- **Requests made in MediaHub** appear as soon as Sonarr/Radarr import them (webhooks).
+- **Anything Sonarr/Radarr import**, whether requested in MediaHub or added there directly, appears as soon as it's imported (webhooks). The title is synced like in the nightly sync: metadata, AniList data and the MyAnimeList ids skip intro uses.
+- **Files deleted or renamed in Sonarr/Radarr** are updated through the webhook too. A deleted episode or movie keeps its place, and everyone's progress, but shows as not available until a file comes back.
 - **Everything else** (files added by hand, a Sonarr/Radarr *Library Import*) is picked up by the **library sync**. It runs every night at `LIBRARY_SYNC_HOUR` (default 4 am), or on demand from *Settings → Library Sync → Sync Library* (admins only).
 
 For an existing collection, first add it to Sonarr/Radarr (*Series/Movies → Library Import*, **Anime** profile), then run the sync.
@@ -178,6 +179,7 @@ For working on MediaHub itself. Install these first:
     - **URL:** `<api_url>/api/webhooks/sonarr` (or `/radarr`)
     - **Method:** `POST`
     - **Headers:** add `X-MediaHub-Secret` with the value of `WEBHOOK_SECRET`
+    - **Notification triggers:** On File Import, On File Upgrade, On Rename, On Series/Movie Delete and On Episode/Movie File Delete (not *...For Upgrade*)
 
     Webhook calls without the header are rejected. Don't put the secret in the URL, it would end up in access logs.
 3. Sign up is invite only. Log in as an admin, go to *User Management → Invites → Create Invite*, and share the code or link it gives you. Each code works for one sign up.

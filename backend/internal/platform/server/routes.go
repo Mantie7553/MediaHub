@@ -120,7 +120,7 @@ func (s *Server) routes() {
 	streamHandler := stream.NewHandler(s.db)
 	syncHandler := sync.NewHandler(s.db)
 	s.sync = syncHandler
-	webhooksHandler := webhooks.NewHandler(s.db)
+	webhooksHandler := webhooks.NewHandler(s.db, syncHandler)
 	usersHandler := users.NewHandler(s.db)
 	insightsHandler := insights.NewHandler(s.db)
 	s.insights = insightsHandler

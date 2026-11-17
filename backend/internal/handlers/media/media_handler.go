@@ -864,7 +864,8 @@ func (h *Handler) GetEpisodes(w http.ResponseWriter, r *http.Request) {
 		`SELECT e.id, e.season_number, e.episode_number, e.title, e.title_locked,
 		COALESCE(uap.watched, false),
 		COALESCE(uep.position_secs, 0),
-		COALESCE(uep.duration_secs, 0)
+		COALESCE(uep.duration_secs, 0),
+		COALESCE(e.file_path, '') <> ''
 		FROM episodes e
 		LEFT JOIN user_anime_progress uap ON uap.episode_id = e.id AND uap.user_id = $2
 		LEFT JOIN user_episode_progress uep ON uep.episode_id = e.id AND uep.user_id = $2
@@ -879,7 +880,7 @@ func (h *Handler) GetEpisodes(w http.ResponseWriter, r *http.Request) {
 
 	for rows.Next() {
 		var ep Episode
-		if err := rows.Scan(&ep.ID, &ep.SeasonNumber, &ep.EpisodeNumber, &ep.Title, &ep.TitleLocked, &ep.Watched, &ep.PositionSecs, &ep.DurationSecs); err != nil {
+		if err := rows.Scan(&ep.ID, &ep.SeasonNumber, &ep.EpisodeNumber, &ep.Title, &ep.TitleLocked, &ep.Watched, &ep.PositionSecs, &ep.DurationSecs, &ep.Available); err != nil {
 			utils.InternalError(w, err)
 			return
 		}

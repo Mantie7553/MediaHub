@@ -163,10 +163,21 @@ def from_schema(api, kind, implementation, name, values, extra=None):
     return item
 
 
-def ensure_provider(api, kind, implementation, name, values, extra=None):
+def ensure_provider(api, kind, implementation, name, values, extra=None, sync_extra=False):
+    """Add the provider if it's missing. With sync_extra, an existing one also gets the `extra`
+    settings (e.g. the webhook's events) when they differ, so an older install picks up new ones."""
     existing = [p for p in api.get(f"/{kind}") if p["implementation"] == implementation]
-    if any(p["name"] == name for p in existing):
-        log(f"  {api.name}: {kind} '{name}' already set up")
+    current = next((p for p in existing if p["name"] == name), None)
+    if current is not None:
+        unknown = sorted(k for k in (extra or {}) if k not in current)
+        if unknown:
+            log(f"  warning: {api.name} {kind} '{name}' has no settings {unknown}")
+        changed = {k: v for k, v in (extra or {}).items() if k in current and current[k] != v}
+        if sync_extra and changed:
+            api.put(f"/{kind}/{current['id']}", dict(current, **changed))
+            log(f"  {api.name}: updated {kind} '{name}' ({', '.join(sorted(changed))})")
+        else:
+            log(f"  {api.name}: {kind} '{name}' already set up")
         return
     api.post(f"/{kind}", from_schema(api, kind, implementation, name, values, extra))
     log(f"  {api.name}: added {kind} '{name}'")
@@ -370,6 +381,16 @@ def check_quality_profile(api):
         log(f"  warning: {api.name} has no quality profile with id 1, MediaHub requests will fail")
 
 
+# the events each app sends MediaHub's webhook: new and renamed files sync the title, deleted
+# files and titles clear its files. A file deleted for an upgrade is followed by its Download
+WEBHOOK_EVENTS = {
+    "Sonarr": {"onDownload": True, "onUpgrade": True, "onRename": True, "onSeriesDelete": True,
+               "onEpisodeFileDelete": True, "onEpisodeFileDeleteForUpgrade": False},
+    "Radarr": {"onDownload": True, "onUpgrade": True, "onRename": True, "onMovieDelete": True,
+               "onMovieFileDelete": True, "onMovieFileDeleteForUpgrade": False},
+}
+
+
 def setup_arr(api, settings, media_folder, category_field, category, webhook_path):
     log(f"{api.name}:")
     set_login(api)
@@ -385,7 +406,7 @@ def setup_arr(api, settings, media_folder, category_field, category, webhook_pat
         "url": BACKEND_URL + webhook_path,
         "method": 1,  # POST
         "headers": [{"key": "X-MediaHub-Secret", "value": WEBHOOK_SECRET}],
-    }, extra={"onDownload": True, "onUpgrade": True})
+    }, extra=WEBHOOK_EVENTS[api.name], sync_extra=True)
     # formats first, profiles score them by name
     sync_custom_formats(api, settings.get("customFormats", []))
     sync_quality_profiles(api, settings.get("qualityProfiles", []))
