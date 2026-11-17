@@ -96,7 +96,7 @@ func (h *Handler) Save(w http.ResponseWriter, r *http.Request) {
 
 	// anything downloaded by yt-dlp (music, and types without a handler of their own) needs a
 	// YouTube video link; any link sent is checked, and kept only in its canonical form
-	download := req.Action == "download" || req.Action == "both"
+	download := req.Action == "download"
 	usesYtdlp := req.Type != "anime" && req.Type != "movie" && req.Type != "manga"
 	if req.SourceURL != "" || (download && usesYtdlp) {
 		canonical, err := ytdlp.CanonicalURL(req.SourceURL)
@@ -328,10 +328,19 @@ func (h *Handler) Save(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
+		// only a wishlist downloads; tracking a title on any other list never does
+		if req.Status == "wishlist" {
+			go func(userID string) {
+				if err := downloader.RequestWishlisted(h.db, userID, mediaItemID); err != nil {
+					logger.Error("download request for wishlisted %s failed: %s", mediaItemID, err.Error())
+				}
+			}(user.UserID)
+		}
 	}
 
-	// create a download request if requested
-	if req.Action == "download" || req.Action == "both" {
+	// create a download request when asked outright (music from Discover). "both" is a list
+	// save: its download, if any, comes from the wishlist above
+	if req.Action == "download" {
 		// check the users download permissions
 		var downloadPermissions string
 		err := h.db.QueryRow(

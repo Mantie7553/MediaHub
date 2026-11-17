@@ -126,6 +126,8 @@ Music is filed by folder (`Music/Artist/Album/track.mp3`). The sync fills in a t
 
 For an existing collection, first add it to Sonarr/Radarr (*Series/Movies → Library Import*, **Anime** profile), then run the sync.
 
+**Tracking vs downloading.** Adding a title to a list (Watching, Plan to Watch, Completed...) only tracks it. Setting it to **Wishlist** is what asks for it to be downloaded, from search or later from its card or details page. Users allowed to download start the download at once; for the rest it waits on the Downloads page for an admin. Anime, movies and manga download this way; music is requested from Discover. The nightly new-chapter check only covers manga that are downloaded (chapters on disk, an approved request or a Suwayomi link), never ones that are only on someone's list.
+
 **Removing titles.** Anyone can take a title off their own list (the status menu on its page, or the card's list dialog). Admins can also **Delete from server**, which deletes the files, removes the series/movie from Sonarr/Radarr so it isn't downloaded again, and clears it from everyone's lists. It asks you to type the title first and can't be undone.
 
 ## Updating

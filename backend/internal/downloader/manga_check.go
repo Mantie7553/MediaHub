@@ -68,6 +68,19 @@ func NewChapterCheck(db *sql.DB, mediaItemID string, requestedBy *string) (strin
 	return jobID, err
 }
 
+/*
+the manga the nightly check keeps up to date: ones linked to a Suwayomi source by an admin, and
+MangaDex ones the library downloads, with chapters on disk or an approved request. A manga that
+is only on someone's list (saved from search, so it has a MangaDex id) is never downloaded
+*/
+const downloadedMangaQuery = `SELECT id FROM media_items mi
+	WHERE type = 'manga' AND (
+		EXISTS (SELECT 1 FROM suwayomi_items s WHERE s.media_item_id = mi.id)
+		OR (external_source = 'mangadex' AND COALESCE(external_id, '') <> '' AND (
+			EXISTS (SELECT 1 FROM manga_chapters c WHERE c.media_item_id = mi.id AND c.file_path IS NOT NULL)
+			OR EXISTS (SELECT 1 FROM download_requests r WHERE r.media_item_id = mi.id
+				AND r.status NOT IN ('pending', 'rejected')))))`
+
 // only one nightly pass at a time, a slow one could still be going the next night
 var checkingLibrary atomic.Bool
 
@@ -85,12 +98,7 @@ func CheckLibraryForNewChapters(db *sql.DB) {
 	}
 	defer checkingLibrary.Store(false)
 
-	rows, err := db.Query(
-		`SELECT id FROM media_items mi
-		WHERE type = 'manga' AND (
-			(external_source = 'mangadex' AND COALESCE(external_id, '') <> '')
-			OR EXISTS (SELECT 1 FROM suwayomi_items s WHERE s.media_item_id = mi.id))`,
-	)
+	rows, err := db.Query(downloadedMangaQuery)
 	if err != nil {
 		logger.Error("new chapter check: %s", err.Error())
 		return
