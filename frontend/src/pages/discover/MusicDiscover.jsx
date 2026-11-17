@@ -13,6 +13,7 @@ import { toast } from "../../stores/useToastStore"
 import SearchField from "../../components/SearchField"
 import SectionHeader from "../../components/layout/SectionHeader"
 import Format from "../../utils/format"
+import TrackByline, { ExplicitBadge } from "../../components/TrackByline"
 
 export default function MusicDiscover({ onListChange }) {
     const albums = useApi("/albums", { initial: [] });
@@ -35,9 +36,14 @@ export default function MusicDiscover({ onListChange }) {
         setSearching(true)
 
         api.get(`/music/yt-search?q=${encodeURIComponent(q)}&limit=${limitVal}`)
-            .then(res => setSearch({ query: q, results: res.data ?? [], error: null }))
-            .catch(err => setSearch({ query: q, results: [], error: err }))
+            .then(res => setSearch({ query: q, songs: res.data?.songs ?? [], videos: res.data?.videos ?? [], error: null }))
+            .catch(err => setSearch({ query: q, songs: [], videos: [], error: err }))
             .finally(() => setSearching(false))
+    }
+
+    function openRequest(track) {
+        setSelectedTrack(track)
+        dialogRef.current.showModal()
     }
 
     function handleRequest({ artist, album }) {
@@ -92,35 +98,50 @@ export default function MusicDiscover({ onListChange }) {
             <ListSkeleton rows={4} />
         ) : search?.error ? (
             <ErrorState compact error={search.error} onRetry={handleSearch} />
-        ) : search && search.results.length === 0 ? (
+        ) : search && search.songs.length === 0 && search.videos.length === 0 ? (
             <EmptyState compact title={`No results for "${search.query}"`} hint="Try fewer words, or the artist's name." />
-        ) : search && (
-            <section>
-                <SectionHeader title={`Results for "${search.query}"`} count={search.results.length}/>
-                <ul className="surface flex flex-col p-1.5">
-                    {search.results.map(track => (
-                        <li key={track.id} className="flex items-center gap-3 p-2.5 hover:bg-white/5 rounded-field transition-colors">
-                            <Cover src={track.thumbnail} alt={track.title} className="size-12 shrink-0 rounded-lg object-cover" />
-                            <div className="flex-1 min-w-0">
-                                <p className="font-medium text-sm truncate">{track.title}</p>
-                                <p className="text-xs text-base-content/60 truncate">{track.uploader}</p>
-                            </div>
-                            <span className="hidden sm:flex text-xs text-base-content/50 items-center gap-1 tabular-nums">
-                                <Clock size={12} />
-                                {track.duration_secs ? Format.duration(track.duration_secs) : "--:--"}
-                            </span>
-                            <button className="btn btn-primary btn-sm btn-circle" aria-label={`Request ${track.title}`} onClick={() => { setSelectedTrack(track); dialogRef.current.showModal(); }}>
-                                <Plus size={16}/>
-                            </button>
-                        </li>
-                    ))}
-                </ul>
-            </section>
-        )}
+        ) : search && <>
+            <TrackSection heading={`Songs for "${search.query}"`} tracks={search.songs} onRequest={openRequest}/>
+            <TrackSection heading={search.songs.length > 0 ? "Videos" : `Videos for "${search.query}"`} tracks={search.videos} onRequest={openRequest}/>
+        </>}
         <MusicRequestModal dialogRef={dialogRef} track={selectedTrack} artists={artists.data} onConfirm={handleRequest} />
 
         {/* recommendations are optional, they stay hidden when empty or failed */}
         {recommended.data.length > 0 && <AlbumList albums={recommended.data} heading="Recommended" />}
 
     </div>
+}
+
+/**
+ * A list of music search results, hidden when there are none
+ * @param {string} heading the section's title
+ * @param {object[]} tracks the results
+ * @param {function} onRequest called with a track when its download button is pressed
+ */
+function TrackSection({ heading, tracks, onRequest }) {
+    if (tracks.length === 0) return null
+    return <section>
+        <SectionHeader title={heading} count={tracks.length}/>
+        <ul className="surface flex flex-col p-1.5">
+            {tracks.map(track => (
+                <li key={track.id} className="flex items-center gap-3 p-2.5 hover:bg-white/5 rounded-field transition-colors">
+                    <Cover src={track.thumbnail} alt={track.title} className="size-12 shrink-0 rounded-lg object-cover" />
+                    <div className="flex-1 min-w-0">
+                        <p className="flex items-center gap-1.5 min-w-0">
+                            <span className="font-medium text-sm truncate">{track.title}</span>
+                            {track.explicit && <ExplicitBadge/>}
+                        </p>
+                        <TrackByline track={track} className="text-xs text-base-content/60"/>
+                    </div>
+                    <span className="hidden sm:flex text-xs text-base-content/50 items-center gap-1 tabular-nums">
+                        <Clock size={12} />
+                        {track.duration_secs ? Format.duration(track.duration_secs) : "--:--"}
+                    </span>
+                    <button className="btn btn-primary btn-sm btn-circle" aria-label={`Request ${track.title}`} onClick={() => onRequest(track)}>
+                        <Plus size={16}/>
+                    </button>
+                </li>
+            ))}
+        </ul>
+    </section>
 }

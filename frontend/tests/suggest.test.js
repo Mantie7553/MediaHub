@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { artistFromUploader, canonical, suggestions } from "../src/utils/suggest"
+import { albumFromTrack, artistFromTrack, artistFromUploader, canonical, suggestions } from "../src/utils/suggest"
 
 const artists = ["Ado", "Aimer", "LiSA", "YOASOBI", "Kenshi Yonezu"]
 
@@ -40,5 +40,31 @@ describe("artist from a YouTube channel", () => {
     it("keeps other names", () => {
         expect(artistFromUploader("YOASOBI and Echoes")).toBe("YOASOBI and Echoes")
         expect(artistFromUploader(undefined)).toBe("")
+    })
+})
+
+describe("artist from a search result", () => {
+    it("takes the first credited artist", () => {
+        expect(artistFromTrack({ artists: ["Kendrick Lamar", "Taylour Paige"], uploader: "Kendrick Lamar" })).toBe("Kendrick Lamar")
+    })
+
+    it("falls back to the channel", () => {
+        expect(artistFromTrack({ artists: [], uploader: "Aimer - Topic" })).toBe("Aimer")
+        expect(artistFromTrack({ uploader: "Final Move" })).toBe("Final Move")
+    })
+})
+
+describe("album from a search result", () => {
+    it("keeps an album track's album", () => {
+        expect(albumFromTrack({ title: "We Cry Together", album: "Mr. Morale & The Big Steppers" })).toBe("Mr. Morale & The Big Steppers")
+    })
+
+    it("leaves a single empty so it goes under Singles", () => {
+        expect(albumFromTrack({ title: "Not Like Us", album: "Not Like Us" })).toBe("")
+        expect(albumFromTrack({ title: "Not like us ", album: "Not Like Us" })).toBe("")
+    })
+
+    it("is empty for videos", () => {
+        expect(albumFromTrack({ title: "Not Like Us" })).toBe("")
     })
 })

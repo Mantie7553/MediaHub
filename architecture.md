@@ -137,7 +137,7 @@ See [`backend/migrations/`](backend/migrations/) for the full schema. Each migra
 ## Key Flows
 
 ### Requesting a Download
-1. The user finds a title on the Discover page, which searches AniList (anime, movies) or MangaDex (manga) through `GET /api/search`. Music searches YouTube with yt-dlp (`GET /api/music/yt-search`); results are kept in memory per query for an hour. The yt-dlp release binary unpacks itself on every run, so it gets a local temp folder (`YTDLP_TMPDIR`, `/tmp` in the image) instead of `TMPDIR` on the media disk. When requesting a track, the artist and album fields suggest what the library already has (`GET /api/music/artists`) and adopt its spelling, so a different case doesn't start a second folder.
+1. The user finds a title on the Discover page, which searches AniList (anime, movies) or MangaDex (manga) through `GET /api/search`. Music searches YouTube Music's own search API (`GET /api/music/yt-search`, the `ytmusic` client), returning songs (official audio, with artist, album and an explicit flag) and videos (with the channel and whether it's the official upload); results are kept in memory per query for an hour. That API isn't published, so when it gives nothing the search falls back to yt-dlp's YouTube search. The yt-dlp release binary unpacks itself on every run, so it gets a local temp folder (`YTDLP_TMPDIR`, `/tmp` in the image) instead of `TMPDIR` on the media disk. When requesting a track, the artist and album fields suggest what the library already has (`GET /api/music/artists`) and adopt its spelling, so a different case doesn't start a second folder.
 2. Saving or requesting it creates a `media_items` row if one doesn't exist yet (`POST /api/search/save`), then `POST /api/requests` creates a `download_requests` row. Titles are shared, so a save never changes one already in the library: its metadata is fetched and its download dispatched by the external id the library has, not the one sent (an admin's save may fill in a missing one), and a track keeps its artist and album.
 3. `requests_handler` checks the user's download permission. `vetted` requests stay `pending` until an admin approves them from the Downloads page. `auto_approved` requests are approved right away.
 4. On approval, `downloader.Dispatch` picks a destination folder under `MEDIA_ROOT` and a handler based on media type, then inserts a `download_jobs` row:
@@ -212,7 +212,8 @@ Admins can fix what the metadata sources get wrong from each details page (*Edit
 | Sonarr | Anime downloads and library | Notifies MediaHub through a webhook on download |
 | Radarr | Movie downloads and library | Notifies MediaHub through a webhook on download |
 | qBittorrent | Torrent client behind Sonarr and Radarr | MediaHub never talks to it directly |
-| yt-dlp | Music search and downloads | Run as a subprocess. Progress is read from its output |
+| YouTube Music | Music search | Its web app's internal search API (`youtubei/v1/search`), not a published one |
+| yt-dlp | Music downloads, and search when YouTube Music fails | Run as a subprocess. Progress is read from its output |
 | ffmpeg | HLS transcoding and subtitle extraction | Encodes on the GPU (AMF, VAAPI or NVENC) or the CPU (libx264), see `TRANSCODE_ENCODER` |
 | AniSkip | Opening and ending times for anime episodes | Looked up by MyAnimeList id (from Fribb's anime list) and kept in `skip_times` |
 
