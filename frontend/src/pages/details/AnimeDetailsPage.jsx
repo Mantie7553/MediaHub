@@ -139,15 +139,17 @@ export default function AnimeDetailsPage() {
 
     const positionOf = ep => episodeProgress[ep.id]?.position ?? ep.position_secs ?? 0
     const durationOf = ep => episodeProgress[ep.id]?.duration ?? ep.duration_secs ?? 0
-    const watch = (ep, position) => openViewer(navigate, `/watch/episode/${ep.id}`, { position, animeId: id, episodes: episodes })
+    // an episode whose file was deleted keeps its place in the list, but can't be played
+    const playable = episodes.filter(ep => ep.available !== false)
+    const watch = (ep, position) => openViewer(navigate, `/watch/episode/${ep.id}`, { position, animeId: id, episodes: playable })
 
-    // the first episode not watched yet is where the user is up to
-    const nextEpisode = episodes.find(ep => !watchedEpisodes.has(ep.id))
+    // the first episode not watched yet that can be played is where the user is up to
+    const nextEpisode = playable.find(ep => !watchedEpisodes.has(ep.id))
     const episodeLabel = ep => multiSeason ? `S${ep.season_number} · E${ep.episode_number}` : `Episode ${ep.episode_number}`
     const primary = nextEpisode
         ? { label: `${positionOf(nextEpisode) > 30 ? "Resume" : "Play"} ${episodeLabel(nextEpisode)}`, run: () => watch(nextEpisode, positionOf(nextEpisode)) }
-        : episodes.length > 0
-            ? { label: "Watch again", run: () => watch(episodes[0], 0) }
+        : playable.length > 0
+            ? { label: "Watch again", run: () => watch(playable[0], 0) }
             : null
 
     const linkedSeason = searchParams.get("season")
@@ -224,6 +226,7 @@ export default function AnimeDetailsPage() {
                         const position = positionOf(ep)
                         const duration = durationOf(ep)
                         const started = duration > 0 && position > 0 && !watched
+                        const unavailable = ep.available === false
                         return <ItemRow
                             key={ep.id}
                             checked={watched}
@@ -231,13 +234,14 @@ export default function AnimeDetailsPage() {
                             toggleLabel={`Mark episode ${ep.episode_number} ${watched ? "unwatched" : "watched"}`}
                             number={String(ep.episode_number).padStart(2, "0")}
                             title={ep.title ?? `Episode ${ep.episode_number}`}
-                            progress={started ? Math.min(position / duration, 1) : null}
-                            progressLabel={started
+                            progress={started && !unavailable ? Math.min(position / duration, 1) : null}
+                            progressLabel={unavailable ? "Not available" : started
                                 ? `${Math.max(1, Math.ceil((duration - position) / 60))} min left`
                                 : watched ? "Watched" : duration > 0 ? `${Math.round(duration / 60)} min` : null}
                             current={nextEpisode?.id === ep.id}
                             onOpen={() => watch(ep, position)}
                             openLabel={`Watch episode ${ep.episode_number}`}
+                            unavailable={unavailable}
                             menu={pieces.menu({ kind: "episode", id: ep.id, label: ep.title ?? episodeLabel(ep), title: ep.title })}
                         />
                     })}

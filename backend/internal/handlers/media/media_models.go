@@ -77,6 +77,8 @@ type Episode struct {
 	Watched       bool    `json:"watched"`
 	PositionSecs  float64 `json:"position_secs"`
 	DurationSecs  float64 `json:"duration_secs"`
+	// false when its file was deleted (in Sonarr or from disk): it keeps its place and progress
+	Available bool `json:"available"`
 }
 
 // LIGHT NOVEL
