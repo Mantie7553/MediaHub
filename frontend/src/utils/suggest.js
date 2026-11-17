@@ -39,3 +39,23 @@ export function canonical(options, value) {
 export function artistFromUploader(uploader) {
     return (uploader ?? "").replace(/\s+-\s+Topic$/i, "").trim()
 }
+
+/**
+ * The artist a search result is filed under: its first credited artist, else the channel it
+ * was posted by
+ * @param {object} track a music search result
+ */
+export function artistFromTrack(track) {
+    return track?.artists?.[0] || artistFromUploader(track?.uploader)
+}
+
+/**
+ * The album a search result is filed under. A single's album is usually its own title; that
+ * one is left empty so the track goes under Singles
+ * @param {object} track a music search result
+ */
+export function albumFromTrack(track) {
+    const album = (track?.album ?? "").trim()
+    const title = (track?.title ?? "").trim()
+    return album.toLowerCase() === title.toLowerCase() ? "" : album
+}

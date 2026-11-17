@@ -9,7 +9,6 @@ import (
 
 	"github.com/Mantie7553/MediaHub/backend/internal/clients/anilist"
 	"github.com/Mantie7553/MediaHub/backend/internal/clients/mangadex"
-	"github.com/Mantie7553/MediaHub/backend/internal/clients/ytdlp"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/cache"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/logger"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/utils"
@@ -36,9 +35,9 @@ func newSearchCache() *cache.Memo[[]SearchResult] {
 	return cache.NewMemo[[]SearchResult](15*time.Minute, 15*time.Minute, 300)
 }
 
-// YouTube results for a query barely change within the hour
-func newMusicSearchCache() *cache.Memo[[]ytdlp.SearchResult] {
-	return cache.NewMemo[[]ytdlp.SearchResult](time.Hour, time.Hour, 200)
+// YouTube Music results for a query barely change within the hour
+func newMusicSearchCache() *cache.Memo[musicSearchResponse] {
+	return cache.NewMemo[musicSearchResponse](time.Hour, time.Hour, 200)
 }
 
 /*

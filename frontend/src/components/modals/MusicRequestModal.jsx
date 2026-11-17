@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { X } from "lucide-react";
 import Autocomplete from "../Autocomplete";
-import { artistFromUploader, canonical } from "../../utils/suggest";
+import { albumFromTrack, artistFromTrack, canonical } from "../../utils/suggest";
+import TrackByline, { ExplicitBadge } from "../TrackByline";
 
 /**
  * Pick the artist and album a YouTube track is saved under before downloading it. Both fields
@@ -27,8 +28,8 @@ export default function MusicRequestModal({ dialogRef, track, artists = [], onCo
 }
 
 function RequestForm({ track, artists, onCancel, onConfirm }) {
-    const [artist, setArtist] = useState(() => artistFromUploader(track.uploader));
-    const [album, setAlbum] = useState("");
+    const [artist, setArtist] = useState(() => artistFromTrack(track));
+    const [album, setAlbum] = useState(() => albumFromTrack(track));
 
     const artistNames = artists.map(a => a.name);
     const known = artists.find(a => a.name === canonical(artistNames, artist));
@@ -42,8 +43,11 @@ function RequestForm({ track, artists, onCancel, onConfirm }) {
 
     return <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
         <div className="pr-8">
-            <h3 className="text-xl font-semibold leading-snug">{track.title}</h3>
-            {track.uploader && <p className="text-sm text-base-content/60 mt-1">{track.uploader}</p>}
+            <h3 className="text-xl font-semibold leading-snug">
+                {track.title}
+                {track.explicit && <span className="inline-block align-middle ml-2"><ExplicitBadge/></span>}
+            </h3>
+            <TrackByline track={track} className="text-sm text-base-content/60 mt-1"/>
         </div>
         <Autocomplete label="Artist" value={artist} onChange={setArtist} options={artistNames}
             placeholder="Who made it" required autoFocus

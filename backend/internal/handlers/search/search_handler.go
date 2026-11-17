@@ -9,6 +9,7 @@ import (
 	"github.com/Mantie7553/MediaHub/backend/internal/clients/anilist"
 	"github.com/Mantie7553/MediaHub/backend/internal/clients/mangadex"
 	"github.com/Mantie7553/MediaHub/backend/internal/clients/ytdlp"
+	"github.com/Mantie7553/MediaHub/backend/internal/clients/ytmusic"
 	"github.com/Mantie7553/MediaHub/backend/internal/covers"
 	"github.com/Mantie7553/MediaHub/backend/internal/downloader"
 	"github.com/Mantie7553/MediaHub/backend/internal/locks"
@@ -26,13 +27,15 @@ type Handler struct {
 	yt            *ytdlp.YtdlpClient
 	discovery     *cache.Memo[discoveryResponse]
 	searches      *cache.Memo[[]SearchResult]
-	musicSearches *cache.Memo[[]ytdlp.SearchResult]
+	ytm           *ytmusic.YTMusicClient
+	musicSearches *cache.Memo[musicSearchResponse]
 }
 
 func NewHandler(db *sql.DB) *Handler {
 	return &Handler{
 		db:            db,
 		yt:            ytdlp.NewYtdlpClient("YTDLP_PATH", "MUSIC_DIR"),
+		ytm:           ytmusic.NewYTMusicClient(),
 		discovery:     newDiscoveryCache(),
 		searches:      newSearchCache(),
 		musicSearches: newMusicSearchCache(),
