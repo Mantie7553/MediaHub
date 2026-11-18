@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom"
 import useDocumentTitle from "../../hooks/useDocumentTitle"
 import { ArrowLeft } from "lucide-react"
 import Cover from "../Cover"
+import useHideOnScroll from "../../hooks/useHideOnScroll"
 import { goBack } from "../../utils/navigation"
 import { sanitizeHtml } from "../../utils/sanitize"
 
@@ -11,7 +12,9 @@ const LONG_DESCRIPTION = 320
 
 /**
  * The top of a details page: the cover blurred behind everything, the poster, title, facts,
- * description and actions. Runs to the edges of the page
+ * description and actions. Runs to the edges of the page. Its Back button follows the page down
+ * long track and chapter lists, sliding away while the page scrolls down and coming back when
+ * it scrolls up. Belongs first in the page's flex-col gap-8 wrapper, which it sticks within
  * @param {object} cover { src, source } as for components/Cover.jsx
  * @param {boolean} square album art instead of a poster
  * @param {any} poster drawn in the poster's place instead of the cover, like a playlist's mosaic;
@@ -31,8 +34,25 @@ export default function DetailsHero({ cover, square = false, poster, eyebrow, ti
     const navigate = useNavigate()
     useDocumentTitle(title)
     const facts = meta.filter(Boolean)
+    const { hidden } = useHideOnScroll()
 
-    return <section className="relative z-10 isolate -mx-4 sm:-mx-6 lg:-mx-10 -mt-5 sm:-mt-6 lg:-mt-8 px-4 sm:px-6 lg:px-10 pt-3 lg:pt-6 pb-10 mb-2">
+    return <>
+        {/* zero height, so it takes no room. The margins cancel the wrapper's gap-8 and put Back
+            where the hero's padding would; it then sticks under the phone header (3.5rem) */}
+        <div className="sticky z-20 h-0 -mt-2 -mb-6 sm:-mt-3 sm:-mb-5 lg:-mt-2 lg:-mb-6
+            top-[calc(4.25rem+env(safe-area-inset-top))] lg:top-6">
+            <button
+                className={`btn btn-ghost btn-sm -ml-2 rounded-full bg-base-100/60 backdrop-blur-xl ring-1 ring-white/10 text-base-content/80 hover:bg-base-100/80
+                    transition-[translate,opacity] duration-300 ease-out ${hidden ? "-translate-y-[calc(100%+1rem)] opacity-0 pointer-events-none" : ""}`}
+                onClick={() => goBack(navigate)}
+                aria-hidden={hidden}
+                tabIndex={hidden ? -1 : 0}
+            >
+                <ArrowLeft size={18} strokeWidth={2}/> Back
+            </button>
+        </div>
+
+        <section className="relative z-10 isolate -mx-4 sm:-mx-6 lg:-mx-10 -mt-5 sm:-mt-6 lg:-mt-8 px-4 sm:px-6 lg:px-10 pt-3 lg:pt-6 pb-10 mb-2">
         {/* the cover, blurred into a wash of its colors. Clipped here and not on the section, so
             the action menus can open past the hero. Past the page's max width its edges fade out */}
         <div className="absolute inset-0 -z-10 overflow-hidden min-[1680px]:[mask-image:linear-gradient(to_right,transparent,#000_6rem,#000_calc(100%-6rem),transparent)]" aria-hidden="true">
@@ -41,9 +61,8 @@ export default function DetailsHero({ cover, square = false, poster, eyebrow, ti
             <div className="absolute inset-0 bg-linear-to-r from-base-100/70 via-transparent to-transparent"></div>
         </div>
 
-        <button className="btn btn-ghost btn-sm -ml-2 text-base-content/80 hover:bg-white/10" onClick={() => goBack(navigate)}>
-            <ArrowLeft size={18} strokeWidth={2}/> Back
-        </button>
+        {/* where Back sits before the page scrolls, it's drawn by the sticky bar above */}
+        <div className="h-8" aria-hidden="true"></div>
 
         <div className="mt-4 lg:mt-6 flex flex-col sm:flex-row items-center sm:items-end gap-6 lg:gap-10 animate-fade-up">
             <div className={`shrink-0 overflow-hidden rounded-box bg-base-300 shadow-raised ring-1 ring-white/10
@@ -79,6 +98,7 @@ export default function DetailsHero({ cover, square = false, poster, eyebrow, ti
             </div>
         </div>
     </section>
+    </>
 }
 
 function Description({ text, html }) {
