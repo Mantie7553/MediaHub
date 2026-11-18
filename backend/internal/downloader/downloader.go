@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"database/sql"
+	"io"
 	"os"
 	"os/exec"
 	"strconv"
@@ -78,12 +79,21 @@ func Run(db *sql.DB, jobID string, mediaItemID string) {
 	defer os.Remove(tmpFile.Name())
 	tmpFile.Close()
 
+	// age-restricted videos need a signed-in YouTube account's cookies
+	cookiesFile, err := cookiesCopy()
+	if err != nil {
+		logger.Warn("Job %s can't use the yt-dlp cookies file: %s", jobID, err.Error())
+	}
+	if cookiesFile != "" {
+		defer os.Remove(cookiesFile)
+	}
+
 	// 4. Build and start the command
 	ytdlpPath := os.Getenv("YTDLP_PATH")
 	if ytdlpPath == "" {
 		ytdlpPath = "yt-dlp"
 	}
-	cmd := exec.Command(ytdlpPath, ytdlpArgs(outputTemplate, tmpFile.Name(), sourceURL)...)
+	cmd := exec.Command(ytdlpPath, ytdlpArgs(outputTemplate, tmpFile.Name(), cookiesFile, sourceURL)...)
 	cmd.Env = ytdlp.Env()
 
 	stdout, err := cmd.StdoutPipe()
@@ -119,7 +129,7 @@ func Run(db *sql.DB, jobID string, mediaItemID string) {
 
 	// 6. Wait for finish
 	if err := cmd.Wait(); err != nil {
-		markFailed(db, jobID, stderr.String())
+		markFailed(db, jobID, failureMessage(stderr.String(), cookiesFile != ""))
 		return
 	}
 
@@ -164,16 +174,74 @@ func saveCover(db *sql.DB, mediaItemID, filePath string) {
 }
 
 /*
+Function: cookiesCopy
+Purpose: a private copy of the YouTube cookies file YTDLP_COOKIES names, for one download.
+yt-dlp rewrites its cookies file when it finishes, so it gets a copy: the original can be mounted
+read-only and two downloads never write the same file. The copy goes in YTDLP_TMPDIR, on the
+container's own disk, not the media disk. Returns "" when no cookies file is set up; the caller
+removes the copy
+*/
+func cookiesCopy() (string, error) {
+	src := os.Getenv("YTDLP_COOKIES")
+	if src == "" {
+		return "", nil
+	}
+	in, err := os.Open(src)
+	if os.IsNotExist(err) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	defer in.Close()
+
+	out, err := os.CreateTemp(os.Getenv("YTDLP_TMPDIR"), "ytdlp-cookies-*.txt")
+	if err != nil {
+		return "", err
+	}
+	if _, err := io.Copy(out, in); err != nil {
+		out.Close()
+		os.Remove(out.Name())
+		return "", err
+	}
+	if err := out.Close(); err != nil {
+		os.Remove(out.Name())
+		return "", err
+	}
+	return out.Name(), nil
+}
+
+/*
+Function: failureMessage
+Purpose: what a failed download's job shows. An age-restricted video says how to fix it; the
+full yt-dlp output follows either way
+Params:
+  - stderr: yt-dlp's error output
+  - hadCookies: whether the download used a cookies file
+*/
+func failureMessage(stderr string, hadCookies bool) string {
+	if !strings.Contains(stderr, "confirm your age") {
+		return stderr
+	}
+	hint := "Age-restricted on YouTube: put a signed-in account's cookies.txt in the yt-dlp folder (see .env.example)"
+	if hadCookies {
+		hint = "Age-restricted on YouTube and the cookies were refused, they have likely expired: export a fresh cookies.txt (see .env.example)"
+	}
+	return hint + "\n\n" + stderr
+}
+
+/*
 Function: ytdlpArgs
 Purpose: the yt-dlp arguments for downloading one track as mp3 with its thumbnail as album art.
 The source comes last, after --, so yt-dlp reads it as a URL even if it starts with a dash
 Params:
   - outputTemplate: where to save the file, with yt-dlp's %(title)s and %(ext)s fields
   - printFile: a file yt-dlp writes the finished file's path to
+  - cookiesFile: a YouTube cookies file to sign in with, "" for none
   - sourceURL: the canonical YouTube link
 */
-func ytdlpArgs(outputTemplate, printFile, sourceURL string) []string {
-	return []string{
+func ytdlpArgs(outputTemplate, printFile, cookiesFile, sourceURL string) []string {
+	args := []string{
 		"-x",
 		"--audio-format", "mp3",
 		// the video's thumbnail becomes the track's album art
@@ -182,9 +250,12 @@ func ytdlpArgs(outputTemplate, printFile, sourceURL string) []string {
 		"--newline",
 		"-o", outputTemplate,
 		"--print-to-file", "after_move:filepath", printFile,
-		// everything after -- is a URL, never an option, whatever it starts with
-		"--", sourceURL,
 	}
+	if cookiesFile != "" {
+		args = append(args, "--cookies", cookiesFile)
+	}
+	// everything after -- is a URL, never an option, whatever it starts with
+	return append(args, "--", sourceURL)
 }
 
 func markFailed(db *sql.DB, jobID string, message string) {
