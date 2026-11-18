@@ -50,7 +50,7 @@ export default function MusicDiscover({ onListChange }) {
         dialogRef.current.showModal()
     }
 
-    function handleRequest({ artist, album }) {
+    function handleRequest({ artist, album, trackNumber }) {
         api.post("/search/save", {
             external_id: selectedTrack.id,
             external_source: "ytdlp",
@@ -60,6 +60,7 @@ export default function MusicDiscover({ onListChange }) {
             source_url: selectedTrack.url,
             artist,
             album,
+            track_number: trackNumber,
             duration_secs: selectedTrack.duration_secs,
             action: "download",
         })
