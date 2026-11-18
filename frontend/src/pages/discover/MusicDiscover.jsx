@@ -14,6 +14,10 @@ import SearchField from "../../components/SearchField"
 import SectionHeader from "../../components/layout/SectionHeader"
 import Format from "../../utils/format"
 import TrackByline, { ExplicitBadge } from "../../components/TrackByline"
+import { SortMenu } from "../../components/details/Menus"
+import useSort from "../../hooks/useSort"
+import { sortItems } from "../../utils/sort"
+import { albumSorts, artistSorts, musicResultSorts } from "../../utils/sortOptions"
 
 export default function MusicDiscover({ onListChange }) {
     const albums = useApi("/albums", { initial: [] });
@@ -71,11 +75,12 @@ export default function MusicDiscover({ onListChange }) {
                 <ErrorState compact error={albums.error} onRetry={albums.reload} />
             </section>
         ) : (
-            <AlbumList albums={albums.data} heading="Available Now" loading={albums.loading} expandKey="discover:music:available"
+            <AlbumList albums={albums.data} heading="Available Now" loading={albums.loading} expandKey="discover:music:available" sortOptions={albumSorts}
                 emptyText="No music yet" emptyHint="Search below and request tracks to download them." />
         )}
         {/* like recommendations, they stay hidden when empty or failed */}
-        {artistPlaylists.data.length > 0 && <CollectionList collections={artistPlaylists.data} kind="playlist" heading="Artists" canCreate={false}/>}
+        {artistPlaylists.data.length > 0 && <CollectionList collections={artistPlaylists.data} kind="playlist" heading="Artists" canCreate={false}
+            expandKey="discover:music:artists" sortOptions={artistSorts}/>}
 
         <SearchField
             value={query}
@@ -101,13 +106,13 @@ export default function MusicDiscover({ onListChange }) {
         ) : search && search.songs.length === 0 && search.videos.length === 0 ? (
             <EmptyState compact title={`No results for "${search.query}"`} hint="Try fewer words, or the artist's name." />
         ) : search && <>
-            <TrackSection heading={`Songs for "${search.query}"`} tracks={search.songs} onRequest={openRequest}/>
-            <TrackSection heading={search.songs.length > 0 ? "Videos" : `Videos for "${search.query}"`} tracks={search.videos} onRequest={openRequest}/>
+            <TrackSection heading={`Songs for "${search.query}"`} tracks={search.songs} onRequest={openRequest} sortKey="discover:music:songs"/>
+            <TrackSection heading={search.songs.length > 0 ? "Videos" : `Videos for "${search.query}"`} tracks={search.videos} onRequest={openRequest} sortKey="discover:music:videos"/>
         </>}
         <MusicRequestModal dialogRef={dialogRef} track={selectedTrack} artists={artists.data} onConfirm={handleRequest} />
 
         {/* recommendations are optional, they stay hidden when empty or failed */}
-        {recommended.data.length > 0 && <AlbumList albums={recommended.data} heading="Recommended" />}
+        {recommended.data.length > 0 && <AlbumList albums={recommended.data} heading="Recommended" expandKey="discover:music:recommended" sortOptions={albumSorts}/>}
 
     </div>
 }
@@ -117,11 +122,16 @@ export default function MusicDiscover({ onListChange }) {
  * @param {string} heading the section's title
  * @param {object[]} tracks the results
  * @param {function} onRequest called with a track when its download button is pressed
+ * @param {string} sortKey remembers the sort across reloads under this name (see useSort)
  */
-function TrackSection({ heading, tracks, onRequest }) {
-    if (tracks.length === 0) return null
+function TrackSection({ heading, tracks: given, onRequest, sortKey }) {
+    const [sort, setSort] = useSort(sortKey, musicResultSorts)
+    if (given.length === 0) return null
+    const tracks = sortItems(given, sort)
     return <section>
-        <SectionHeader title={heading} count={tracks.length}/>
+        <SectionHeader title={heading} count={tracks.length}>
+            {tracks.length > 1 && <SortMenu options={musicResultSorts} value={sort} onChange={setSort} label={`Sort ${heading}`}/>}
+        </SectionHeader>
         <ul className="surface flex flex-col p-1.5">
             {tracks.map(track => (
                 <li key={track.id} className="flex items-center gap-3 p-2.5 hover:bg-white/5 rounded-field transition-colors">

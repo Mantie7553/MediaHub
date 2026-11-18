@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import { Link, useNavigate, useParams } from "react-router-dom"
-import { ArrowDown, ArrowUp, ArrowUpToLine, Check, Clock, Copy, GripVertical, ImageMinus, ImagePlus, ListPlus, PencilLine, Send, SlidersHorizontal, Sparkles, Trash2, X } from "lucide-react"
+import { ArrowDown, ArrowUp, ArrowUpToLine, Check, Clock, Copy, GripVertical, ImageMinus, ImagePlus, ListOrdered, ListPlus, PencilLine, Send, SlidersHorizontal, Sparkles, Trash2, X } from "lucide-react"
 import useApi from "../../hooks/useApi"
 import useCollectionPicker from "../../hooks/useCollectionPicker"
 import { useUserContent } from "../../hooks"
@@ -8,7 +8,7 @@ import useAudioStore from "../../stores/useAudioStore"
 import { toast } from "../../stores/useToastStore"
 import DetailsHero from "../../components/details/DetailsHero"
 import TrackList from "../../components/details/TrackList"
-import { ActionMenu, ActionMenuItem } from "../../components/details/Menus"
+import { ActionMenu, ActionMenuItem, SortMenu } from "../../components/details/Menus"
 import { AlbumCard, Card, CollectionCard, CollectionCover } from "../../components/cards"
 import { cardGrid } from "../../components/layout/cardGrid"
 import Cover from "../../components/Cover"
@@ -19,10 +19,13 @@ import EmptyState from "../../components/states/EmptyState"
 import ErrorState from "../../components/states/ErrorState"
 import NotFound from "../../components/states/NotFound"
 import { DetailsSkeleton } from "../../components/states/Skeletons"
-import { deleteCollection, featureNow, moveInCollection, onCollectionsChanged, removeCollectionImage, removeFromCollection, saveCopy, setCollectionImage, submitForFeaturing, updateCollection, withdrawSubmission } from "../../services/collectionsService"
+import { deleteCollection, featureNow, moveInCollection, onCollectionsChanged, removeCollectionImage, removeFromCollection, saveCollectionOrder, saveCopy, setCollectionImage, submitForFeaturing, updateCollection, withdrawSubmission } from "../../services/collectionsService"
 import { userIsAdmin } from "../../utils/auth"
 import { ARTIST_PLAYLIST_PREFIX, SMART_PLAYLISTS, applyMove, dropTarget, itemTitle, moveTarget } from "../../utils/collections"
 import { PlayButton, QueueModeButtons } from "../../components/details/PlaybackControls"
+import useSort from "../../hooks/useSort"
+import { sortItems } from "../../utils/sort"
+import { collectionEntrySorts, playlistSorts } from "../../utils/sortOptions"
 
 // what each kind of entry is called on its own line
 const typeLabels = {
@@ -49,6 +52,13 @@ export default function CollectionPage() {
     const imageRef = useRef(null)
     const [arranging, setArranging] = useState(false)
     const [copying, setCopying] = useState(false)
+    const [savingOrder, setSavingOrder] = useState(false)
+    // each playlist or collection remembers its own sort; it only changes the view, the saved
+    // order stays as "Custom order" until the owner keeps a sorted one
+    const kindSorts = data?.kind === "collection" ? collectionEntrySorts : playlistSorts
+    // the playlists that fill themselves have an order of their own, not one the user made
+    const sortOptions = data?.smart ? [{ ...kindSorts[0], label: "Default order" }, ...kindSorts.slice(1)] : kindSorts
+    const [sort, setSort] = useSort(`collection:${id}`, sortOptions)
     // the cards on a collection's page have their own picker, which can add to this one
     useEffect(() => onCollectionsChanged(() => reload(true)), [reload])
 
@@ -72,6 +82,18 @@ export default function CollectionPage() {
     const featured = data.featured
     // admins look after the images of their own and of the featured ones
     const canSetImage = userIsAdmin() && !data.smart && (canEdit || featured)
+
+    // what's shown, in the sort picked; the moves below work on the saved order
+    const shown = sortItems(entries, sort, { userContentMap })
+    const custom = sort.key === "custom"
+
+    function saveOrder() {
+        setSavingOrder(true)
+        saveCollectionOrder(id, shown.map(e => e.entry_id))
+            .then(() => { setEntries(shown); setSort("custom"); toast.success(`Saved as the ${noun}'s order`); reload(true) })
+            .catch(err => { toast.error(err, "Could not save the order"); reload(true) })
+            .finally(() => setSavingOrder(false))
+    }
 
     function move(index, after) {
         if (after === undefined) return
@@ -132,7 +154,7 @@ export default function CollectionPage() {
         <ActionMenuItem icon={Trash2} label={`Remove from ${noun}`} danger onClick={() => remove(entry)}/>
     </>
 
-    const playable = entries.filter(e => e.type === "music_track" && e.available)
+    const playable = shown.filter(e => e.type === "music_track" && e.available)
     const queue = playable.map(t => ({ id: t.id, title: t.title, artist: t.artist, thumbnail: t.cover_image_url }))
     const totalSecs = entries.reduce((sum, e) => sum + (e.type === "music_track" ? e.duration_secs ?? 0 : 0), 0)
     const count = entries.length
@@ -157,7 +179,7 @@ export default function CollectionPage() {
                 : featured ? <button className="btn btn-lg px-6 border-white/10 bg-white/10 hover:bg-white/15" onClick={copyToMine} disabled={copying}>
                     {copying ? <span className="loading loading-spinner loading-sm"/> : <Copy size={18}/>} Save a copy
                 </button>
-                : canEdit && count > 0 && <button className={`btn btn-lg px-6 ${arranging ? "btn-primary" : "border-white/10 bg-white/10 hover:bg-white/15"}`}
+                : canEdit && count > 0 && custom && <button className={`btn btn-lg px-6 ${arranging ? "btn-primary" : "border-white/10 bg-white/10 hover:bg-white/15"}`}
                     onClick={() => setArranging(!arranging)}>
                     {arranging ? <><Check size={18}/> Done</> : <><SlidersHorizontal size={18}/> Arrange</>}
                 </button>}
@@ -183,6 +205,15 @@ export default function CollectionPage() {
         {canEdit && !data.smart && count > 0 && <FeatureStatus collection={data} noun={noun} onChange={() => reload(true)}/>}
         {!canEdit && !featured && data.in_review && <ReviewNotice/>}
 
+        {count > 1 && !arranging && <div className="flex flex-wrap items-center justify-end gap-2 -mb-4">
+            {canEdit && !data.smart && !custom && <button className="btn btn-sm btn-ghost rounded-full bg-white/5 gap-1.5"
+                onClick={saveOrder} disabled={savingOrder}>
+                {savingOrder ? <span className="loading loading-spinner loading-xs"/> : <ListOrdered size={14}/>}
+                Save as {noun} order
+            </button>}
+            <SortMenu options={sortOptions} value={sort} onChange={setSort} label={`Sort ${data.name}`}/>
+        </div>}
+
         {count === 0 ? (
             <EmptyState compact
                 title={data.smart ? "Nothing here yet" : `This ${noun} is empty`}
@@ -197,22 +228,22 @@ export default function CollectionPage() {
             />
         ) : isPlaylist ? (
             <TrackList
-                tracks={entries.map(e => ({
+                tracks={shown.map(e => ({
                     key: e.entry_id || e.id, id: e.id, title: e.title, available: e.available,
                     subtitle: [e.artist, e.album_title].filter(Boolean).join(" · "), duration_secs: e.duration_secs,
                 }))}
-                onPlay={i => playAlbum(queue, playable.indexOf(entries[i]), `/playlists/${id}`)}
+                onPlay={i => playAlbum(queue, playable.indexOf(shown[i]), `/playlists/${id}`)}
                 menu={(track, i) => <ActionMenu label={`${track.title} actions`} size="sm">
                     <ActionMenuItem icon={ListPlus} label="Add to playlist…" onClick={() => picker.open({ id: track.id, type: "music_track", title: track.title })}/>
-                    {editItems(entries[i], i)}
+                    {custom ? editItems(entries[i], i) : canEdit && <ActionMenuItem icon={Trash2} label={`Remove from ${noun}`} danger onClick={() => remove(shown[i])}/>}
                 </ActionMenu>}
-                onReorder={canEdit ? (from, to) => move(from, dropTarget(entries, from, to)) : undefined}
+                onReorder={canEdit && custom ? (from, to) => move(from, dropTarget(entries, from, to)) : undefined}
             />
         ) : arranging ? (
             <ArrangeList entries={entries} onMove={move} onRemove={remove}/>
         ) : (
             <ul className={cardGrid}>
-                {entries.map(e => <EntryCard key={e.entry_id} entry={e} userContentMap={userContentMap} onListChange={refresh}/>)}
+                {shown.map(e => <EntryCard key={e.entry_id} entry={e} userContentMap={userContentMap} onListChange={refresh}/>)}
             </ul>
         )}
 

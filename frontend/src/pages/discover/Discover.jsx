@@ -15,6 +15,7 @@ import SearchField from "../../components/SearchField";
 import SectionHeader from "../../components/layout/SectionHeader";
 import { readStored, writeStored } from "../../utils/storage";
 import { homePageForDiscover } from "../../utils/homePages";
+import { librarySorts, resultSorts } from "../../utils/sortOptions";
 
 const emptySections = { trending: [], popular: [], top_rated: [] };
 
@@ -84,7 +85,7 @@ export default function Discover() {
         </section>
     ) : (
         <ContentList items={library.data} heading="Available Now" userContentMap={userContentMap} onListChange={refresh}
-            loading={library.loading} expandKey={`discover:${tabKey}:available`} emptyText="Nothing downloaded yet"
+            loading={library.loading} expandKey={`discover:${tabKey}:available`} sortOptions={librarySorts(activeTab)} emptyText="Nothing downloaded yet"
             emptyHint={tab.libraryOnly ? "Light novels show up here once they're added to the server's library folder." : undefined} />
     );
 
@@ -122,14 +123,18 @@ export default function Discover() {
                     search.error
                         ? <ErrorState compact error={search.error} onRetry={handleSearch} />
                         : <ContentGrid items={search.results} heading={`Results for "${search.query}"`} userContentMap={userContentMap} onListChange={refresh}
+                            sortOptions={resultSorts("Best match")} sortKey={`discover:${tabKey}:results`}
                             emptyText={`No results for "${search.query}"`} emptyHint="Check the spelling or try the title in another language." />
                 ) : sections.error ? (
                     <ErrorState compact error={sections.error} onRetry={sections.reload} />
                 ) : (
                     <>
-                        <ContentList items={sections.data.trending ?? []} heading="Trending" {...listProps} />
-                        <ContentList items={sections.data.popular ?? []} heading="Popular" {...listProps} />
-                        <ContentList items={sections.data.top_rated ?? []} heading={topRatedHeading} {...listProps} />
+                        <ContentList items={sections.data.trending ?? []} heading="Trending" {...listProps}
+                            expandKey={`discover:${tabKey}:trending`} sortOptions={resultSorts("Trending")} />
+                        <ContentList items={sections.data.popular ?? []} heading="Popular" {...listProps}
+                            expandKey={`discover:${tabKey}:popular`} sortOptions={resultSorts("Most popular")} />
+                        <ContentList items={sections.data.top_rated ?? []} heading={topRatedHeading} {...listProps}
+                            expandKey={`discover:${tabKey}:top_rated`} sortOptions={resultSorts(topRatedHeading)} />
                     </>
                 )}
             </>

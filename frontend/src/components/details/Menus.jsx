@@ -1,15 +1,8 @@
-import { useRef, useState } from "react"
-import { Check, ChevronDown, MoreHorizontal, Plus } from "lucide-react"
+import { useRef } from "react"
+import { ArrowUpDown, Check, ChevronDown, MoreHorizontal, Plus } from "lucide-react"
 import Format from "../../utils/format"
 import { mediaStatusDot } from "../../utils/status"
-
-// sizes for placing an ActionMenu: its width (w-60), an item's height, the list's padding, the
-// phone tab bar's height (h-16) and the gap kept from the screen's edges
-const MENU_WIDTH_PX = 240
-const MENU_ITEM_PX = 40
-const MENU_PADDING_PX = 12
-const TAB_BAR_PX = 64
-const SCREEN_MARGIN_PX = 8
+import useMenuPlacement from "../../hooks/useMenuPlacement"
 
 // a daisyUI dropdown stays open while focused, so picking an item closes it by dropping focus
 function closeMenu() {
@@ -55,6 +48,41 @@ export function ListStatusMenu({ status, type, options, onSelect, onRemove }) {
 }
 
 /**
+ * A menu of the ways a list can be sorted, with the picked one ticked. On phones the button is
+ * just its icon, to leave the row's heading room
+ * @param {object[]} options the list's sort options
+ * @param {object} value the picked option
+ * @param {function} onChange called with the key of the option picked
+ * @param {string} label names the menu for screen readers, like "Sort Anime"
+ */
+export function SortMenu({ options, value, onChange, label = "Sort" }) {
+    const menuRef = useRef(null)
+    const [place, placeMenu] = useMenuPlacement(menuRef)
+    const sorted = value && value.key !== options[0]?.key
+
+    return <div className={`dropdown ${place.start ? "dropdown-start" : "dropdown-end"} ${place.top ? "dropdown-top" : ""}`}>
+        <div tabIndex={0} role="button" aria-label={`${label}: ${value?.label}`} title={value?.label}
+            onPointerDown={placeMenu} onFocus={placeMenu}
+            className={`flex items-center gap-1.5 h-7 px-2 rounded-full text-sm transition-colors cursor-pointer
+                ${sorted ? "bg-primary/15 text-primary" : "bg-white/5 text-base-content/60 hover:text-base-content"}`}>
+            <ArrowUpDown size={14}/>
+            <span className="hidden sm:inline max-w-40 truncate">{value?.label}</span>
+        </div>
+        <ul ref={menuRef} tabIndex={0} className={`dropdown-content menu surface-raised z-30 ${place.top ? "mb-2" : "mt-2"} w-60 max-w-[calc(100vw-1rem)] p-1.5 gap-0.5`}>
+            {options.map(option => (
+                <li key={option.key}>
+                    <button className={option.key === value?.key ? "text-primary font-medium" : ""}
+                        onClick={() => { onChange(option.key); closeMenu(); }}>
+                        <span className="flex-1">{option.label}</span>
+                        {option.key === value?.key && <Check size={16}/>}
+                    </button>
+                </li>
+            ))}
+        </ul>
+    </div>
+}
+
+/**
  * A ⋯ button with a menu of less common actions
  * @param {string} label names the menu for screen readers
  * @param {string} size "md", or "sm" inside lists
@@ -62,24 +90,7 @@ export function ListStatusMenu({ status, type, options, onSelect, onRemove }) {
  */
 export function ActionMenu({ label = "More actions", size = "md", children }) {
     const menuRef = useRef(null)
-    const [place, setPlace] = useState({ start: false, top: false })
-
-    // decided as the menu opens: it lines up with the button's right edge unless that runs it off
-    // the left of the screen, and opens upwards when there's no room under the button (the phone
-    // tab bar and the player bar cover the bottom of the screen)
-    function placeMenu(e) {
-        const rect = e.currentTarget.getBoundingClientRect()
-        const root = document.documentElement
-        const covered = (parseFloat(getComputedStyle(root).getPropertyValue("--player-h")) || 0) +
-            (window.matchMedia("(min-width: 1024px)").matches ? 0 : TAB_BAR_PX)
-        // the menu is hidden until it opens, so its height comes from its items
-        const height = (menuRef.current?.children.length ?? 0) * MENU_ITEM_PX + MENU_PADDING_PX
-        const below = window.innerHeight - covered - rect.bottom
-        setPlace({
-            start: rect.right - MENU_WIDTH_PX < SCREEN_MARGIN_PX,
-            top: below < height + SCREEN_MARGIN_PX && rect.top > below,
-        })
-    }
+    const [place, placeMenu] = useMenuPlacement(menuRef)
 
     return <div className={`dropdown ${place.start ? "dropdown-start" : "dropdown-end"} ${place.top ? "dropdown-top" : ""}`}>
         <div tabIndex={0} role="button" aria-label={label} onPointerDown={placeMenu} onFocus={placeMenu}

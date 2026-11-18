@@ -15,6 +15,7 @@ import MakeHomeButton from "../../components/layout/MakeHomeButton";
 import HomeSection from "./HomeSection";
 import { splitCollections, trackedOfType } from "./rows";
 import { filterByQuery } from "../../utils/search";
+import { collectionSorts, continueSorts, featuredSorts, trackedAlbumSorts, trackedSorts } from "../../utils/sortOptions";
 import { onCollectionsChanged } from "../../services/collectionsService";
 
 /**
@@ -60,18 +61,18 @@ export default function OverviewPage() {
     };
 
     const rows = [
-        { key: "anime", label: "Anime", count: anime.length, render: () => <ContentList expandKey="home:overview:anime" items={anime} heading="Anime" {...tracked}/> },
-        { key: "movie", label: "Movies", count: movies.length, render: () => <ContentList expandKey="home:overview:movie" items={movies} heading="Movies" {...tracked}/> },
-        { key: "manga", label: "Manga", count: manga.length, render: () => <ContentList expandKey="home:overview:manga" items={manga} heading="Manga" {...tracked}/> },
-        { key: "music", label: "Music", count: music.length, render: () => <AlbumList expandKey="home:overview:music" albums={music} heading="Music" loading={userLoading} emptyText={searching ? tracked.emptyText : "No albums saved yet"} emptyAction={tracked.emptyAction}/> },
-        { key: "light_novel", label: "Light Novels", count: lightNovels.length, render: () => <ContentList expandKey="home:overview:light_novel" items={lightNovels} heading="Light Novels" {...tracked}/> },
+        { key: "anime", label: "Anime", count: anime.length, render: () => <ContentList expandKey="home:overview:anime" items={anime} heading="Anime" sortOptions={trackedSorts("anime")} {...tracked}/> },
+        { key: "movie", label: "Movies", count: movies.length, render: () => <ContentList expandKey="home:overview:movie" items={movies} heading="Movies" sortOptions={trackedSorts("movie")} {...tracked}/> },
+        { key: "manga", label: "Manga", count: manga.length, render: () => <ContentList expandKey="home:overview:manga" items={manga} heading="Manga" sortOptions={trackedSorts("manga")} {...tracked}/> },
+        { key: "music", label: "Music", count: music.length, render: () => <AlbumList expandKey="home:overview:music" albums={music} heading="Music" sortOptions={trackedAlbumSorts} loading={userLoading} emptyText={searching ? tracked.emptyText : "No albums saved yet"} emptyAction={tracked.emptyAction}/> },
+        { key: "light_novel", label: "Light Novels", count: lightNovels.length, render: () => <ContentList expandKey="home:overview:light_novel" items={lightNovels} heading="Light Novels" sortOptions={trackedSorts("light_novel")} {...tracked}/> },
         // like the other rows these show under "All" once they have something; their filter chips
         // show them empty too, with the card that makes a first one
         { key: "playlist", label: "Playlists", count: playlists.length, error: collections.error, reload: collections.reload,
-            render: () => <CollectionList expandKey="home:overview:playlist" collections={playlists} kind="playlist" heading="Playlists" loading={collections.loading}
+            render: () => <CollectionList expandKey="home:overview:playlist" collections={playlists} kind="playlist" heading="Playlists" sortOptions={collectionSorts} loading={collections.loading}
                 emptyText={searching ? tracked.emptyText : undefined}/> },
         { key: "collection", label: "Collections", count: userCollections.length, error: collections.error, reload: collections.reload,
-            render: () => <CollectionList expandKey="home:overview:collection" collections={userCollections} kind="collection" heading="Collections" loading={collections.loading}
+            render: () => <CollectionList expandKey="home:overview:collection" collections={userCollections} kind="collection" heading="Collections" sortOptions={collectionSorts} loading={collections.loading}
                 emptyText={searching ? tracked.emptyText : undefined}/> },
     ];
 
@@ -90,12 +91,12 @@ export default function OverviewPage() {
         <HidingSearchBar value={query} onChange={setQuery} placeholder="Search what you follow…" className="-mt-4 sm:-mt-8"/>
 
         {!continuing.loading && continueItems.length > 0 && (
-            <ContentList items={continueItems} heading="Continue" expandKey="home:overview:continue" userContentMap={userContentMap}
+            <ContentList items={continueItems} heading="Continue" expandKey="home:overview:continue" sortOptions={continueSorts} userContentMap={userContentMap}
                 onListChange={() => { refresh(); continuing.reload(true); }}/>
         )}
 
         {!featured.loading && featuredItems.length > 0 && (
-            <CollectionList collections={featuredItems} heading="Featured" expandKey="home:overview:featured" canCreate={false}/>
+            <CollectionList collections={featuredItems} heading="Featured" expandKey="home:overview:featured" sortOptions={featuredSorts} canCreate={false}/>
         )}
 
         <HomeSection

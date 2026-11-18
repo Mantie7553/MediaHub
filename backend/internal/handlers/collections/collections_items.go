@@ -8,6 +8,7 @@ import (
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/auth"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/utils"
 	"github.com/go-chi/chi/v5"
+	"github.com/lib/pq"
 )
 
 // an album's downloaded tracks, added on the end of a playlist in track order: $4 is the
@@ -365,6 +366,73 @@ func (h *Handler) MoveItem(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if _, err := tx.Exec(`UPDATE collection_items SET position = $1 WHERE id = $2`, position, entryID); utils.InternalError(w, err) {
+		return
+	}
+	if _, err := tx.Exec(`UPDATE collections SET updated_at = NOW() WHERE id = $1`, id); utils.InternalError(w, err) {
+		return
+	}
+	if utils.InternalError(w, tx.Commit()) {
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+/*
+Function:	SetOrder
+Purpose:	Put every entry in a new order at once, like a sorted view the owner keeps. The order
+has to name each entry exactly once, or nothing changes
+*/
+func (h *Handler) SetOrder(w http.ResponseWriter, r *http.Request) {
+	user := auth.GetUser(r)
+	id := chi.URLParam(r, "id")
+	var req orderRequest
+	if !utils.DecodeJSON(w, r, &req) {
+		return
+	}
+
+	tx, err := h.db.Begin()
+	if utils.InternalError(w, err) {
+		return
+	}
+	defer tx.Rollback()
+
+	var c stored
+	if !isSmart(id) {
+		c, err = load(tx, id, user, true)
+	}
+	if refuseEdit(w, id, c, err, user.UserID) {
+		return
+	}
+
+	// locked, so an entry added or removed meanwhile can't slip past the check
+	rows, err := tx.Query(`SELECT id::text FROM collection_items WHERE collection_id = $1 FOR UPDATE`, id)
+	if utils.InternalError(w, err) {
+		return
+	}
+	have := []string{}
+	for rows.Next() {
+		var entryID string
+		if err := rows.Scan(&entryID); err != nil {
+			rows.Close()
+			utils.InternalError(w, err)
+			return
+		}
+		have = append(have, entryID)
+	}
+	rows.Close()
+	if utils.InternalError(w, rows.Err()) {
+		return
+	}
+	if !sameEntries(have, req.EntryIDs) {
+		utils.Error(w, http.StatusConflict, "this has changed since it was loaded; reload and try again")
+		return
+	}
+
+	if _, err := tx.Exec(`
+		UPDATE collection_items ci SET position = o.n * $2
+		FROM unnest($3::uuid[]) WITH ORDINALITY AS o(id, n)
+		WHERE ci.id = o.id AND ci.collection_id = $1`,
+		id, positionStep, pq.Array(req.EntryIDs)); utils.InternalError(w, err) {
 		return
 	}
 	if _, err := tx.Exec(`UPDATE collections SET updated_at = NOW() WHERE id = $1`, id); utils.InternalError(w, err) {

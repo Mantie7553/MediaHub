@@ -98,6 +98,31 @@ func expandsToTracks(kind, item string) bool {
 	return kind == kindPlaylist && item == "album"
 }
 
+/*
+Function:	sameEntries
+Purpose:	Whether a new order names each of a collection's entries exactly once, so saving it
+can't drop, repeat or bring in anything
+Params:
+  - have: the entry ids the collection holds
+  - order: the entry ids asked for, in their new order
+*/
+func sameEntries(have, order []string) bool {
+	if len(have) != len(order) {
+		return false
+	}
+	left := make(map[string]bool, len(have))
+	for _, id := range have {
+		left[id] = true
+	}
+	for _, id := range order {
+		if !left[id] {
+			return false
+		}
+		delete(left, id)
+	}
+	return true
+}
+
 // whether an id is one of the computed playlists, which can be played but not changed
 func isSmart(id string) bool {
 	return id == smartListened || id == smartUnlistened || isArtist(id)

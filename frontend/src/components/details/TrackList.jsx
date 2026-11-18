@@ -11,8 +11,9 @@ import Format from "../../utils/format"
  * @param {function} menu (track, index) => an ActionMenu for the row, or nothing
  * @param {function} onReorder (from, to) when a row is dragged to another place. Dragging works
  *  with a mouse; on touch screens the row menus move tracks instead
+ * @param {any} headerExtra shown at the end of the header row, like a SortMenu
  */
-export default function TrackList({ tracks, onPlay, menu, onReorder }) {
+export default function TrackList({ tracks, onPlay, menu, onReorder, headerExtra }) {
     const currentTrack = useAudioStore(state => state.currentTrack)
     const isPlaying = useAudioStore(state => state.isPlaying)
     const [dragging, setDragging] = useState(null)
@@ -29,6 +30,7 @@ export default function TrackList({ tracks, onPlay, menu, onReorder }) {
         <div className="flex items-center gap-4 px-3 py-2 text-xs uppercase tracking-wider text-base-content/40 border-b border-white/5 mb-1">
             <span className="w-8 text-right">#</span>
             <span className="flex-1">Title</span>
+            {headerExtra && <span className="normal-case tracking-normal">{headerExtra}</span>}
             <Clock size={14} />
         </div>
         <ol className="flex flex-col gap-0.5">

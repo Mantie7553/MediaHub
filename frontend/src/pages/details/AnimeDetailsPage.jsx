@@ -15,7 +15,7 @@ import Format from "../../utils/format";
 import { CheckCheck, PencilLine, Play, RotateCcw, Undo2, Upload, ListPlus } from "lucide-react";
 import DetailsHero from "../../components/details/DetailsHero";
 import StatusPill from "../../components/StatusPill";
-import { ActionMenu, ActionMenuItem, ListStatusMenu } from "../../components/details/Menus";
+import { ActionMenu, ActionMenuItem, ListStatusMenu, SortMenu } from "../../components/details/Menus";
 import ItemRow, { ItemList } from "../../components/details/ItemRow";
 import SegmentedTabs from "../../components/SegmentedTabs";
 import EditDetailsModal from "../../components/modals/EditDetailsModal";
@@ -24,6 +24,12 @@ import useAdminPieces from "../../hooks/useAdminPieces";
 import useCollectionPicker from "../../hooks/useCollectionPicker";
 import { saveListEntry } from "../../services/mediaService";
 import { userIsAdmin } from "../../utils/auth";
+import useSort from "../../hooks/useSort";
+import { sortItems } from "../../utils/sort";
+import { partSorts } from "../../utils/sortOptions";
+
+// oldest to newest by number, or the other way, or what's left to do first
+const episodeSorts = partSorts("Unwatched");
 
 export default function AnimeDetailsPage() {
     const { id } = useParams();
@@ -43,6 +49,7 @@ export default function AnimeDetailsPage() {
     const [episodesAttempt, setEpisodesAttempt] = useState(0);
     // the season tab picked, null until the user picks one (then the next episode's season shows)
     const [pickedSeason, setPickedSeason] = useState(null);
+    const [episodeSort, setEpisodeSort] = useSort("details:episodes", episodeSorts);
     const editRef = useRef(null);
     const uploadRef = useRef(null);
     // a cover just uploaded, with a version so the browser doesn't show the one it cached
@@ -155,6 +162,11 @@ export default function AnimeDetailsPage() {
     const linkedSeason = searchParams.get("season")
     const season = pickedSeason ?? (seasons[linkedSeason] ? linkedSeason : String(nextEpisode?.season_number ?? seasonNumbers[0]))
     const seasonEpisodes = seasons[season] ?? []
+    // sorted within the season; the next episode above still goes by the list's own order
+    const shownEpisodes = sortItems(seasonEpisodes, episodeSort,
+        { numberOf: ep => ep.episode_number, isDone: ep => watchedEpisodes.has(ep.id) })
+    const episodeSortMenu = seasonEpisodes.length > 1 &&
+        <SortMenu options={episodeSorts} value={episodeSort} onChange={setEpisodeSort} label="Sort episodes"/>
 
     return (
         <div className="flex flex-col gap-8">
@@ -216,14 +228,14 @@ export default function AnimeDetailsPage() {
                             options={seasonNumbers.map(n => ({ key: n, label: `Season ${n}` }))}
                         />
                         : "Episodes"}
-                    actions={multiSeason && <ActionMenu label={`Season ${season} actions`} size="sm">
+                    actions={<>{episodeSortMenu}{multiSeason && <ActionMenu label={`Season ${season} actions`} size="sm">
                         <ActionMenuItem icon={CheckCheck} label={`Mark season ${season} watched`} onClick={() => markSeason(season, seasonEpisodes, true)}/>
                         <ActionMenuItem icon={RotateCcw} label={`Mark season ${season} unwatched`} onClick={() => markSeason(season, seasonEpisodes, false)}/>
                         <ActionMenuItem icon={ListPlus} label={`Add season ${season} to a collection…`}
                             onClick={() => picker.open({ id, type: anime.type, title: anime.title, season_number: Number(season) })}/>
-                    </ActionMenu>}
+                    </ActionMenu>}</>}
                 >
-                    {seasonEpisodes.map(ep => {
+                    {shownEpisodes.map(ep => {
                         const watched = watchedEpisodes.has(ep.id)
                         const position = positionOf(ep)
                         const duration = durationOf(ep)

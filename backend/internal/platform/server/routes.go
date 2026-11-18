@@ -247,6 +247,7 @@ func (s *Server) routes() {
 			r.Post("/collections/{id}/items", collectionsHandler.AddItem)
 			r.Delete("/collections/{id}/items/{entryId}", collectionsHandler.RemoveItem)
 			r.Put("/collections/{id}/items/{entryId}/position", collectionsHandler.MoveItem)
+			r.Put("/collections/{id}/order", collectionsHandler.SetOrder)
 			// featuring: users submit theirs, everyone sees the featured copies and can save one as
 			// their own
 			r.Get("/featured", collectionsHandler.ListFeatured)

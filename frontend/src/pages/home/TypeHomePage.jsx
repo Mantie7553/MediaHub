@@ -13,8 +13,9 @@ import HidingSearchBar from "../../components/HidingSearchBar";
 import HomeTabs from "../../components/layout/HomeTabs";
 import MakeHomeButton from "../../components/layout/MakeHomeButton";
 import HomeSection from "./HomeSection";
-import { byTitle, splitCollections, trackedOfType } from "./rows";
+import { splitCollections, trackedOfType } from "./rows";
 import { filterByQuery } from "../../utils/search";
+import { albumSorts, artistSorts, collectionSorts, continueSorts, featuredSorts, librarySorts, trackedAlbumSorts, trackedSorts } from "../../utils/sortOptions";
 import { homePage } from "../../utils/homePages";
 import { onCollectionsChanged } from "../../services/collectionsService";
 
@@ -44,7 +45,7 @@ export default function TypeHomePage({ pageKey }) {
     const matching = items => filterByQuery(items, searchText);
 
     const mine = matching(trackedOfType(userContent, page.type));
-    const available = matching([...library.data].sort(byTitle));
+    const available = matching(library.data);
     const continueItems = matching(continuing.data);
     const lists = splitCollections(collections.data);
     const playlists = matching(lists.playlists);
@@ -59,29 +60,29 @@ export default function TypeHomePage({ pageKey }) {
 
     const mineRows = isMusic ? [
         { key: "albums", label: "Albums", count: mine.length,
-            render: () => <AlbumList expandKey="home:music:mine" albums={mine} heading="Albums" loading={userLoading} emptyText={mineEmpty}/> },
+            render: () => <AlbumList expandKey="home:music:mine" albums={mine} heading="Albums" sortOptions={trackedAlbumSorts} loading={userLoading} emptyText={mineEmpty}/> },
         { key: "playlist", label: "Playlists", count: playlists.length, error: collections.error, reload: collections.reload,
-            render: () => <CollectionList expandKey="home:music:playlists" collections={playlists} kind="playlist" heading="Playlists"
+            render: () => <CollectionList expandKey="home:music:playlists" collections={playlists} kind="playlist" heading="Playlists" sortOptions={collectionSorts}
                 loading={collections.loading} emptyText={searching ? mineEmpty : undefined}/> },
         { key: "collection", label: "Collections", count: userCollections.length, error: collections.error, reload: collections.reload,
-            render: () => <CollectionList expandKey="home:music:collections" collections={userCollections} kind="collection" heading="Collections"
+            render: () => <CollectionList expandKey="home:music:collections" collections={userCollections} kind="collection" heading="Collections" sortOptions={collectionSorts}
                 loading={collections.loading} emptyText={searching ? mineEmpty : undefined}/> },
     ] : [
         { key: "mine", label: page.label, count: mine.length,
-            render: () => <ContentList expandKey={`home:${page.key}:mine`} items={mine} heading={page.label} loading={userLoading}
+            render: () => <ContentList expandKey={`home:${page.key}:mine`} items={mine} heading={page.label} sortOptions={trackedSorts(page.type)} loading={userLoading}
                 userContentMap={userContentMap} onListChange={refresh} emptyText={mineEmpty}/> },
     ];
 
     const availableRows = isMusic ? [
         { key: "albums", label: "Albums", count: available.length, error: library.error, reload: library.reload,
-            render: () => <AlbumList expandKey="home:music:available" albums={available} heading="Albums" loading={library.loading}
+            render: () => <AlbumList expandKey="home:music:available" albums={available} heading="Albums" sortOptions={albumSorts} userContentMap={userContentMap} loading={library.loading}
                 emptyText={availableEmpty} emptyHint={availableHint}/> },
         { key: "artists", label: "Artists", count: artists.length, error: artistPlaylists.error, reload: artistPlaylists.reload,
-            render: () => <CollectionList expandKey="home:music:artists" collections={artists} kind="playlist" heading="Artists"
+            render: () => <CollectionList expandKey="home:music:artists" collections={artists} kind="playlist" heading="Artists" sortOptions={artistSorts}
                 loading={artistPlaylists.loading} canCreate={false} emptyText={availableEmpty}/> },
     ] : [
         { key: "available", label: page.label, count: available.length, error: library.error, reload: library.reload,
-            render: () => <ContentList expandKey={`home:${page.key}:available`} items={available} heading={page.label} loading={library.loading}
+            render: () => <ContentList expandKey={`home:${page.key}:available`} items={available} heading={page.label} sortOptions={librarySorts(page.type)} loading={library.loading}
                 userContentMap={userContentMap} onListChange={refresh} emptyText={availableEmpty} emptyHint={availableHint}/> },
     ];
 
@@ -100,12 +101,12 @@ export default function TypeHomePage({ pageKey }) {
         <HidingSearchBar value={query} onChange={setQuery} placeholder={`Search ${page.noun}…`} className="-mt-4 sm:-mt-8"/>
 
         {!continuing.loading && continueItems.length > 0 && (
-            <ContentList items={continueItems} heading="Continue" expandKey={`home:${page.key}:continue`} userContentMap={userContentMap}
+            <ContentList items={continueItems} heading="Continue" expandKey={`home:${page.key}:continue`} sortOptions={continueSorts} userContentMap={userContentMap}
                 onListChange={() => { refresh(); continuing.reload(true); }}/>
         )}
 
         {!featured.loading && featuredPlaylists.length > 0 && (
-            <CollectionList collections={featuredPlaylists} heading="Featured" expandKey="home:music:featured" canCreate={false}/>
+            <CollectionList collections={featuredPlaylists} heading="Featured" expandKey="home:music:featured" sortOptions={featuredSorts} canCreate={false}/>
         )}
 
         <HomeSection

@@ -1,5 +1,8 @@
 import { useRef } from "react"
 import useExpanded from "../../hooks/useExpanded"
+import useSort from "../../hooks/useSort"
+import { sortItems } from "../../utils/sort"
+import { SortMenu } from "../details/Menus"
 import { useNavigate } from "react-router-dom"
 import { CollectionCard, NewCollectionCard } from "../cards"
 import { CardRowSkeleton } from "../states/Skeletons"
@@ -23,11 +26,14 @@ const ROW_LIMIT = 12
  * @param {string} emptyText shown instead of the row when there's nothing and no new card,
  *  e.g. while searching
  * @param {boolean} canCreate ends the row with a card that makes a new one (not for featured ones)
- * @param {string} expandKey remembers "See all" across reloads under this name (see useExpanded)
+ * @param {string} expandKey remembers "See all" and the sort across reloads under this name
+ * @param {object[]} sortOptions the ways the row can be sorted (see utils/sortOptions), none
+ *  leaves it in the order given
  */
-export default function CollectionList({ collections, kind, heading, loading = false, emptyText, canCreate = true, expandKey }) {
+export default function CollectionList({ collections: given, kind, heading, loading = false, emptyText, canCreate = true, expandKey, sortOptions }) {
     const navigate = useNavigate()
     const [expanded, setExpanded] = useExpanded(expandKey)
+    const [sort, setSort] = useSort(expandKey, sortOptions)
     const newRef = useRef(null)
 
     if (loading) return <CardRowSkeleton heading={heading} square/>
@@ -37,12 +43,15 @@ export default function CollectionList({ collections, kind, heading, loading = f
             .then(res => navigate(`/${kind === "collection" ? "collections" : "playlists"}/${res.data.id}`))
     }
 
+    const collections = sortItems(given, sort)
     const canExpand = collections.length > ROW_LIMIT
     const newCard = canCreate && !emptyText && <NewCollectionCard kind={kind} fluid={expanded} onClick={() => newRef.current.showModal()}/>
 
     return <section className="animate-fade-up">
         <SectionHeader title={heading} count={collections.length} expanded={expanded}
-            onShowAll={canExpand ? () => setExpanded(!expanded) : undefined}/>
+            onShowAll={canExpand ? () => setExpanded(!expanded) : undefined}>
+            {sortOptions && collections.length > 1 && <SortMenu options={sortOptions} value={sort} onChange={setSort} label={`Sort ${heading}`}/>}
+        </SectionHeader>
         {collections.length === 0 && emptyText ? (
             <EmptyState compact title={emptyText}/>
         ) : expanded && canExpand ? (

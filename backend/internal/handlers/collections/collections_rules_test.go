@@ -213,3 +213,28 @@ func TestOnlyAdminsSetImagesOfTheirOwnOrFeatured(t *testing.T) {
 		}
 	}
 }
+
+func TestANewOrderNamesEveryEntryOnce(t *testing.T) {
+	have := []string{"a", "b", "c"}
+	tests := []struct {
+		name  string
+		order []string
+		want  bool
+	}{
+		{"same order", []string{"a", "b", "c"}, true},
+		{"reordered", []string{"c", "a", "b"}, true},
+		{"one missing", []string{"a", "b"}, false},
+		{"one extra", []string{"a", "b", "c", "d"}, false},
+		{"one repeated in place of another", []string{"a", "a", "c"}, false},
+		{"one from elsewhere", []string{"a", "b", "x"}, false},
+		{"empty", nil, false},
+	}
+	for _, tt := range tests {
+		if got := sameEntries(have, tt.order); got != tt.want {
+			t.Errorf("%s: sameEntries = %v, want %v", tt.name, got, tt.want)
+		}
+	}
+	if !sameEntries(nil, []string{}) {
+		t.Error("an empty collection's order is an empty list")
+	}
+}

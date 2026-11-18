@@ -14,7 +14,7 @@ import useAudioStore from "../../stores/useAudioStore"
 import { useUserContent, useRemoveFromList } from "../../hooks"
 import AddToListModal from "../../components/modals/AddToListModal"
 import DetailsHero from "../../components/details/DetailsHero"
-import { ActionMenu, ActionMenuItem } from "../../components/details/Menus"
+import { ActionMenu, ActionMenuItem, SortMenu } from "../../components/details/Menus"
 import { userIsAdmin } from "../../utils/auth"
 import Format from "../../utils/format"
 import EditDetailsModal from "../../components/modals/EditDetailsModal"
@@ -23,6 +23,9 @@ import useAdminPieces from "../../hooks/useAdminPieces"
 import useCollectionPicker from "../../hooks/useCollectionPicker"
 import TrackList from "../../components/details/TrackList"
 import { PlayButton, QueueModeButtons } from "../../components/details/PlaybackControls"
+import useSort from "../../hooks/useSort"
+import { sortItems } from "../../utils/sort"
+import { albumTrackSorts } from "../../utils/sortOptions"
 
 export default function AlbumDetailsPage() {
     const dialogRef = useRef(null);
@@ -40,6 +43,8 @@ export default function AlbumDetailsPage() {
     const playAlbum = useAudioStore(state => state.playAlbum);
     const pieces = useAdminPieces(() => reload(true));
     const picker = useCollectionPicker();
+    // remembered for every album, so a preference like "Shortest" sticks
+    const [trackSort, setTrackSort] = useSort("album:tracks", albumTrackSorts);
 
     function handleAddToList({ status, score }) {
         saveListEntry(userContent, { album_id: id }, { status, rating: score || null })
@@ -52,7 +57,8 @@ export default function AlbumDetailsPage() {
     if (error) return <ErrorState error={error} title="Couldn't load this album" onRetry={reload} showBack />
     if (!album) return null
 
-    const tracks = album.tracks ?? []
+    // played in the order shown
+    const tracks = sortItems(album.tracks ?? [], trackSort)
     const cover = uploadedCover ?? album.cover_image_url
     const queueTracks = tracks.map(t => ({
         id: t.media_item_id,
@@ -102,6 +108,7 @@ export default function AlbumDetailsPage() {
                 <TrackList
                     tracks={tracks.map(t => ({ key: t.media_item_id, id: t.media_item_id, title: t.title, number: t.track_number, duration_secs: t.duration_secs }))}
                     onPlay={i => playAlbum(queueTracks, i, `/albums/${id}`)}
+                    headerExtra={tracks.length > 1 && <SortMenu options={albumTrackSorts} value={trackSort} onChange={setTrackSort} label="Sort tracks"/>}
                     menu={(track, i) => pieces.menu({
                         kind: "track", id: track.id, label: track.title,
                         title: track.title, artist: tracks[i].artist || album.artist, track_number: tracks[i].track_number,

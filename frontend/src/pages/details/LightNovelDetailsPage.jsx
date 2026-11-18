@@ -15,7 +15,7 @@ import { savedPositionKey } from "../../utils/readerAnchor";
 import { BookOpen, CheckCheck, PencilLine, Undo2, Upload, ListPlus } from "lucide-react";
 import Format from "../../utils/format";
 import DetailsHero from "../../components/details/DetailsHero";
-import { ActionMenu, ActionMenuItem, ListStatusMenu } from "../../components/details/Menus";
+import { ActionMenu, ActionMenuItem, ListStatusMenu, SortMenu } from "../../components/details/Menus";
 import ItemRow, { ItemList } from "../../components/details/ItemRow";
 import EditDetailsModal from "../../components/modals/EditDetailsModal";
 import UploadFilesModal from "../../components/modals/UploadFilesModal";
@@ -23,6 +23,12 @@ import useAdminPieces from "../../hooks/useAdminPieces";
 import useCollectionPicker from "../../hooks/useCollectionPicker";
 import { saveListEntry } from "../../services/mediaService";
 import { userIsAdmin } from "../../utils/auth";
+import useSort from "../../hooks/useSort";
+import { sortItems } from "../../utils/sort";
+import { partSorts } from "../../utils/sortOptions";
+
+// oldest to newest by number, or the other way, or what's left to do first
+const volumeSorts = partSorts("Unread");
 
 export default function LightNovelDetailsPage() {
     const navigate = useNavigate();
@@ -41,6 +47,7 @@ export default function LightNovelDetailsPage() {
     const isAdmin = userIsAdmin();
     const pieces = useAdminPieces(() => refetch(false));
     const picker = useCollectionPicker();
+    const [volumeSort, setVolumeSort] = useSort("details:volumes", volumeSorts);
 
     // read state and positions start from each copy of the title that loads
     const [shownLn, setShownLn] = useState(null);
@@ -160,8 +167,9 @@ export default function LightNovelDetailsPage() {
                 <EmptyState compact title="No volumes yet" hint="Volumes show up here once they've downloaded."
                     action={isAdmin ? { label: "Add volume files", onClick: () => uploadRef.current.showModal() } : undefined} />
             ) : (
-                <ItemList title="Volumes">
-                    {volumes.map(volume => {
+                <ItemList title="Volumes" actions={volumes.length > 1 &&
+                    <SortMenu options={volumeSorts} value={volumeSort} onChange={setVolumeSort} label="Sort volumes"/>}>
+                    {sortItems(volumes, volumeSort, { numberOf: v => Number(v.volume_number), isDone: v => readVolumes.has(v.id) }).map(volume => {
                         const done = readVolumes.has(volume.id);
                         const pct = scrollPosition[volume.id] ?? 0;
                         const started = !done && pct > 0;
