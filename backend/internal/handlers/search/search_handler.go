@@ -66,6 +66,8 @@ type saveRequest struct {
 	Album          string `json:"album"`
 	DurationSecs   *int   `json:"duration_secs"`
 	SourceURL      string `json:"source_url"`
+	// a new track's place on its album; left out, it goes after the album's last track
+	TrackNumber *int `json:"track_number"`
 }
 
 /*
@@ -115,6 +117,10 @@ func (h *Handler) Save(w http.ResponseWriter, r *http.Request) {
 		req.Artist, req.Album = musicfiles.CleanName(req.Artist), musicfiles.CleanName(req.Album)
 		if req.Artist == "" {
 			utils.Error(w, http.StatusBadRequest, "artist is required")
+			return
+		}
+		if req.TrackNumber != nil && (*req.TrackNumber < 1 || *req.TrackNumber > 999) {
+			utils.Error(w, http.StatusBadRequest, "track_number must be between 1 and 999")
 			return
 		}
 	}
@@ -301,14 +307,18 @@ func (h *Handler) Save(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
+		// with no number given, the track goes after its album's last one, so tracks requested
+		// in album order are numbered in that order however their downloads finish
 		_, err = h.db.Exec(
-			`INSERT INTO music_metadata (media_item_id, artist, duration_secs, album_id)
-			VALUES ($1, $2, $3, $4)
+			`INSERT INTO music_metadata (media_item_id, artist, duration_secs, album_id, track_number)
+			VALUES ($1, $2, $3, $4::uuid, COALESCE($5::int,
+				(SELECT COALESCE(MAX(track_number), 0) + 1 FROM music_metadata WHERE album_id = $4::uuid)))
 			ON CONFLICT (media_item_id) DO NOTHING`,
 			mediaItemID,
 			req.Artist,
 			req.DurationSecs,
 			albumID,
+			req.TrackNumber,
 		)
 		if utils.InternalError(w, err) {
 			return
