@@ -21,7 +21,7 @@ func TestSaveRefusesUnsafeMusicRequests(t *testing.T) {
 		{"track number 0", `{"title":"t","type":"music_track","action":"download","artist":"A","track_number":0,"source_url":"https://youtu.be/ZRtdQ81jPUQ"}`},
 		{"negative track number", `{"title":"t","type":"music_track","action":"download","artist":"A","track_number":-1,"source_url":"https://youtu.be/ZRtdQ81jPUQ"}`},
 		{"track number too big", `{"title":"t","type":"music_track","action":"download","artist":"A","track_number":1000,"source_url":"https://youtu.be/ZRtdQ81jPUQ"}`},
-		{"no artist",`{"title":"t","type":"music_track","action":"download","source_url":"https://youtu.be/ZRtdQ81jPUQ"}`},
+		{"no artist", `{"title":"t","type":"music_track","action":"download","source_url":"https://youtu.be/ZRtdQ81jPUQ"}`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
