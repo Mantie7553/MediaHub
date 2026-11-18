@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/Mantie7553/MediaHub/backend/internal/musicfiles"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/auth"
@@ -20,6 +21,10 @@ type AlbumSummary struct {
 	Artist     string  `json:"artist"`
 	CoverURL   *string `json:"cover_image_url"`
 	TrackCount int     `json:"track_count"`
+	// when it came out (its own date, or else its newest track's) and when it reached the
+	// server, for sorting
+	ReleaseDate *time.Time `json:"release_date"`
+	CreatedAt   time.Time  `json:"created_at"`
 }
 
 type AlbumDetail struct {
@@ -71,9 +76,11 @@ func (h *Handler) GetAlbums(w http.ResponseWriter, r *http.Request) {
 	rows, err := h.db.Query(`
 		SELECT a.id, a.title, a.artist,
 			` + albumCover + ` AS cover_image_url,
-			COUNT(mm.media_item_id) as track_count
+			COUNT(mm.media_item_id) as track_count,
+			COALESCE(a.release_date, MAX(mi.release_date)::date), a.created_at
 		FROM albums a
 		JOIN music_metadata mm ON mm.album_id = a.id AND mm.file_path IS NOT NULL
+		JOIN media_items mi ON mi.id = mm.media_item_id
 		GROUP BY a.id
 		ORDER BY a.title`)
 	if utils.InternalError(w, err) {
@@ -84,7 +91,7 @@ func (h *Handler) GetAlbums(w http.ResponseWriter, r *http.Request) {
 	albums := []AlbumSummary{}
 	for rows.Next() {
 		var a AlbumSummary
-		if err := rows.Scan(&a.ID, &a.Title, &a.Artist, &a.CoverURL, &a.TrackCount); err != nil {
+		if err := rows.Scan(&a.ID, &a.Title, &a.Artist, &a.CoverURL, &a.TrackCount, &a.ReleaseDate, &a.CreatedAt); err != nil {
 			utils.InternalError(w, err)
 			return
 		}
@@ -174,9 +181,11 @@ func (h *Handler) GetRecommended(w http.ResponseWriter, r *http.Request) {
 	rows, err := h.db.Query(`
 		SELECT a.id, a.title, a.artist,
 			`+albumCover+` AS cover_image_url,
-			COUNT(mm.media_item_id) as track_count
+			COUNT(mm.media_item_id) as track_count,
+			COALESCE(a.release_date, MAX(mi.release_date)::date), a.created_at
 		FROM albums a
 		JOIN music_metadata mm ON mm.album_id = a.id AND mm.file_path IS NOT NULL
+		JOIN media_items mi ON mi.id = mm.media_item_id
 		WHERE a.artist IN (
 			SELECT DISTINCT a2.artist
 			FROM user_media_status ums
@@ -199,7 +208,7 @@ func (h *Handler) GetRecommended(w http.ResponseWriter, r *http.Request) {
 	albums := []AlbumSummary{}
 	for rows.Next() {
 		var a AlbumSummary
-		if err := rows.Scan(&a.ID, &a.Title, &a.Artist, &a.CoverURL, &a.TrackCount); err != nil {
+		if err := rows.Scan(&a.ID, &a.Title, &a.Artist, &a.CoverURL, &a.TrackCount, &a.ReleaseDate, &a.CreatedAt); err != nil {
 			utils.InternalError(w, err)
 			return
 		}

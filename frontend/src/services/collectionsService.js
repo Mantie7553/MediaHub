@@ -75,6 +75,15 @@ export function moveInCollection(id, entryId, after) {
 }
 
 /**
+ * Keep a new order for everything in a playlist or collection, like a sorted view
+ * @param {string} id the playlist or collection
+ * @param {string[]} entryIds every entry's id, in the new order
+ */
+export function saveCollectionOrder(id, entryIds) {
+    return api.put(`/collections/${id}/order`, { entry_ids: entryIds })
+}
+
+/**
  * Ask the admins to feature one of the user's playlists or collections
  * @param {string} note an optional message for the admins
  * @returns the response, with where the request is ({ status, ... })

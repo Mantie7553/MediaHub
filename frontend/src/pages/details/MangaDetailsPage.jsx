@@ -14,7 +14,7 @@ import api from "../../services/api";
 import { BookOpen, CheckCheck, Link2, PencilLine, RefreshCw, Undo2, Upload, ListPlus } from "lucide-react";
 import DetailsHero from "../../components/details/DetailsHero";
 import StatusPill from "../../components/StatusPill";
-import { ActionMenu, ActionMenuItem, ListStatusMenu } from "../../components/details/Menus";
+import { ActionMenu, ActionMenuItem, ListStatusMenu, SortMenu } from "../../components/details/Menus";
 import ItemRow, { ItemList } from "../../components/details/ItemRow";
 import UploadChaptersModal from "../../components/modals/UploadChaptersModal";
 import EditDetailsModal from "../../components/modals/EditDetailsModal";
@@ -23,6 +23,12 @@ import useCollectionPicker from "../../hooks/useCollectionPicker";
 import useLinkSource from "../../hooks/useLinkSource";
 import { checkForChapters, getSuwayomiLink, saveListEntry } from "../../services/mediaService";
 import { userIsAdmin } from "../../utils/auth";
+import useSort from "../../hooks/useSort";
+import { sortItems } from "../../utils/sort";
+import { partSorts } from "../../utils/sortOptions";
+
+// oldest to newest by number, or the other way, or what's left to do first
+const chapterSorts = partSorts("Unread");
 
 export default function MangaDetailsPage() {
     const navigate = useNavigate();
@@ -41,6 +47,7 @@ export default function MangaDetailsPage() {
     const isAdmin = userIsAdmin();
     const pieces = useAdminPieces(() => refetch(false));
     const picker = useCollectionPicker();
+    const [chapterSort, setChapterSort] = useSort("details:chapters", chapterSorts);
     // admins: whether Suwayomi is set up, and the source title missing chapters come from
     const [suwayomi, setSuwayomi] = useState({ configured: false, link: null });
     useEffect(() => {
@@ -185,8 +192,9 @@ export default function MangaDetailsPage() {
                 <EmptyState compact title="No chapters yet" hint="Chapters show up here once they've downloaded."
                     action={isAdmin ? { label: "Add chapter files", onClick: () => uploadRef.current.showModal() } : undefined} />
             ) : (
-                <ItemList title="Chapters">
-                    {chapters.map(chapter => {
+                <ItemList title="Chapters" actions={chapters.length > 1 &&
+                    <SortMenu options={chapterSorts} value={chapterSort} onChange={setChapterSort} label="Sort chapters"/>}>
+                    {sortItems(chapters, chapterSort, { numberOf: c => Number(c.chapter_number), isDone: c => readChapters.has(c.id) }).map(chapter => {
                         const done = readChapters.has(chapter.id);
                         const { progress, label } = chapterProgress(pageProgress[chapter.id] ?? 0, chapter.page_count, done);
                         return <ItemRow

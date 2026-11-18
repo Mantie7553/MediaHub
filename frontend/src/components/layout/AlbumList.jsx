@@ -1,4 +1,7 @@
 import useExpanded from "../../hooks/useExpanded"
+import useSort from "../../hooks/useSort"
+import { sortItems } from "../../utils/sort"
+import { SortMenu } from "../details/Menus"
 import { AlbumCard } from "../cards"
 import EmptyState from "../states/EmptyState"
 import { CardRowSkeleton } from "../states/Skeletons"
@@ -18,13 +21,18 @@ const ROW_LIMIT = 12
  * @param {string} emptyText what to say when there are no albums
  * @param {string} emptyHint what the user can do about it
  * @param {object} emptyAction optional { label, to } shown when there are no albums
- * @param {string} expandKey remembers "See all" across reloads under this name (see useExpanded)
+ * @param {string} expandKey remembers "See all" and the sort across reloads under this name
+ * @param {object[]} sortOptions the ways the row can be sorted (see utils/sortOptions), none
+ *  leaves it in the order given
+ * @param {object} userContentMap the user's list entries, for sorting by their rating
  */
-export default function AlbumList({ albums, heading, loading = false, emptyText = "Nothing here yet", emptyHint, emptyAction, expandKey }) {
+export default function AlbumList({ albums: given, heading, loading = false, emptyText = "Nothing here yet", emptyHint, emptyAction, expandKey, sortOptions, userContentMap }) {
     const [expanded, setExpanded] = useExpanded(expandKey)
+    const [sort, setSort] = useSort(expandKey, sortOptions)
 
     if (loading) return <CardRowSkeleton heading={heading} square/>
 
+    const albums = sortItems(given, sort, { userContentMap })
     if (!albums || albums.length === 0) {
         return <section>
             <SectionHeader title={heading}/>
@@ -36,7 +44,9 @@ export default function AlbumList({ albums, heading, loading = false, emptyText 
 
     return <section className="animate-fade-up">
         <SectionHeader title={heading} count={albums.length} expanded={expanded}
-            onShowAll={canExpand ? () => setExpanded(!expanded) : undefined}/>
+            onShowAll={canExpand ? () => setExpanded(!expanded) : undefined}>
+            {sortOptions && albums.length > 1 && <SortMenu options={sortOptions} value={sort} onChange={setSort} label={`Sort ${heading}`}/>}
+        </SectionHeader>
         {expanded && canExpand ? (
             <ul className={cardGrid}>{albums.map(album => <AlbumCard key={album.id} album={album} fluid/>)}</ul>
         ) : (

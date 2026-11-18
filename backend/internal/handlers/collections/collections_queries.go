@@ -82,7 +82,7 @@ SELECT ci.id,
 	` + entryCover("") + `,
 	mi.release_date, mi.external_source::text,
 	mm.duration_secs, COALESCE(mm.file_path IS NOT NULL, false),
-	mm.album_id::text, ta.title, ci.season_number,
+	mm.album_id::text, ta.title, ci.season_number, mm.track_number, ci.added_at,
 	CASE
 		WHEN ci.season_number IS NOT NULL THEN
 			(SELECT COUNT(*) FROM episodes x WHERE x.media_item_id = ci.media_item_id
@@ -122,7 +122,8 @@ best AS (
 )
 SELECT mi.id, mi.title, mm.artist,
 	COALESCE(` + albumCoverOf("ta", "t") + `, mi.cover_image_url),
-	mi.release_date, mi.external_source::text, mm.duration_secs, mm.album_id::text, ta.title
+	mi.release_date, mi.external_source::text, mm.duration_secs, mm.album_id::text, ta.title,
+	mm.track_number, best.updated_at
 FROM best
 JOIN music_metadata mm ON mm.media_item_id = best.track_id AND mm.file_path IS NOT NULL
 JOIN media_items mi ON mi.id = mm.media_item_id
@@ -151,7 +152,8 @@ whose name hashes to $1, newest album first, each album in track order. Same col
 var artistTracksQuery = `
 SELECT mi.id, mi.title, mm.artist,
 	COALESCE(` + albumCoverOf("ta", "t") + `, mi.cover_image_url),
-	mi.release_date, mi.external_source::text, mm.duration_secs, mm.album_id::text, ta.title
+	mi.release_date, mi.external_source::text, mm.duration_secs, mm.album_id::text, ta.title,
+	mm.track_number, NULL::timestamptz
 FROM albums ta
 JOIN music_metadata mm ON mm.album_id = ta.id AND mm.file_path IS NOT NULL
 JOIN media_items mi ON mi.id = mm.media_item_id
@@ -208,7 +210,7 @@ func loadEntries(db querier, collectionID string) ([]Entry, error) {
 		var covers []string
 		if err := rows.Scan(&e.EntryID, &e.Type, &e.ID, &e.Title, &e.Artist, &e.CoverImageURL,
 			&e.ReleaseDate, &e.ExternalSource, &e.DurationSecs, &e.Available, &e.AlbumID, &e.AlbumTitle,
-			&e.SeasonNumber, &count, pq.Array(&covers)); err != nil {
+			&e.SeasonNumber, &e.TrackNumber, &e.AddedAt, &count, pq.Array(&covers)); err != nil {
 			return nil, err
 		}
 		if count.Valid {
@@ -271,7 +273,7 @@ func loadTracks(db querier, query string, args ...any) ([]Entry, error) {
 	for rows.Next() {
 		e := Entry{Type: "music_track", Available: true}
 		if err := rows.Scan(&e.ID, &e.Title, &e.Artist, &e.CoverImageURL, &e.ReleaseDate,
-			&e.ExternalSource, &e.DurationSecs, &e.AlbumID, &e.AlbumTitle); err != nil {
+			&e.ExternalSource, &e.DurationSecs, &e.AlbumID, &e.AlbumTitle, &e.TrackNumber, &e.AddedAt); err != nil {
 			return nil, err
 		}
 		entries = append(entries, e)

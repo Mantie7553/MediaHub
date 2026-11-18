@@ -60,11 +60,15 @@ type Entry struct {
 	CoverImageURL  *string    `json:"cover_image_url"`
 	ReleaseDate    *time.Time `json:"release_date"`
 	ExternalSource *string    `json:"external_source"`
+	// when it went in; in a computed playlist when its list status last changed, and nil in an
+	// artist's playlist
+	AddedAt *time.Time `json:"added_at"`
 	// tracks
 	DurationSecs *int    `json:"duration_secs"`
 	Available    bool    `json:"available"`
 	AlbumID      *string `json:"album_id"`
 	AlbumTitle   *string `json:"album_title"`
+	TrackNumber  *int    `json:"track_number"`
 	// one season of an anime, rather than the whole show
 	SeasonNumber *int `json:"season_number"`
 	// albums (their downloaded tracks), nested playlists (their entries) and seasons (their
@@ -102,6 +106,11 @@ type addResponse struct {
 // After is the entry to move it below, or null for the top
 type moveRequest struct {
 	After *string `json:"after"`
+}
+
+// the entry ids of a playlist or collection, every one of them, in their new order
+type orderRequest struct {
+	EntryIDs []string `json:"entry_ids"`
 }
 
 type submitRequest struct {

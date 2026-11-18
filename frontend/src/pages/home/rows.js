@@ -1,9 +1,6 @@
-// list entries name their title media_title, library items title
-export const byTitle = (a, b) => (a.media_title ?? a.title ?? "").localeCompare(b.media_title ?? b.title ?? "");
-
 /**
- * The user's tracked titles of one type, sorted by title. Albums come back shaped like /albums
- * so AlbumList can show them
+ * The user's tracked titles of one type, in no set order (each row sorts itself). Albums come
+ * back shaped like /albums so AlbumList can show them, keeping what they sort by
  * @param {object[]} userContent entries from /me/media
  * @param {string} type a media type, music_album for albums
  */
@@ -16,9 +13,13 @@ export function trackedOfType(userContent, type) {
             artist: item.artist,
             cover_image_url: item.cover_image_url,
             track_count: null,
+            status: item.status,
+            rating: item.rating,
+            updated_at: item.updated_at,
+            media_type: item.media_type,
         }))
         : entries;
-    return shaped.sort(byTitle);
+    return shaped;
 }
 
 /**

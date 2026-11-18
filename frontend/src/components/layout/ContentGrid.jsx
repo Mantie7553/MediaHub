@@ -1,4 +1,7 @@
+import useSort from "../../hooks/useSort";
+import { sortItems } from "../../utils/sort";
 import { Card } from "../cards";
+import { SortMenu } from "../details/Menus";
 import { CardGridSkeleton } from "../states/Skeletons";
 import EmptyState from "../states/EmptyState";
 import SectionHeader from "./SectionHeader";
@@ -11,8 +14,13 @@ import { cardGrid } from "./cardGrid";
  * @param {boolean} loading shows placeholder cards instead of the items
  * @param {string} emptyText what to say when there are no items, nothing is shown without it
  * @param {string} emptyHint what the user can do about it
+ * @param {object[]} sortOptions the ways the grid can be sorted (see utils/sortOptions)
+ * @param {string} sortKey remembers the sort across reloads under this name (see useSort)
  */
-export default function ContentGrid({items = [], heading, userContentMap={}, onListChange, loading=false, emptyText, emptyHint}) {
+export default function ContentGrid({items: given = [], heading, userContentMap={}, onListChange, loading=false, emptyText, emptyHint, sortOptions, sortKey}) {
+    const [sort, setSort] = useSort(sortKey, sortOptions);
+    const items = sortItems(given, sort, { userContentMap });
+
     if (loading) return <section>
         {heading && <SectionHeader title={heading}/>}
         <CardGridSkeleton/>
@@ -23,7 +31,9 @@ export default function ContentGrid({items = [], heading, userContentMap={}, onL
     }
 
     return <section className="animate-fade-up">
-        {heading && <SectionHeader title={heading} count={items.length}/>}
+        {heading && <SectionHeader title={heading} count={items.length}>
+            {sortOptions && items.length > 1 && <SortMenu options={sortOptions} value={sort} onChange={setSort} label={`Sort ${heading}`}/>}
+        </SectionHeader>}
         <ul className={cardGrid}>
             {items.map(item => <Card key={item.id ?? item.external_id} item={item} userContentMap={userContentMap} onListChange={onListChange} fluid/>)}
         </ul>

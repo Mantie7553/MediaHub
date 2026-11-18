@@ -219,6 +219,7 @@ func TestCollectionRoutesNeedSignIn(t *testing.T) {
 		{http.MethodPost, "/api/collections/" + id + "/items"},
 		{http.MethodDelete, "/api/collections/" + id + "/items/" + id},
 		{http.MethodPut, "/api/collections/" + id + "/items/" + id + "/position"},
+		{http.MethodPut, "/api/collections/" + id + "/order"},
 	}
 	for _, rt := range routes {
 		req := httptest.NewRequest(rt.method, rt.path, strings.NewReader("{}"))
