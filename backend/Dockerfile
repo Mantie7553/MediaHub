@@ -22,6 +22,10 @@ RUN curl -fsSL -o /usr/local/bin/yt-dlp \
       "https://github.com/yt-dlp/yt-dlp/releases/download/${YTDLP_VERSION}/yt-dlp_linux" \
  && chmod 0755 /usr/local/bin/yt-dlp
 
+# yt-dlp needs a JavaScript runtime to solve YouTube's challenges; without one, signed-in
+# (age-restricted) downloads fail and some formats go missing. It finds deno on the PATH
+COPY --from=denoland/deno:bin-2.9.8 /deno /usr/local/bin/deno
+
 COPY --from=build /out/mediahub /usr/local/bin/mediahub
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod 0755 /usr/local/bin/docker-entrypoint.sh

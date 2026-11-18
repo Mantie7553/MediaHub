@@ -19,6 +19,9 @@ coverage
 !.env.example
 *.local
 
+# yt-dlp's YouTube login cookies
+yt-dlp/
+
 # Logs
 *.log
 .bootstrap.log
