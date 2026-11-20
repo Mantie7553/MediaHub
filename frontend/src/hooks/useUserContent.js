@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import useApi from "./useApi";
 
 /**
@@ -8,11 +9,12 @@ import useApi from "./useApi";
 export default function useUserContent() {
     const { data: userContent, loading, error, reload } = useApi("/me/media", { initial: [] });
 
-    const userContentMap = Object.fromEntries([
+    // built once per load, not on every render of a page showing several lists
+    const userContentMap = useMemo(() => Object.fromEntries([
         ...userContent.map(item => [item.media_item_id, item]),
         ...userContent.filter(item => item.external_id != null).map(item => [String(item.external_id), item]),
         ...userContent.filter(item => item.album_id != null).map(item => [item.album_id, item]),
-    ]);
+    ]), [userContent]);
 
     return { userContent, userContentMap, loading, error, refresh: () => reload(true), retry: () => reload() };
 }

@@ -5,6 +5,7 @@ import TypeHomePage from './pages/home/TypeHomePage'
 import { homePages } from './utils/homePages'
 import DownloadsPage from './pages/downloads/DownloadsPage'
 import Layout from './components/layout/Layout'
+import ScrollToTop from './components/layout/ScrollToTop'
 import LoginPage from './pages/login/LoginPage'
 import ProtectedRoute from './components/layout/ProtectedRoute'
 import SettingsPage from './pages/settings/SettingsPage'
@@ -26,6 +27,7 @@ import ErrorBoundary, { PageBoundary } from './components/states/ErrorBoundary'
 function App() {
   return (
     <BrowserRouter>
+      <ScrollToTop/>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route element={<ProtectedRoute><PageBoundary><Outlet/></PageBoundary></ProtectedRoute>}>
