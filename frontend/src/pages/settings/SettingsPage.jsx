@@ -3,6 +3,7 @@ import AccountSection from "./AccountSection";
 import PlaybackSection from "./PlaybackSection";
 import HomePageSection from "./HomePageSection";
 import LibrarySyncSection from "./LibrarySyncSection";
+import AnimeMergeSection from "./AnimeMergeSection";
 import PageHeader from "../../components/layout/PageHeader";
 
 /**
@@ -20,7 +21,10 @@ export default function SettingsPage() {
                     <HomePageSection/>
                     <PlaybackSection/>
                 </div>
-                {isAdmin && <LibrarySyncSection />}
+                {isAdmin && <div className="grid gap-6">
+                    <LibrarySyncSection />
+                    <AnimeMergeSection />
+                </div>}
             </div>
         </div>
     );

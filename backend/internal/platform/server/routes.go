@@ -337,6 +337,9 @@ func (s *Server) routes() {
 			r.Post("/admin/sync/manga", syncHandler.SyncManga)
 			r.Post("/admin/sync/light-novels", syncHandler.SyncLightNovel)
 			r.Post("/admin/sync/music", syncHandler.SyncMusic)
+			// anime seasons saved as titles of their own, folded into their series: a dry run, then the merge
+			r.Get("/admin/anime-merges", syncHandler.GetAnimeMerges)
+			r.Post("/admin/anime-merges", syncHandler.MergeAnime)
 
 			// User Handler endpoints
 			r.Get("/admin/users", usersHandler.GetAll)
