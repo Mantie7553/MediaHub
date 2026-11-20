@@ -1,6 +1,7 @@
 package arr
 
 import (
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -147,5 +148,47 @@ func TestSeasonMalMap(t *testing.T) {
 		if got[k] != v {
 			t.Errorf("%v = %d, want %d", k, got[k], v)
 		}
+	}
+}
+
+func TestBuildAnimeMapsMonogatari(t *testing.T) {
+	season := func(n int) *int { return &n }
+	e := func(typ string, tvdb, s, anilist, anidb int) fribbEntry {
+		entry := fribbEntry{Type: typ, TvdbID: tvdb, AnilistID: anilist, MalID: anilist + 1000, AnidbID: anidb}
+		if s >= 0 {
+			entry.Season.Tvdb = season(s)
+		}
+		return entry
+	}
+	// shaped like Monogatari: every entry has its own name, TVDB keeps them in one series
+	m := buildAnimeMaps([]fribbEntry{
+		e("TV", 102261, 2, 17074, 9000), // Monogatari Second Season, listed before the first
+		e("TV", 102261, 0, 15689, 8000), // Nekomonogatari: Kuro, a special
+		e("TV", 102261, 1, 5081, 6327),  // Bakemonogatari
+		e("TV", 102261, 1, 11597, 8658), // Nisemonogatari, the second entry in season 1
+		e("MOVIE", 102261, -1, 9260, 8357),
+		e("TV", 200, -1, 77, 1), // a series Fribb gives no season for
+	})
+
+	if got := m.TvdbToAnilist[102261]; got != 5081 {
+		t.Errorf("series entry = %d, want Bakemonogatari 5081", got)
+	}
+	if got := m.TvdbToAnilist[200]; got != 77 {
+		t.Errorf("series without seasons = %d, want 77", got)
+	}
+	at, seasons, ok := m.Show(11597)
+	if !ok || at != (TvdbSeason{102261, 1}) {
+		t.Fatalf("Show(Nisemonogatari) = %v, %v", at, ok)
+	}
+	var order []int
+	for _, s := range seasons {
+		order = append(order, s.AnilistID)
+	}
+	want := []int{5081, 11597, 17074, 15689}
+	if fmt.Sprint(order) != fmt.Sprint(want) {
+		t.Errorf("watch order = %v, want %v", order, want)
+	}
+	if _, _, ok := m.Show(9260); ok {
+		t.Error("a movie must stay its own title")
 	}
 }

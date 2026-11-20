@@ -18,7 +18,9 @@ export default function RatingPrompt() {
     }, [request]);
 
     function save(rating) {
-        return saveListEntry({ id: request.entryId }, null, { rating })
+        // a request can save somewhere else, a season's rating say
+        const saving = request.save ? request.save(rating) : saveListEntry({ id: request.entryId }, null, { rating })
+        return saving
             .then(() => { toast.success(rating == null ? "Rating cleared" : "Rating saved"); request.onSaved?.(); })
             .catch(err => { toast.error(err, "Could not save your rating"); throw err; });
     }

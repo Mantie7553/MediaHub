@@ -12,7 +12,7 @@ import { useMediaItem, useUserContent, useRemoveFromList } from "../../hooks";
 import DeleteFromServerButton from "../../components/DeleteFromServerButton";
 import { animeBadge } from "../../utils/status";
 import Format from "../../utils/format";
-import { CheckCheck, PencilLine, Play, RotateCcw, Undo2, Upload, ListPlus } from "lucide-react";
+import { CheckCheck, PencilLine, Play, RotateCcw, Undo2, Upload, ListPlus, Star } from "lucide-react";
 import DetailsHero from "../../components/details/DetailsHero";
 import StatusPill from "../../components/StatusPill";
 import { ActionMenu, ActionMenuItem, ListStatusMenu, SortMenu } from "../../components/details/Menus";
@@ -27,6 +27,9 @@ import { userIsAdmin } from "../../utils/auth";
 import useSort from "../../hooks/useSort";
 import { sortItems } from "../../utils/sort";
 import { partSorts } from "../../utils/sortOptions";
+import { rateTitle } from "../../stores/useRatingStore";
+import { readStored, writeStored } from "../../utils/storage";
+import { seasonDismissKey, shouldPromptSeasonRating } from "../../utils/ratingPrompt";
 
 // oldest to newest by number, or the other way, or what's left to do first
 const episodeSorts = partSorts("Unwatched");
@@ -58,6 +61,16 @@ export default function AnimeDetailsPage() {
     const reloadEpisodes = () => setEpisodesAttempt(a => a + 1);
     const pieces = useAdminPieces(reloadEpisodes);
     const picker = useCollectionPicker();
+    // the user's rating of each season, by season number
+    const [seasonRatings, setSeasonRatings] = useState({});
+    const [seasonRatingsAttempt, setSeasonRatingsAttempt] = useState(0);
+    const reloadSeasonRatings = () => setSeasonRatingsAttempt(a => a + 1);
+
+    useEffect(() => {
+        api.get(`/anime/${id}/season-ratings`)
+            .then(res => setSeasonRatings(Object.fromEntries((res.data ?? []).map(s => [String(s.season_number), s]))))
+            .catch(() => {})
+    }, [id, seasonRatingsAttempt])
 
     useEffect(() => {
         // background: the refresh when the tab regains focus, which fails quietly
@@ -97,6 +110,38 @@ export default function AnimeDetailsPage() {
             .catch(err => toast.error(err, "Could not update your list"));
     }
 
+    // a season's rating, from its tab's menu or asked for when the season is finished
+    function rateSeason(seasonNum, prompt = false) {
+        rateTitle({
+            title: `${anime.title} · Season ${seasonNum}`,
+            rating: seasonRatings[seasonNum]?.rating ?? null,
+            prompt,
+            save: rating => api.put(`/anime/${id}/seasons/${seasonNum}/rating`, { rating }),
+            onSaved: () => { reloadSeasonRatings(); refresh(); },
+            onDismiss: prompt ? () => writeStored(seasonDismissKey(id, seasonNum), "1") : undefined,
+        });
+    }
+
+    // after episodes are marked watched: ask for the rating of a season that just got finished
+    function askSeasonRating(before, after) {
+        const seasonNums = [...new Set(episodes.map(ep => String(ep.season_number)))];
+        if (seasonNums.length < 2) return;
+        const showDone = episodes.every(ep => after.has(ep.id));
+        for (const n of seasonNums) {
+            const eps = episodes.filter(ep => String(ep.season_number) === n);
+            if (shouldPromptSeasonRating({
+                wasDone: eps.every(ep => before.has(ep.id)),
+                isDone: eps.every(ep => after.has(ep.id)),
+                showDone,
+                rated: !!seasonRatings[n],
+                dismissed: readStored(seasonDismissKey(id, n), "") === "1",
+            })) {
+                rateSeason(n, true);
+                return;
+            }
+        }
+    }
+
     function toggleEpisode(ep) {
         const watched = !watchedEpisodes.has(ep.id);
         api.put(`/episodes/${ep.id}/watched`, { watched })
@@ -104,6 +149,7 @@ export default function AnimeDetailsPage() {
                 const next = new Set(watchedEpisodes);
                 watched ? next.add(ep.id) : next.delete(ep.id);
                 setWatchedEpisodes(next);
+                askSeasonRating(watchedEpisodes, next);
                 // the server moves the list status along with what's watched
                 refresh();
             })
@@ -116,6 +162,7 @@ export default function AnimeDetailsPage() {
                 const next = new Set(watchedEpisodes);
                 eps.forEach(ep => watched ? next.add(ep.id) : next.delete(ep.id));
                 setWatchedEpisodes(next);
+                askSeasonRating(watchedEpisodes, next);
                 refresh();
             })
             .catch(err => toast.error(err, `Could not update season ${seasonNum}`))
@@ -225,12 +272,14 @@ export default function AnimeDetailsPage() {
                             bleed={false}
                             value={season}
                             onChange={setPickedSeason}
-                            options={seasonNumbers.map(n => ({ key: n, label: `Season ${n}` }))}
+                            options={seasonNumbers.map(n => ({ key: n, label: <SeasonLabel season={n} rating={seasonRatings[n]?.rating}/> }))}
                         />
                         : "Episodes"}
                     actions={<>{episodeSortMenu}{multiSeason && <ActionMenu label={`Season ${season} actions`} size="sm">
                         <ActionMenuItem icon={CheckCheck} label={`Mark season ${season} watched`} onClick={() => markSeason(season, seasonEpisodes, true)}/>
                         <ActionMenuItem icon={RotateCcw} label={`Mark season ${season} unwatched`} onClick={() => markSeason(season, seasonEpisodes, false)}/>
+                        <ActionMenuItem icon={Star} label={seasonRatings[season] ? `Change season ${season}'s rating…` : `Rate season ${season}…`}
+                            onClick={() => rateSeason(season)}/>
                         <ActionMenuItem icon={ListPlus} label={`Add season ${season} to a collection…`}
                             onClick={() => picker.open({ id, type: anime.type, title: anime.title, season_number: Number(season) })}/>
                     </ActionMenu>}</>}
@@ -277,4 +326,14 @@ export default function AnimeDetailsPage() {
             {picker.modal}
         </div>
     )
+}
+
+/** A season tab's label, with the user's rating of it when they have one */
+function SeasonLabel({ season, rating }) {
+    return <span className="flex items-center gap-1.5">
+        Season {season}
+        {rating != null && <span className="flex items-center gap-0.5 text-xs tabular-nums opacity-75" aria-label={`rated ${rating} out of 10`}>
+            <Star size={11} fill="currentColor"/>{rating}
+        </span>}
+    </span>
 }

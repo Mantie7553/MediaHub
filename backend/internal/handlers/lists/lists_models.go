@@ -28,9 +28,11 @@ func validRating(rating *int) bool {
 }
 
 type UserMediaEntry struct {
-	ID             string     `json:"id"`
-	Status         string     `json:"status"`
-	Rating         *int       `json:"rating"`
+	ID     string `json:"id"`
+	Status string `json:"status"`
+	Rating *int   `json:"rating"`
+	// the rating is the average of the user's season ratings, not one they picked
+	RatingDerived  bool       `json:"rating_derived"`
 	UpdatedAt      time.Time  `json:"updated_at"`
 	MediaItemID    *string    `json:"media_item_id"`
 	MediaType      string     `json:"media_type"`

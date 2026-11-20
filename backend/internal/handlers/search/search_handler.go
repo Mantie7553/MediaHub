@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/Mantie7553/MediaHub/backend/internal/clients/anilist"
+	"github.com/Mantie7553/MediaHub/backend/internal/clients/arr"
 	"github.com/Mantie7553/MediaHub/backend/internal/clients/mangadex"
 	"github.com/Mantie7553/MediaHub/backend/internal/clients/ytdlp"
 	"github.com/Mantie7553/MediaHub/backend/internal/clients/ytmusic"
@@ -29,6 +30,12 @@ type Handler struct {
 	searches      *cache.Memo[[]SearchResult]
 	ytm           *ytmusic.YTMusicClient
 	musicSearches *cache.Memo[musicSearchResponse]
+	series        seriesLookup
+}
+
+// what Save needs to know of anime series: arr.Shows, or a stand-in in tests
+type seriesLookup interface {
+	Of(anilistID int) (arr.Show, arr.TvdbSeason, bool)
 }
 
 func NewHandler(db *sql.DB) *Handler {
@@ -39,6 +46,7 @@ func NewHandler(db *sql.DB) *Handler {
 		discovery:     newDiscoveryCache(),
 		searches:      newSearchCache(),
 		musicSearches: newMusicSearchCache(),
+		series:        arr.AnimeShows(),
 	}
 }
 
@@ -50,6 +58,11 @@ type SearchResult struct {
 	Type           string `json:"type"`
 	// episodes or chapters the source says the title has, when it knows
 	TotalParts *int `json:"total_parts,omitempty"`
+	// the TVDB series an anime result is, when known. A result with one is the whole series:
+	// its seasons and progress count across every entry AniList splits the series into
+	TvdbID int `json:"tvdb_id,omitempty"`
+	// how many seasons the series has, for a result that stands for several AniList entries
+	Seasons int `json:"seasons,omitempty"`
 }
 
 type saveRequest struct {
@@ -62,10 +75,13 @@ type saveRequest struct {
 	Status         string `json:"status"`
 	Score          *int   `json:"rating"`
 	Progress       *int   `json:"progress"`
-	Artist         string `json:"artist"`
-	Album          string `json:"album"`
-	DurationSecs   *int   `json:"duration_secs"`
-	SourceURL      string `json:"source_url"`
+	// set when the save is for a whole anime series (a grouped search result), so its progress
+	// is the series' and not one season's
+	TvdbID       int    `json:"tvdb_id"`
+	Artist       string `json:"artist"`
+	Album        string `json:"album"`
+	DurationSecs *int   `json:"duration_secs"`
+	SourceURL    string `json:"source_url"`
 	// a new track's place on its album; left out, it goes after the album's last track
 	TrackNumber *int `json:"track_number"`
 }
@@ -125,10 +141,14 @@ func (h *Handler) Save(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// an anime season (AniList keeps "Nisemonogatari" apart from "Bakemonogatari") is saved
+	// as its whole series, the one title Sonarr keeps
+	series := h.seriesOf(&req)
+
 	// insert the media item if it doesn't exist, otherwise use the existing one. Any user can
 	// save, and a title in the library is shared by everyone, so saving never changes one that
 	// is already there (only an admin can fill in what it is missing)
-	mediaItemID, created, err := h.findOrCreate(req)
+	mediaItemID, created, err := h.findOrCreate(req, series)
 	var bad badRequest
 	if errors.As(err, &bad) {
 		utils.Error(w, http.StatusBadRequest, string(bad))
@@ -326,7 +346,27 @@ func (h *Handler) Save(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// add to the user's list if requested
-	if req.Action == "list" || req.Action == "both" {
+	if (req.Action == "list" || req.Action == "both") && series.show != nil {
+		count, status := series.progress(req)
+		if utils.InternalError(w, tracking.SaveSeriesEntry(h.db, user.UserID, mediaItemID, status, series.seriesRating(req.Score), count)) {
+			return
+		}
+		if utils.InternalError(w, series.saveRating(h.db, user.UserID, mediaItemID, req.Score)) {
+			return
+		}
+		if status == "completed" && series.whole {
+			if utils.InternalError(w, tracking.CompleteAll(h.db, user.UserID, mediaItemID)) {
+				return
+			}
+		}
+		if status == "wishlist" {
+			go func(userID string) {
+				if err := downloader.RequestWishlisted(h.db, userID, mediaItemID); err != nil {
+					logger.Error("download request for wishlisted %s failed: %s", mediaItemID, err.Error())
+				}
+			}(user.UserID)
+		}
+	} else if req.Action == "list" || req.Action == "both" {
 		_, err = h.db.Exec(
 			`INSERT INTO user_media_status (user_id, media_item_id, status, rating)
 			VALUES ($1, $2, $3, $4)
@@ -405,9 +445,20 @@ Purpose:	the media item a save is for: the one with this title and type, or the 
 external id, or a new one. Never changes an item that exists
 Returns:	its id, and whether it was just created
 */
-func (h *Handler) findOrCreate(req saveRequest) (string, bool, error) {
+func (h *Handler) findOrCreate(req saveRequest, series savedSeries) (string, bool, error) {
 	var id string
+	var tvdbID *int
+	if series.show != nil {
+		tvdbID = &series.show.TvdbID
+		id, err := h.titleOfSeries(*series.show)
+		if !errors.Is(err, sql.ErrNoRows) {
+			return id, false, err
+		}
+	}
 	err := h.db.QueryRow(`SELECT id FROM media_items WHERE title = $1 AND type = $2`, req.Title, req.Type).Scan(&id)
+	if err == nil && tvdbID != nil {
+		h.setTvdbID(id, *tvdbID)
+	}
 	if !errors.Is(err, sql.ErrNoRows) {
 		return id, false, err
 	}
@@ -416,11 +467,11 @@ func (h *Handler) findOrCreate(req saveRequest) (string, bool, error) {
 	}
 
 	err = h.db.QueryRow(
-		`INSERT INTO media_items (type, title, cover_image_url, external_id, external_source)
-		VALUES ($1, $2, $3, $4, $5)
+		`INSERT INTO media_items (type, title, cover_image_url, external_id, external_source, tvdb_id)
+		VALUES ($1, $2, $3, $4, $5, $6)
 		ON CONFLICT (external_id, external_source) DO NOTHING
 		RETURNING id`,
-		req.Type, req.Title, utils.NullString(req.CoverImageURL), req.ExternalID, req.ExternalSource,
+		req.Type, req.Title, utils.NullString(req.CoverImageURL), req.ExternalID, req.ExternalSource, tvdbID,
 	).Scan(&id)
 	if err == nil {
 		return id, true, nil

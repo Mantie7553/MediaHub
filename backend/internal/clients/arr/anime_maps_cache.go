@@ -10,6 +10,23 @@ type AnimeMaps struct {
 	TvdbToAnilist map[int]int
 	TmdbToAnilist map[int]int
 	SeasonToMal   map[TvdbSeason]int
+	// each AniList entry's TVDB series and season
+	AnilistToShow map[int]TvdbSeason
+	// each TVDB series' AniList entries in watch order, specials last
+	ShowSeasons map[int][]SeasonEntry
+}
+
+/*
+Function:	Show
+Purpose:	the TVDB series an AniList entry is part of, and that series' entries in watch order
+Returns:	false when Fribb doesn't place the entry in a series
+*/
+func (m AnimeMaps) Show(anilistID int) (TvdbSeason, []SeasonEntry, bool) {
+	at, ok := m.AnilistToShow[anilistID]
+	if !ok {
+		return TvdbSeason{}, nil, false
+	}
+	return at, m.ShowSeasons[at.TvdbID], true
 }
 
 // how long a downloaded copy of Fribb's list is used before fetching it again
@@ -24,11 +41,8 @@ type animeMapsCache struct {
 }
 
 var sharedAnimeMaps = &animeMapsCache{
-	fetch: func() (AnimeMaps, error) {
-		tvdb, tmdb, seasons, err := FetchAnimeMaps()
-		return AnimeMaps{tvdb, tmdb, seasons}, err
-	},
-	now: time.Now,
+	fetch: FetchAnimeMaps,
+	now:   time.Now,
 }
 
 /*
@@ -52,7 +66,7 @@ func (c *animeMapsCache) load() (AnimeMaps, error) {
 		if c.maps != nil {
 			return *c.maps, err
 		}
-		return AnimeMaps{map[int]int{}, map[int]int{}, map[TvdbSeason]int{}}, err
+		return buildAnimeMaps(nil), err
 	}
 	c.maps = &fresh
 	c.fetched = c.now()

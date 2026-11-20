@@ -14,7 +14,8 @@ const useRatingStore = create(set => ({
 /**
  * Open the rating dialog from anywhere
  * @param {object} request entryId (the list entry), title, rating (now, null for none), prompt
- *  (asked because it was just completed), onSaved (after a save), onDismiss (closed unsaved)
+ *  (asked because it was just completed), onSaved (after a save), onDismiss (closed unsaved),
+ *  save (optional: saves the rating somewhere other than the list entry, returns a promise)
  */
 export function rateTitle(request) {
     useRatingStore.getState().ask(request)

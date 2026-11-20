@@ -261,6 +261,8 @@ func (s *Server) routes() {
 			r.Put("/episodes/{id}/watched", listsHandler.UpdateProgress)
 			r.Put("/anime/{id}/watched", listsHandler.MarkShowWatched)
 			r.Put("/anime/{id}/seasons/{seasonNumber}/watched", listsHandler.MarkSeasonWatched)
+			r.Get("/anime/{id}/season-ratings", listsHandler.GetSeasonRatings)
+			r.Put("/anime/{id}/seasons/{seasonNumber}/rating", listsHandler.RateSeason)
 
 			// Request Handler endpoints
 			r.Get("/requests", requestsHandler.GetAll)

@@ -87,8 +87,23 @@ const getByIDQuery = `query ($id: Int) {
   }
 }`
 
-const discoveryQuery = `query ($perPage: Int, $type: MediaType, $format: MediaFormat) {
-  trending: Page(perPage: $perPage) {
+// getByIDsQuery is the GraphQL document used by GetByIDs: many entries in one request
+const getByIDsQuery = `query ($ids: [Int], $perPage: Int) {
+  Page(perPage: $perPage) {
+    media(id_in: $ids) {
+      id type format status
+      title { romaji english native }
+      description episodes chapters volumes
+      coverImage { large medium }
+      genres
+      studios { nodes { name } }
+      startDate { year month day }
+    }
+  }
+}`
+
+const discoveryQuery = `query ($page: Int, $perPage: Int, $type: MediaType, $format: MediaFormat) {
+  trending: Page(page: $page, perPage: $perPage) {
     media(sort: TRENDING_DESC, type: $type, format: $format) {
       id type format status
       title { romaji english native }
@@ -99,7 +114,7 @@ const discoveryQuery = `query ($perPage: Int, $type: MediaType, $format: MediaFo
       startDate { year month day }
     }
   }
-  popular: Page(perPage: $perPage) {
+  popular: Page(page: $page, perPage: $perPage) {
     media(sort: POPULARITY_DESC, type: $type, format: $format) {
       id type format status
       title { romaji english native }
@@ -110,7 +125,7 @@ const discoveryQuery = `query ($perPage: Int, $type: MediaType, $format: MediaFo
       startDate { year month day }
     }
   }
-  topRated: Page(perPage: $perPage) {
+  topRated: Page(page: $page, perPage: $perPage) {
     media(sort: SCORE_DESC, type: $type, format: $format) {
       id type format status
       title { romaji english native }
@@ -167,12 +182,23 @@ func (c *AnilistClient) Search(mediaType, query string, perPage int, format stri
 }
 
 func (c *AnilistClient) Discovery(mediaType string, format string, perPage int) (*DiscoveryResult, error) {
+	return c.DiscoveryPage(mediaType, format, perPage, 1)
+}
+
+/*
+Function:	DiscoveryPage
+Purpose:	one page of the trending, popular and top rated lists. AniList gives at most 50 a page
+Params:
+  - page: which page, from 1
+*/
+func (c *AnilistClient) DiscoveryPage(mediaType string, format string, perPage, page int) (*DiscoveryResult, error) {
 	if perPage <= 0 {
 		perPage = 10
 	}
 
 	vars := map[string]any{
-		"perPage": perPage,
+		"perPage": min(perPage, maxPerPage),
+		"page":    max(page, 1),
 	}
 	if mediaType != "" {
 		vars["type"] = mediaType
@@ -232,6 +258,38 @@ func (c *AnilistClient) GetByID(id int) (*Media, error) {
 	}
 	domain := env.Media.toDomain()
 	return &domain, nil
+}
+
+// AniList returns at most 50 entries a page
+const maxPerPage = 50
+
+/*
+Function:	GetByIDs
+Purpose:	Fetch many Anilist entries at once, 50 per request. Ids AniList doesn't know are left
+out of the result
+Params:
+  - ids: Anilist's numeric IDs
+
+Returns:	the entries keyed by id
+*/
+func (c *AnilistClient) GetByIDs(ids []int) (map[int]Media, error) {
+	out := make(map[int]Media, len(ids))
+	for start := 0; start < len(ids); start += maxPerPage {
+		end := min(start+maxPerPage, len(ids))
+		var env struct {
+			Page struct {
+				Media []wireMedia `json:"media"`
+			} `json:"Page"`
+		}
+		vars := map[string]any{"ids": ids[start:end], "perPage": maxPerPage}
+		if err := c.query(getByIDsQuery, vars, &env); err != nil {
+			return out, err
+		}
+		for _, m := range env.Page.Media {
+			out[m.ID] = m.toDomain()
+		}
+	}
+	return out, nil
 }
 
 // graphQLRequest is the JSON body sent to the GraphQL endpoint on every call.
