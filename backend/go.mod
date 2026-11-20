@@ -11,6 +11,7 @@ require (
 	github.com/lib/pq v1.12.3
 	github.com/pressly/goose/v3 v3.29.0
 	golang.org/x/crypto v0.58.0
+	golang.org/x/image v0.48.0
 )
 
 require (

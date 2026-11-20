@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { ImageOff } from "lucide-react"
+import { coverUrl } from "../utils/coverUrl"
 
 /**
  * Cover art with a placeholder when there is no image or it fails to load
@@ -19,14 +20,14 @@ export default function Cover({ src, source, alt = "", className = "" }) {
         </div>
     }
 
-    // MangaDex blocks hotlinking, so its covers are fetched by the backend. A manga from
-    // MangaDex can have a cover an admin uploaded, which is served by the backend already
-    const url = source === "mangadex" && src.startsWith("https://uploads.mangadex.org/")
-        ? `/api/proxy/cover?url=${encodeURIComponent(src)}`
-        : src
+    // a cover the browser already has is shown straight away, the fade is for ones still loading
+    function checkCached(img) {
+        if (img?.complete && img.naturalWidth > 0 && loadedSrc !== src) setLoadedSrc(src)
+    }
 
     return <img
-        src={url}
+        ref={checkCached}
+        src={coverUrl(src, source)}
         alt={alt}
         loading="lazy"
         className={`${className} transition-opacity duration-500 ${loadedSrc === src ? "opacity-100" : "opacity-0"}`}

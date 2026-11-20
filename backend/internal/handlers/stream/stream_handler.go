@@ -3,7 +3,6 @@ package stream
 import (
 	"database/sql"
 	"errors"
-	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -15,6 +14,7 @@ import (
 	"time"
 
 	"github.com/Mantie7553/MediaHub/backend/internal/clients/aniskip"
+	"github.com/Mantie7553/MediaHub/backend/internal/covers"
 	"github.com/Mantie7553/MediaHub/backend/internal/musicfiles"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/auth"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/cache"
@@ -304,11 +304,14 @@ func (h *Handler) SignTrackURL(w http.ResponseWriter, r *http.Request) {
 	if utils.InternalError(w, err) {
 		return
 	}
-	query := "?" + auth.MediaTokenParam + "=" + url.QueryEscape(token)
+	coverToken, err := auth.GenerateCoverToken(auth.GetUser(r).UserID, auth.MediaScope{MediaType: auth.ScopeMusicCover, MediaID: id})
+	if utils.InternalError(w, err) {
+		return
+	}
 
 	utils.JSON(w, map[string]string{
-		"url":   "/stream/music/" + id + query,
-		"cover": "/stream/music/" + id + "/cover" + query,
+		"url":   "/stream/music/" + id + "?" + auth.MediaTokenParam + "=" + url.QueryEscape(token),
+		"cover": "/stream/music/" + id + "/cover?" + auth.MediaTokenParam + "=" + url.QueryEscape(coverToken),
 	})
 }
 
@@ -456,33 +459,5 @@ func (h *Handler) ServeCover(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	f, err := os.Open(cache.Disk().Local(musicfiles.CoverPath(filePath)))
-	if os.IsNotExist(err) {
-		utils.Error(w, http.StatusNotFound, "cover not found")
-		return
-	}
-	if utils.InternalError(w, err) {
-		return
-	}
-	defer f.Close()
-	info, err := f.Stat()
-	if utils.InternalError(w, err) {
-		return
-	}
-
-	// an uploaded cover can be a PNG or WebP under the cover.jpg name
-	head := make([]byte, 512)
-	n, _ := io.ReadFull(f, head)
-	contentType := musicfiles.ImageType(head[:n])
-	if contentType == "" {
-		contentType = "image/jpeg"
-	}
-	if _, err := f.Seek(0, io.SeekStart); utils.InternalError(w, err) {
-		return
-	}
-
-	// an admin can replace the cover behind the same URL, so check it's unchanged before reuse
-	w.Header().Set("Content-Type", contentType)
-	w.Header().Set("Cache-Control", "no-cache")
-	http.ServeContent(w, r, "", info.ModTime(), f)
+	covers.Serve(w, r, musicfiles.CoverPath(filePath))
 }

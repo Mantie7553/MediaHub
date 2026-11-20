@@ -24,6 +24,14 @@ func TestMediaRoutesRequireTokens(t *testing.T) {
 		t.Fatal(err)
 	}
 	q := "?" + auth.MediaTokenParam + "=" + url.QueryEscape(token)
+	trackToken, err := auth.GenerateMediaToken("user-1", auth.MediaScope{MediaType: "music", MediaID: "1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	coverToken, err := auth.GenerateCoverToken("user-1", auth.MediaScope{MediaType: auth.ScopeMusicCover, MediaID: "1"})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	tests := []struct {
 		name   string
@@ -36,6 +44,8 @@ func TestMediaRoutesRequireTokens(t *testing.T) {
 		{"segment other type", "/api/stream/segments/movie/1/a1/playlist0.ts" + q, http.StatusUnauthorized},
 		{"track with episode token", "/api/stream/music/1" + q, http.StatusUnauthorized},
 		{"cover with episode token", "/api/stream/music/1/cover" + q, http.StatusUnauthorized},
+		{"cover with the track's token", "/api/stream/music/1/cover?" + auth.MediaTokenParam + "=" + url.QueryEscape(trackToken), http.StatusUnauthorized},
+		{"track with its cover's token", "/api/stream/music/1?" + auth.MediaTokenParam + "=" + url.QueryEscape(coverToken), http.StatusUnauthorized},
 		{"ln image with episode token", "/api/light-novels/1/volumes/1/images/a.jpg" + q, http.StatusUnauthorized},
 		{"stream media needs bearer", "/api/stream/media/episode/1", http.StatusUnauthorized},
 		{"stream media rejects media token", "/api/stream/media/episode/1" + q, http.StatusUnauthorized},
@@ -129,7 +139,7 @@ func TestCurationRoutes(t *testing.T) {
 		t.Fatal(err)
 	}
 	const id = "6f1c2b9e-1d2a-4b3c-8d4e-5f6a7b8c9d0e"
-	coverToken, err := auth.GenerateMediaToken("user-1", auth.MediaScope{MediaType: "cover", MediaID: id})
+	coverToken, err := auth.GenerateCoverToken("user-1", auth.MediaScope{MediaType: "cover", MediaID: id})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -19,6 +19,14 @@ const (
 	// the hour it was minted in. Players remint on 401.
 	MediaTokenTTL = 2 * time.Hour
 
+	// CoverTokenTTL is how long a signed cover URL stays valid, counted from the start of the
+	// UTC day it was minted in, so a cover keeps one URL (and its browser cached copy) all day
+	CoverTokenTTL = 48 * time.Hour
+
+	// ScopeMusicCover is a track's cover, kept apart from "music" so a long lived cover token
+	// never opens the audio stream
+	ScopeMusicCover = "music_cover"
+
 	MediaTokenParam = "media_token"
 )
 
@@ -54,20 +62,45 @@ Params:
   - scope: the resource the token is valid for
 */
 func GenerateMediaToken(userID string, scope MediaScope) (string, error) {
+	// issue on the hour so repeat requests get the same URL; tokens are valid for between
+	// TTL-1h and TTL
+	return signMediaToken(userID, scope, time.Hour, MediaTokenTTL)
+}
+
+/*
+Function:	GenerateCoverToken
+Purpose:	Create a token for a cover image that stays the same all day, so the browser can keep
+reusing the cover it already downloaded. Only for scopes that open nothing but an image
+Params:
+  - userID: the id of the user the token is minted for
+  - scope: the cover the token is valid for
+*/
+func GenerateCoverToken(userID string, scope MediaScope) (string, error) {
+	return signMediaToken(userID, scope, 24*time.Hour, CoverTokenTTL)
+}
+
+/*
+Function:	signMediaToken
+Purpose:	sign a media token issued at the start of the current period, valid for ttl from then
+Params:
+  - userID: the id of the user the token is minted for
+  - scope: the resource the token is valid for
+  - period: issue time is truncated to this, so tokens within one period are identical
+  - ttl: how long the token is valid, counted from the issue time
+*/
+func signMediaToken(userID string, scope MediaScope, period, ttl time.Duration) (string, error) {
 	secret := mediaSecret()
 	if len(secret) == 0 {
 		return "", errors.New("MEDIA_SIGNING_SECRET not set")
 	}
 
-	// issue on the hour so repeat requests get the same URL and the browser can cache
-	// covers/images; tokens are valid for between TTL-1h and TTL
-	issued := time.Now().Truncate(time.Hour)
+	issued := time.Now().UTC().Truncate(period)
 	claims := MediaClaims{
 		Type:       TokenTypeMedia,
 		MediaScope: scope,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Subject:   userID,
-			ExpiresAt: jwt.NewNumericDate(issued.Add(MediaTokenTTL)),
+			ExpiresAt: jwt.NewNumericDate(issued.Add(ttl)),
 			IssuedAt:  jwt.NewNumericDate(issued),
 		},
 	}
@@ -144,21 +177,22 @@ func SignCoverURL(cover *string, userID string) error {
 	if cover == nil {
 		return nil
 	}
-	var scope MediaScope
+	var token string
+	var err error
 	if m := musicCoverPath.FindStringSubmatch(*cover); m != nil {
-		scope = MediaScope{MediaType: "music", MediaID: m[1]}
+		token, err = GenerateCoverToken(userID, MediaScope{MediaType: ScopeMusicCover, MediaID: m[1]})
 	} else if m := uploadedCoverPath.FindStringSubmatch(*cover); m != nil {
-		scope = MediaScope{MediaType: "cover", MediaID: m[1]}
+		token, err = GenerateCoverToken(userID, MediaScope{MediaType: "cover", MediaID: m[1]})
 	} else if m := volumeImagePath.FindStringSubmatch(*cover); m != nil {
-		scope = MediaScope{MediaType: "light_novel", MediaID: m[1], VolumeID: m[2]}
+		// this scope opens the volume's pages too, so it keeps the hourly token
+		token, err = GenerateMediaToken(userID, MediaScope{MediaType: "light_novel", MediaID: m[1], VolumeID: m[2]})
 	} else {
 		return nil
 	}
-	signed, err := SignMediaPath(*cover, userID, scope)
 	if err != nil {
 		return err
 	}
-	*cover = signed
+	*cover += "?" + MediaTokenParam + "=" + url.QueryEscape(token)
 	return nil
 }
 

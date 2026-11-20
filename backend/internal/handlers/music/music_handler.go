@@ -3,6 +3,7 @@ package music
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"time"
@@ -305,6 +306,8 @@ func (h *Handler) UploadCover(w http.ResponseWriter, r *http.Request) {
 	if utils.InternalError(w, auth.SignCoverURL(&coverURL, auth.GetUser(r).UserID)) {
 		return
 	}
+	// browsers keep a cover for a while under the same URL, so the uploader's copy gets a new one
+	coverURL += fmt.Sprintf("&v=%d", time.Now().Unix())
 	utils.JSON(w, map[string]string{"cover_image_url": coverURL})
 }
 
