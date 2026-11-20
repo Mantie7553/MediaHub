@@ -192,3 +192,25 @@ func TestBuildAnimeMapsMonogatari(t *testing.T) {
 		t.Error("a movie must stay its own title")
 	}
 }
+
+func TestEpisodeListed(t *testing.T) {
+	now := time.Date(2026, 11, 19, 12, 0, 0, 0, time.UTC)
+	tests := []struct {
+		name string
+		ep   SonarrEpisode
+		want bool
+	}{
+		{"downloaded", SonarrEpisode{SeasonNumber: 2, HasFile: true}, true},
+		{"a downloaded special", SonarrEpisode{SeasonNumber: 0, HasFile: true}, true},
+		{"aired, not downloaded", SonarrEpisode{SeasonNumber: 2, AirDateUtc: "2020-01-05T15:00:00Z"}, true},
+		{"aired just now", SonarrEpisode{SeasonNumber: 1, AirDateUtc: "2026-11-19T12:00:00Z"}, true},
+		{"still to air", SonarrEpisode{SeasonNumber: 3, AirDateUtc: "2026-11-26T12:00:00Z"}, false},
+		{"no air date", SonarrEpisode{SeasonNumber: 3}, false},
+		{"a special without a file", SonarrEpisode{SeasonNumber: 0, AirDateUtc: "2020-01-05T15:00:00Z"}, false},
+	}
+	for _, tt := range tests {
+		if got := tt.ep.Listed(now); got != tt.want {
+			t.Errorf("%s: Listed = %v, want %v", tt.name, got, tt.want)
+		}
+	}
+}

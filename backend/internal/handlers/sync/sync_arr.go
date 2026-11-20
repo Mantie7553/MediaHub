@@ -225,8 +225,24 @@ func (h *Handler) syncSeries(s arr.SonarrSeries, maps arr.AnimeMaps) error {
 	// episodes Sonarr has a file for, whether or not saving it below works, so a failed save
 	// never clears a file that is still there
 	withFile := []int64{}
+	now := time.Now()
 	for _, ep := range episodes {
 		if !ep.HasFile {
+			// listed without a file, so every season shows; a file it had is cleared below
+			if ep.Listed(now) {
+				if _, err := h.db.Exec(
+					`INSERT INTO episodes (media_item_id, season_number, episode_number, title, sonarr_id)
+					VALUES ($1, $2, $3, $4, $5)
+					ON CONFLICT (media_item_id, season_number, episode_number) DO UPDATE SET
+					title = CASE WHEN episodes.title_locked THEN episodes.title ELSE EXCLUDED.title END,
+					-- an uploaded file in its place isn't Sonarr's, so the clearing below leaves it
+					sonarr_id = CASE WHEN episodes.file_path IS NULL OR episodes.sonarr_id IS NOT NULL
+						THEN EXCLUDED.sonarr_id ELSE episodes.sonarr_id END`,
+					mediaItemID, ep.SeasonNumber, ep.EpisodeNumber, ep.Title, ep.ID,
+				); err != nil {
+					logger.Error("failed to list episode %d: %s", ep.ID, err.Error())
+				}
+			}
 			continue
 		}
 		withFile = append(withFile, int64(ep.ID))

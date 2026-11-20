@@ -104,6 +104,8 @@ func (h *Handler) AddEpisode(w http.ResponseWriter, r *http.Request) {
 		VALUES ($1, $2, $3, $4, $5, $6)
 		ON CONFLICT (media_item_id, season_number, episode_number) DO UPDATE SET
 		file_path = EXCLUDED.file_path,
+		-- the file is an upload now, not Sonarr's: the Sonarr sync must not clear it
+		sonarr_id = NULL,
 		title = COALESCE(EXCLUDED.title, episodes.title),
 		title_locked = episodes.title_locked OR EXCLUDED.title_locked,
 		updated_at = NOW()`,
