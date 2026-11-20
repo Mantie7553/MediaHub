@@ -1,3 +1,4 @@
+import { useMemo } from "react"
 import useExpanded from "../../hooks/useExpanded"
 import useSort from "../../hooks/useSort"
 import { sortItems } from "../../utils/sort"
@@ -11,6 +12,8 @@ import { cardGrid } from "./cardGrid"
 
 // cards a row shows before "See all"
 const ROW_LIMIT = 12
+// the same empty map every render, so the sorted items aren't worked out again for nothing
+const NO_ENTRIES = {}
 
 /**
  * A list of some content type. A row with more than it shows gets "See all", which opens it
@@ -25,13 +28,14 @@ const ROW_LIMIT = 12
  * @param {object[]} sortOptions the ways the row can be sorted (see utils/sortOptions), none
  *  leaves it in the order given
  */
-export default function ContentList({items: given, heading, userContentMap={}, onListChange, loading=false, emptyText="Nothing here yet", emptyHint, emptyAction, expandKey, sortOptions}) {
+export default function ContentList({items: given, heading, userContentMap=NO_ENTRIES, onListChange, loading=false, emptyText="Nothing here yet", emptyHint, emptyAction, expandKey, sortOptions}) {
     const [expanded, setExpanded] = useExpanded(expandKey);
     const [sort, setSort] = useSort(expandKey, sortOptions);
 
+    const items = useMemo(() => sortItems(given, sort, { userContentMap }), [given, sort, userContentMap]);
+
     if (loading) return <CardRowSkeleton heading={heading}/>
 
-    const items = sortItems(given, sort, { userContentMap });
     const canExpand = items.length > ROW_LIMIT;
     const card = (item, fluid) => <Card key={item.id} item={item} userContentMap={userContentMap} onListChange={onListChange} fluid={fluid}/>
 
