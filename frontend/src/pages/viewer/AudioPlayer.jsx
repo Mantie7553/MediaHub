@@ -64,8 +64,11 @@ export default function AudioPlayer() {
         return Number.isFinite(stored) ? Math.min(Math.max(stored, 0), 1) : 1
     })
     const [muted, setMuted] = useState(() => readStored("mediahub.muted", "false") === "true")
-    // a cover that failed to load, its signed link may have expired since the queue was saved
-    const [failedThumb, setFailedThumb] = useState(null)
+    // the cover link signed with each track's stream link, for the track it was signed for.
+    // The thumbnail saved with the queue may have expired since
+    const [freshCover, setFreshCover] = useState(null)
+    // covers that failed to load: the fresh link falls back to the saved one, then to the icon
+    const [failedCovers, setFailedCovers] = useState(() => new Set())
 
     const remintedRef = useRef(false)
     const lastSavedRef = useRef(0)
@@ -88,6 +91,7 @@ export default function AudioPlayer() {
         if (!audio || useAudioStore.getState().currentTrack?.id !== trackId) return
 
         audio.src = `${baseURL}${res.data.url}`
+        if (res.data.cover) setFreshCover({ id: trackId, url: `${baseURL}${res.data.cover}` })
         if (resumeAt > 0) {
             audio.addEventListener("loadedmetadata", () => {
                 audio.currentTime = resumeAt
@@ -245,14 +249,17 @@ export default function AudioPlayer() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the handlers read the store and audio element when they run
     }, [visible])
 
+    const cover = [freshCover?.id === currentTrack?.id ? freshCover?.url : null, currentTrack?.thumbnail]
+        .find(url => url && !failedCovers.has(url)) ?? null
+
     useEffect(() => {
         if (!("mediaSession" in navigator)) return
         navigator.mediaSession.metadata = currentTrack ? new window.MediaMetadata({
             title: currentTrack.title,
             artist: currentTrack.artist ?? "",
-            artwork: currentTrack.thumbnail ? [{ src: new URL(currentTrack.thumbnail, window.location.href).href }] : [],
+            artwork: cover ? [{ src: new URL(cover, window.location.href).href }] : [],
         }) : null
-    }, [currentTrack])
+    }, [currentTrack, cover])
 
     useEffect(() => {
         if ("mediaSession" in navigator) navigator.mediaSession.playbackState = !visible ? "none" : isPlaying ? "playing" : "paused"
@@ -384,8 +391,8 @@ export default function AudioPlayer() {
             <div className="flex items-center gap-3 sm:gap-4 px-3 sm:px-4 py-2">
                 {/* Track Info: opens the album or playlist it's playing from */}
                 <TrackInfo source={source} title={currentTrack.title}>
-                    {currentTrack.thumbnail && failedThumb !== currentTrack.thumbnail ? (
-                        <img src={currentTrack.thumbnail} alt="" onError={() => setFailedThumb(currentTrack.thumbnail)}
+                    {cover ? (
+                        <img src={cover} alt="" onError={() => setFailedCovers(failed => new Set(failed).add(cover))}
                             className="size-11 shrink-0 rounded-lg object-cover shadow-card" />
                     ) : (
                         <div className="size-11 rounded-lg bg-base-200 flex items-center justify-center shrink-0">

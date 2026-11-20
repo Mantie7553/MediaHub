@@ -212,7 +212,7 @@ func TestSignCoverURL(t *testing.T) {
 		scope  MediaScope
 	}{
 		{"nil", nil, false, MediaScope{}},
-		{"music cover", ptr("/api/stream/music/abc-123/cover"), true, MediaScope{MediaType: "music", MediaID: "abc-123"}},
+		{"music cover", ptr("/api/stream/music/abc-123/cover"), true, MediaScope{MediaType: ScopeMusicCover, MediaID: "abc-123"}},
 		{"uploaded cover", ptr("/api/media/abc-123/cover"), true, MediaScope{MediaType: "cover", MediaID: "abc-123"}},
 		{"anilist", ptr("https://s4.anilist.co/file/cover.jpg"), false, MediaScope{}},
 		{"mangadex proxy", ptr("/api/proxy/cover?url=x"), false, MediaScope{}},
@@ -278,5 +278,38 @@ func TestMediaTokenStableWithinHour(t *testing.T) {
 	remaining := time.Until(claims.ExpiresAt.Time)
 	if remaining < MediaTokenTTL-time.Hour || remaining > MediaTokenTTL {
 		t.Fatalf("remaining validity %v outside [%v, %v]", remaining, MediaTokenTTL-time.Hour, MediaTokenTTL)
+	}
+}
+
+func TestCoverTokenStableWithinDay(t *testing.T) {
+	setSecrets(t)
+	scope := MediaScope{MediaType: ScopeMusicCover, MediaID: "1"}
+
+	a, err := GenerateCoverToken("user-1", scope)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := GenerateCoverToken("user-1", scope)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	// could straddle midnight UTC, only compare when both were minted on the same day
+	if a != b && !(now.Hour() == 0 && now.Minute() == 0) {
+		t.Fatal("cover tokens minted on the same day should be identical so URLs stay cacheable")
+	}
+
+	claims, err := ValidateMediaToken(a, scope)
+	if err != nil {
+		t.Fatal(err)
+	}
+	remaining := time.Until(claims.ExpiresAt.Time)
+	if remaining < CoverTokenTTL-24*time.Hour || remaining > CoverTokenTTL {
+		t.Fatalf("remaining validity %v outside [%v, %v]", remaining, CoverTokenTTL-24*time.Hour, CoverTokenTTL)
+	}
+
+	// a cover token never opens the track itself
+	if _, err := ValidateMediaToken(a, MediaScope{MediaType: "music", MediaID: "1"}); err == nil {
+		t.Fatal("music cover token accepted for the audio stream")
 	}
 }

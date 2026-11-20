@@ -166,8 +166,12 @@ func (s *Server) routes() {
 				return auth.MediaScope{MediaType: "music", MediaID: chi.URLParam(r, "id")}
 			}))
 			r.Get("/stream/music/{id}", streamHandler.ServeTrack)
-			r.Get("/stream/music/{id}/cover", streamHandler.ServeCover)
 		})
+
+		// a track's cover has its own scope: its token lasts longer than the stream's
+		r.With(auth.RequireMediaToken(func(r *http.Request) auth.MediaScope {
+			return auth.MediaScope{MediaType: auth.ScopeMusicCover, MediaID: chi.URLParam(r, "id")}
+		})).Get("/stream/music/{id}/cover", streamHandler.ServeCover)
 
 		// covers admins uploaded for a title
 		r.With(auth.RequireMediaToken(func(r *http.Request) auth.MediaScope {

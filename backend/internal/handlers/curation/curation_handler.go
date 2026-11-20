@@ -10,7 +10,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -458,13 +457,15 @@ func (h *Handler) UploadCover(w http.ResponseWriter, r *http.Request) {
 	if utils.InternalError(w, auth.SignCoverURL(&coverURL, auth.GetUser(r).UserID)) {
 		return
 	}
+	// browsers keep a cover for a while under the same URL, so the uploader's copy gets a new one
+	coverURL += fmt.Sprintf("&v=%d", time.Now().Unix())
 	utils.JSON(w, map[string]string{"cover_image_url": coverURL})
 }
 
 /*
 Function:	ServeCover
-Purpose:	an uploaded cover, loaded by <img> tags with a media token. Served with its real
-image type and no-cache, since a replaced cover keeps its URL
+Purpose:	an uploaded cover, loaded by <img> tags with a media token, scaled down by
+covers.Serve
 */
 func (h *Handler) ServeCover(w http.ResponseWriter, r *http.Request) {
 	path, ok := covers.Path(chi.URLParam(r, "id"))
@@ -472,33 +473,7 @@ func (h *Handler) ServeCover(w http.ResponseWriter, r *http.Request) {
 		utils.Error(w, http.StatusNotFound, "cover not found")
 		return
 	}
-	f, err := os.Open(cache.Disk().Local(path))
-	if os.IsNotExist(err) {
-		utils.Error(w, http.StatusNotFound, "cover not found")
-		return
-	}
-	if utils.InternalError(w, err) {
-		return
-	}
-	defer f.Close()
-	info, err := f.Stat()
-	if utils.InternalError(w, err) {
-		return
-	}
-
-	head := make([]byte, 512)
-	n, _ := io.ReadFull(f, head)
-	contentType := musicfiles.ImageType(head[:n])
-	if contentType == "" {
-		utils.Error(w, http.StatusNotFound, "cover not found")
-		return
-	}
-	if _, err := f.Seek(0, io.SeekStart); utils.InternalError(w, err) {
-		return
-	}
-	w.Header().Set("Content-Type", contentType)
-	w.Header().Set("Cache-Control", "no-cache")
-	http.ServeContent(w, r, "", info.ModTime(), f)
+	covers.Serve(w, r, path)
 }
 
 // withArticle names a media type for a message: "an anime", "a light novel"
