@@ -286,18 +286,23 @@ function LightNovelReaderInner({ id, volumeId, volume, volumes, title }) {
                 </button>
             </ReaderToolbar>
             {/* the toolbar stays up while the text loads */}
+            {/* only scrolls up and down: a swipe that drifts sideways while reading stays put (pinch
+                zoom still works) */}
             {loading ? <TextSkeleton /> : <div
                 ref={contentRef}
-                className="flex-1 overflow-y-auto flex flex-col items-center px-3 sm:px-6 py-4 sm:py-8 pb-[calc(2rem+var(--player-h,0px)+env(safe-area-inset-bottom))]"
+                className="flex-1 overflow-y-auto overflow-x-hidden overscroll-x-none touch-pan-y touch-pinch-zoom flex flex-col items-center px-3 sm:px-6 py-4 sm:py-8 pb-[calc(2rem+var(--player-h,0px)+env(safe-area-inset-bottom))]"
             >
                 {/* the bookmark line sits beside the volume's markup, not in it, so a render never wipes it */}
                 <div ref={pageRef} className={`relative w-full max-w-2xl ${restored ? "" : "invisible"}`}>
-                    {/* a warm page to read on, the text comes with its own markup from the EPUB */}
+                    {/* a warm page to read on, the text comes with its own markup from the EPUB. Nothing in
+                        that markup is let wider than the page: long words and links wrap, wide blocks,
+                        tables and preformatted text shrink or wrap to fit */}
                     <article
                         ref={articleRef}
                         onClick={handleTap}
-                        className="w-full rounded-box bg-[#f7f2e8] text-[#1f1a14] shadow-raised px-5 sm:px-12 py-8 sm:py-12
+                        className="w-full min-w-0 wrap-anywhere rounded-box bg-[#f7f2e8] text-[#1f1a14] shadow-raised px-5 sm:px-12 py-8 sm:py-12
                             text-[1.0625rem] leading-relaxed font-[Georgia,'Times_New_Roman',serif]
+                            [&_*]:max-w-full [&_pre]:whitespace-pre-wrap [&_table]:table-fixed [&_table]:w-full
                             [&_p]:mb-4 [&_img]:max-w-full [&_img]:h-auto [&_img]:mx-auto [&_img]:my-6 [&_img]:rounded
                             [&_h1]:text-2xl [&_h1]:font-semibold [&_h1]:mb-4 [&_h2]:text-xl [&_h2]:font-semibold [&_h2]:mb-3 [&_h3]:font-semibold [&_h3]:mb-2"
                         dangerouslySetInnerHTML={html}
