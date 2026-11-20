@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { RECENT_COMPLETION_MS, dismissKey, ratingWord, shouldPromptRating } from "../src/utils/ratingPrompt"
+import { RECENT_COMPLETION_MS, dismissKey, ratingWord, seasonDismissKey, shouldPromptRating, shouldPromptSeasonRating } from "../src/utils/ratingPrompt"
 
 const now = Date.parse("2026-11-11T12:00:00Z")
 const entry = (fields = {}) => ({ id: "e1", status: "completed", rating: null, updated_at: "2026-11-11T11:59:00Z", ...fields })
@@ -42,5 +42,29 @@ describe("asking for a rating", () => {
         for (let r = 1; r <= 10; r++) expect(ratingWord(r)).not.toBe("")
         expect(ratingWord(null)).toBe("")
         expect(ratingWord(0)).toBe("")
+    })
+})
+
+describe("asking for a season's rating", () => {
+    const ask = (fields = {}) => shouldPromptSeasonRating({ wasDone: false, isDone: true, showDone: false, rated: false, dismissed: false, ...fields })
+
+    it("asks when a season is finished", () => {
+        expect(ask()).toBe(true)
+    })
+
+    it("doesn't ask when the series is finished too, that asks for the series' rating", () => {
+        expect(ask({ showDone: true })).toBe(false)
+    })
+
+    it("doesn't ask for unfinished, already finished, rated or dismissed seasons", () => {
+        expect(ask({ isDone: false })).toBe(false)
+        expect(ask({ wasDone: true })).toBe(false)
+        expect(ask({ rated: true })).toBe(false)
+        expect(ask({ dismissed: true })).toBe(false)
+    })
+
+    it("remembers Not now per series and season", () => {
+        expect(seasonDismissKey("m1", "2")).not.toBe(seasonDismissKey("m1", "3"))
+        expect(seasonDismissKey("m1", "2")).not.toBe(seasonDismissKey("m2", "2"))
     })
 })

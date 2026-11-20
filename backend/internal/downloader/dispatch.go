@@ -86,12 +86,19 @@ func Dispatch(db *sql.DB, requestID string, mediaItemID string,
 		sClient := arr.NewArrClient("SONARR_URL", "SONARR_API_KEY")
 
 		var title string
-		err = db.QueryRow(`SELECT title FROM media_items WHERE id = $1`, mediaItemID).Scan(&title)
+		var knownTvdb sql.NullInt64
+		err = db.QueryRow(`SELECT title, tvdb_id FROM media_items WHERE id = $1`, mediaItemID).Scan(&title, &knownTvdb)
 		if err != nil {
 			return "", fmt.Errorf("failed to get title: %w", err)
 		}
 
-		tvdbID, sonarrID, err := sClient.LookupSeries(title)
+		// the series by its TVDB id when known, so a season's own name ("Nisemonogatari") can't
+		// pick the wrong series
+		term := title
+		if knownTvdb.Valid {
+			term = fmt.Sprintf("tvdb:%d", knownTvdb.Int64)
+		}
+		tvdbID, sonarrID, err := sClient.LookupSeries(term)
 		if err != nil {
 			logger.Error("Sonarr lookup failed: %s", err.Error())
 			return "", fmt.Errorf("sonarr lookup failed: %w", err)
@@ -116,6 +123,13 @@ func Dispatch(db *sql.DB, requestID string, mediaItemID string,
 			mediaItemID, seriesID,
 		); err != nil {
 			logger.Error("failed to save sonarr_id %s", err.Error())
+		}
+		if _, err := db.Exec(
+			`UPDATE media_items SET tvdb_id = $1 WHERE id = $2 AND tvdb_id IS NULL
+			AND NOT EXISTS (SELECT 1 FROM media_items o WHERE o.type = 'anime' AND o.tvdb_id = $1)`,
+			tvdbID, mediaItemID,
+		); err != nil {
+			logger.Error("failed to save the TVDB id of %s: %s", title, err.Error())
 		}
 
 	case "radarr":

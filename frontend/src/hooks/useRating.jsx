@@ -44,7 +44,7 @@ export default function useRating(entry, loaded, title, onSaved) {
 
     if (!entry) return { button: null };
     return {
-        button: <RatingButton rating={entry.rating ?? null} onClick={() => rateTitle({
+        button: <RatingButton rating={entry.rating ?? null} derived={!!entry.rating_derived} onClick={() => rateTitle({
             entryId: entry.id,
             title,
             rating: entry.rating ?? null,

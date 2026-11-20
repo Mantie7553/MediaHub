@@ -70,6 +70,13 @@ func (h *Handler) Add(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// added without a rating: the average of any season ratings already given
+	if req.Rating == nil && req.MediaItemId != "" {
+		if utils.InternalError(w, tracking.DeriveSeriesRating(tx, user.UserID, req.MediaItemId)) {
+			return
+		}
+	}
+
 	// a title added as completed has every episode, chapter or volume done too
 	if req.Status == "completed" && req.MediaItemId != "" {
 		if utils.InternalError(w, tracking.CompleteAll(tx, user.UserID, req.MediaItemId)) {
@@ -105,7 +112,7 @@ func (h *Handler) GetAll(w http.ResponseWriter, r *http.Request) {
 	items := []UserMediaEntry{}
 
 	queryString := `
-	SELECT ums.id, ums.status, ums.rating, ums.updated_at, ums.album_id,
+	SELECT ums.id, ums.status, ums.rating, ums.rating IS NOT NULL AND NOT ums.rating_is_set, ums.updated_at, ums.album_id,
 		mi.id, mi.type, mi.title, mi.cover_image_url, mi.release_date, mi.external_id, mi.external_source,
 		mm.artist,
 		anime_progress.active_season, anime_progress.season_watched, anime_progress.season_total,
@@ -165,7 +172,7 @@ func (h *Handler) GetAll(w http.ResponseWriter, r *http.Request) {
 
 	UNION ALL
 
-	SELECT ums.id, ums.status, ums.rating, ums.updated_at, ums.album_id,
+	SELECT ums.id, ums.status, ums.rating, false, ums.updated_at, ums.album_id,
 		NULL, 'music_album', a.title, a.cover_image_url, NULL, NULL, NULL,
 		a.artist,
 		NULL, NULL, NULL,
@@ -183,7 +190,7 @@ func (h *Handler) GetAll(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var item UserMediaEntry
 		err := rows.Scan(
-			&item.ID, &item.Status, &item.Rating, &item.UpdatedAt, &item.AlbumID,
+			&item.ID, &item.Status, &item.Rating, &item.RatingDerived, &item.UpdatedAt, &item.AlbumID,
 			&item.MediaItemID, &item.MediaType, &item.MediaTitle, &item.CoverImageURL,
 			&item.ReleaseDate, &item.ExternalID, &item.ExternalSource, &item.Artist,
 			&item.ActiveSeason, &item.SeasonWatched, &item.SeasonTotal,
@@ -249,6 +256,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		`UPDATE user_media_status
 		SET status = COALESCE($1, status),
 			rating = CASE WHEN $2 THEN $3 ELSE rating END,
+			rating_is_set = CASE WHEN $2 THEN $3::int IS NOT NULL ELSE rating_is_set END,
 			updated_at = NOW()
 		WHERE id = $4 AND user_id = $5
 		RETURNING id, media_item_id`,
@@ -262,6 +270,13 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 
 	if utils.InternalError(w, err) {
 		return
+	}
+
+	// a rating cleared on an anime series goes back to the average of its seasons' ratings
+	if req.Rating.Set && req.Rating.Value == nil && mediaItemID.Valid {
+		if utils.InternalError(w, tracking.DeriveSeriesRating(tx, user.UserID, mediaItemID.String)) {
+			return
+		}
 	}
 
 	// completing a title completes every episode, chapter or volume; other statuses leave

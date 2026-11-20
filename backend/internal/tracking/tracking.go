@@ -16,6 +16,12 @@ type Querier interface {
 	QueryRow(query string, args ...any) *sql.Row
 }
 
+// Rows is a Querier that can also read many rows: the database or a transaction
+type Rows interface {
+	Querier
+	Query(query string, args ...any) (*sql.Rows, error)
+}
+
 func mediaType(q Querier, mediaItemID string) (string, error) {
 	var t string
 	err := q.QueryRow(`SELECT type FROM media_items WHERE id = $1`, mediaItemID).Scan(&t)

@@ -101,6 +101,7 @@ function mediaInfo(item) {
             meta = item.season_number != null ? `Season ${item.season_number}`
                 : episodes !== null
                 ? [season, `E${episodes}${total ? ` / ${total}` : ""}`].filter(Boolean).join(" · ")
+                : item.seasons > 1 ? `${item.seasons} seasons`
                 : (item.release_date ? Format.year(item.release_date) : null)
             progressPct = total ? Math.round((episodes / total) * 100) : 0
             path = "/anime/"
@@ -185,6 +186,8 @@ function ActionButtons({item, userEntry, onListChange, onDeleted}) {
                 status,
                 rating: score === 0 ? null : score,
                 progress,
+                // a result standing for a whole series: its progress counts across every season
+                tvdb_id: item.tvdb_id,
             })
             .then(() => { toast.success("Added to your list"); onListChange?.(); })
             .catch(err => toast.error(err, "Could not update your list"))

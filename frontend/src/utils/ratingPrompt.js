@@ -32,3 +32,21 @@ const WORDS = ["", "Appalling", "Horrible", "Very bad", "Bad", "Average", "Fine"
 export function ratingWord(rating) {
     return WORDS[rating] ?? ""
 }
+
+/** The localStorage key remembering "Not now" for one season of one series */
+export function seasonDismissKey(mediaId, season) {
+    return `seasonRatingPromptDismissed:${mediaId}:${season}`
+}
+
+/**
+ * Whether to ask the user to rate a season they just finished. Not when that also finished the
+ * whole series: the series' own rating is asked for then
+ * @param {boolean} wasDone every episode of the season was watched before
+ * @param {boolean} isDone every episode of it is watched now
+ * @param {boolean} showDone every episode of the series is watched now
+ * @param {boolean} rated the season has a rating already
+ * @param {boolean} dismissed the user said "Not now" to this season already
+ */
+export function shouldPromptSeasonRating({ wasDone, isDone, showDone, rated, dismissed }) {
+    return !wasDone && isDone && !showDone && !rated && !dismissed
+}

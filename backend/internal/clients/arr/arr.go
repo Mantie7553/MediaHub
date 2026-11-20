@@ -170,33 +170,43 @@ func (c *ArrClient) GetAllSeries() ([]SonarrSeries, error) {
 }
 
 func (c *ArrClient) LookupSeries(title string) (tvdbID int, sonarrID int, err error) {
-	req, err := http.NewRequest("GET", c.config.BaseURL+"/api/v3/series/lookup?term="+url.QueryEscape(title), nil)
+	s, err := c.LookupSeriesInfo(title)
 	if err != nil {
 		return 0, 0, err
+	}
+	return s.TvdbID, s.ID, nil
+}
+
+/*
+Function:	LookupSeriesInfo
+Purpose:	Sonarr's best match for a search term: a title, or "tvdb:<id>" for one series. Its id
+is 0 when Sonarr doesn't have the series yet
+*/
+func (c *ArrClient) LookupSeriesInfo(term string) (SonarrSeries, error) {
+	req, err := http.NewRequest("GET", c.config.BaseURL+"/api/v3/series/lookup?term="+url.QueryEscape(term), nil)
+	if err != nil {
+		return SonarrSeries{}, err
 	}
 	req.Header.Set("X-Api-Key", c.config.APIKey)
 
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return 0, 0, err
+		return SonarrSeries{}, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return 0, 0, fmt.Errorf("sonarr lookup returned %d", resp.StatusCode)
+		return SonarrSeries{}, fmt.Errorf("sonarr lookup returned %d", resp.StatusCode)
 	}
 
-	var results []struct {
-		ID     int `json:"id"`
-		TvdbID int `json:"tvdbId"`
-	}
+	var results []SonarrSeries
 	if err := json.NewDecoder(resp.Body).Decode(&results); err != nil {
-		return 0, 0, err
+		return SonarrSeries{}, err
 	}
 	if len(results) == 0 {
-		return 0, 0, fmt.Errorf("no results found for %s", title)
+		return SonarrSeries{}, fmt.Errorf("no results found for %s", term)
 	}
-	return results[0].TvdbID, results[0].ID, nil
+	return results[0], nil
 }
 
 func (c *ArrClient) GetEpisodes(seriesID int) ([]SonarrEpisode, error) {

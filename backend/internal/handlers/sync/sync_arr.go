@@ -155,6 +155,10 @@ func (h *Handler) syncSeries(s arr.SonarrSeries, maps arr.AnimeMaps) error {
 	).Scan(&mediaItemID, &syncedAt)
 
 	if errors.Is(err, sql.ErrNoRows) {
+		// a title saved from one of the series' seasons, or one Sonarr forgot and has again
+		mediaItemID, syncedAt, err = h.titleOfSeries(s.TvdbID, maps)
+	}
+	if errors.Is(err, sql.ErrNoRows) {
 		err = h.db.QueryRow(
 			`INSERT INTO media_items (type, title, cover_image_url, description, release_date)
 			VALUES ('anime', $1, $2, $3, $4)
@@ -177,6 +181,8 @@ func (h *Handler) syncSeries(s arr.SonarrSeries, maps arr.AnimeMaps) error {
 	} else {
 		return fmt.Errorf("looking up sonarr_items: %w", err)
 	}
+
+	h.setTvdbID(mediaItemID, s.TvdbID)
 
 	anilistID, mapped := maps.TvdbToAnilist[s.TvdbID]
 	if s.TvdbID > 0 && mapped {
@@ -257,6 +263,53 @@ func (h *Handler) syncSeries(s arr.SonarrSeries, maps arr.AnimeMaps) error {
 	tracking.PartsAdded(h.db, mediaItemID)
 	h.saveSeasonMal(mediaItemID, s.TvdbID, episodes, maps.SeasonToMal)
 	return nil
+}
+
+/*
+Function:	titleOfSeries
+Purpose:	the anime title that already stands for a TVDB series: the one with its TVDB id, else
+one saved from any of the series' AniList entries, earliest season first
+Returns:	sql.ErrNoRows when there is none
+*/
+func (h *Handler) titleOfSeries(tvdbID int, maps arr.AnimeMaps) (string, *time.Time, error) {
+	var id string
+	var syncedAt *time.Time
+	if tvdbID <= 0 {
+		return "", nil, sql.ErrNoRows
+	}
+	err := h.db.QueryRow(
+		`SELECT id, metadata_synced_at FROM media_items WHERE type = 'anime' AND tvdb_id = $1`, tvdbID,
+	).Scan(&id, &syncedAt)
+	if !errors.Is(err, sql.ErrNoRows) {
+		return id, syncedAt, err
+	}
+	for _, entry := range maps.ShowSeasons[tvdbID] {
+		err = h.db.QueryRow(
+			`SELECT id, metadata_synced_at FROM media_items
+			WHERE type = 'anime' AND external_source = 'anilist' AND external_id = $1
+			AND NOT EXISTS (SELECT 1 FROM sonarr_items si WHERE si.media_item_id = media_items.id)`,
+			strconv.Itoa(entry.AnilistID),
+		).Scan(&id, &syncedAt)
+		if !errors.Is(err, sql.ErrNoRows) {
+			return id, syncedAt, err
+		}
+	}
+	return "", nil, sql.ErrNoRows
+}
+
+// setTvdbID notes the TVDB series a title is. When another title already has it (seasons
+// saved as titles of their own before this was kept) it is left for the merge
+func (h *Handler) setTvdbID(mediaItemID string, tvdbID int) {
+	if tvdbID <= 0 {
+		return
+	}
+	if _, err := h.db.Exec(
+		`UPDATE media_items SET tvdb_id = $1 WHERE id = $2 AND tvdb_id IS DISTINCT FROM $1
+		AND NOT EXISTS (SELECT 1 FROM media_items o WHERE o.type = 'anime' AND o.tvdb_id = $1 AND o.id <> $2)`,
+		tvdbID, mediaItemID,
+	); err != nil {
+		logger.Error("failed to save TVDB id %d of %s: %s", tvdbID, mediaItemID, err.Error())
+	}
 }
 
 /*
