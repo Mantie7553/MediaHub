@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { Library, SearchX } from "lucide-react";
 import useApi from "../../hooks/useApi";
 import useUserContent from "../../hooks/useUserContent";
+import useWishlistStore from "../../stores/useWishlistStore";
 import useMe from "../../hooks/useMe";
 import useSearchParamQuery from "../../hooks/useSearchParamQuery";
 import ContentList from "../../components/layout/ContentList";
@@ -15,12 +16,12 @@ import MakeHomeButton from "../../components/layout/MakeHomeButton";
 import HomeSection from "./HomeSection";
 import { splitCollections, trackedOfType } from "./rows";
 import { filterByQuery } from "../../utils/search";
-import { collectionSorts, continueSorts, featuredSorts, trackedAlbumSorts, trackedSorts } from "../../utils/sortOptions";
+import { collectionSorts, continueSorts, featuredSorts, trackedAlbumSorts, trackedSorts, wishlistSorts } from "../../utils/sortOptions";
 import { onCollectionsChanged } from "../../services/collectionsService";
 
 /**
  * The overview home page: only what the user follows. What they're partway through, what admins
- * featured, and everything on their lists. The server's library lives on each type's home page
+ * featured, everything on their lists and their wishlist. The server's library lives on each type's home page
  * and in Discover
  */
 export default function OverviewPage() {
@@ -28,6 +29,8 @@ export default function OverviewPage() {
     const { userContent, userContentMap, loading: userLoading, error: userError, refresh, retry } = useUserContent();
     // titles started and not finished, newest activity first
     const continuing = useApi("/me/continue", { initial: [] });
+    // what they asked to have downloaded, loaded by useUserContent
+    const wishlist = useWishlistStore();
     // the user's playlists (the two that fill themselves first) and collections
     const collections = useApi("/me/collections", { initial: [] });
     // playlists and collections admins picked for everyone
@@ -50,6 +53,7 @@ export default function OverviewPage() {
     const userCollections = matching(lists.collections);
     const continueItems = matching(continuing.data);
     const featuredItems = matching(featured.data);
+    const wishlisted = matching(wishlist.entries);
 
     // the same hint on every row, so an empty overview explains itself once per row
     const tracked = {
@@ -65,6 +69,9 @@ export default function OverviewPage() {
         { key: "movie", label: "Movies", count: movies.length, render: () => <ContentList expandKey="home:overview:movie" items={movies} heading="Movies" sortOptions={trackedSorts("movie")} {...tracked}/> },
         { key: "manga", label: "Manga", count: manga.length, render: () => <ContentList expandKey="home:overview:manga" items={manga} heading="Manga" sortOptions={trackedSorts("manga")} {...tracked}/> },
         { key: "music", label: "Music", count: music.length, render: () => <AlbumList expandKey="home:overview:music" albums={music} heading="Music" sortOptions={trackedAlbumSorts} loading={userLoading} emptyText={searching ? tracked.emptyText : "No albums saved yet"} emptyAction={tracked.emptyAction}/> },
+        { key: "wishlist", label: "Wishlist", count: wishlisted.length, error: wishlist.error, reload: wishlist.load,
+            render: () => <ContentList expandKey="home:overview:wishlist" items={wishlisted} heading="Wishlist" sortOptions={wishlistSorts} {...tracked}
+                loading={wishlist.loading} emptyText={searching ? tracked.emptyText : "Nothing wishlisted yet"}/> },
         { key: "light_novel", label: "Light Novels", count: lightNovels.length, render: () => <ContentList expandKey="home:overview:light_novel" items={lightNovels} heading="Light Novels" sortOptions={trackedSorts("light_novel")} {...tracked}/> },
         // like the other rows these show under "All" once they have something; their filter chips
         // show them empty too, with the card that makes a first one

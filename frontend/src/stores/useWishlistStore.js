@@ -7,10 +7,19 @@ import { wishlistKeys } from "../utils/wishlist"
  * list status, so wishlisting a title never changes where they are with it
  */
 const useWishlistStore = create(set => ({
+    // the wishlist from /me/wishlist, newest first, shaped like library titles for cards
+    entries: [],
     keys: new Map(),
+    // until the first answer, so rows can show their loading state
+    loading: true,
+    error: null,
     load: () => api.get("/me/wishlist")
-        .then(res => set({ keys: wishlistKeys(res.data ?? []) }))
-        .catch(() => {}),
+        .then(res => {
+            const entries = res.data ?? []
+            set({ entries, keys: wishlistKeys(entries), loading: false, error: null })
+        })
+        // a failed refresh keeps the wishlist already shown
+        .catch(error => set(state => ({ loading: false, error: state.loading ? error : state.error }))),
 }))
 
 export function loadWishlist() {

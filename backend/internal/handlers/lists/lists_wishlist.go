@@ -8,18 +8,25 @@ import (
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/utils"
 )
 
-// WishlistEntry is a title the user wants downloaded, with the ids to match it to cards by
+// WishlistEntry is a title the user wants downloaded, shaped like a library title so a card can
+// show it, with the ids to match it to search results by
 type WishlistEntry struct {
-	MediaItemID    string    `json:"media_item_id"`
-	MediaType      string    `json:"media_type"`
-	ExternalID     *string   `json:"external_id"`
-	ExternalSource *string   `json:"external_source"`
-	CreatedAt      time.Time `json:"created_at"`
+	ID             string     `json:"id"`
+	MediaItemID    string     `json:"media_item_id"`
+	MediaType      string     `json:"media_type"`
+	Title          string     `json:"title"`
+	CoverImageURL  *string    `json:"cover_image_url"`
+	ReleaseDate    *time.Time `json:"release_date"`
+	ExternalID     *string    `json:"external_id"`
+	ExternalSource *string    `json:"external_source"`
+	// when it was wishlisted
+	CreatedAt time.Time `json:"created_at"`
 }
 
 /*
 Function:	GetWishlist
-Purpose:	the titles on the user's wishlist, newest first
+Purpose:	the titles on the user's wishlist, newest first, for the Wishlist rows and to mark
+cards and buttons
 Params:
   - w: http response writer to respond to the front end
   - r: http request coming from the frontend
@@ -27,7 +34,7 @@ Params:
 func (h *Handler) GetWishlist(w http.ResponseWriter, r *http.Request) {
 	user := auth.GetUser(r)
 	rows, err := h.db.Query(
-		`SELECT mi.id, mi.type, mi.external_id, mi.external_source, uw.created_at
+		`SELECT mi.id, mi.type, mi.title, mi.cover_image_url, mi.release_date, mi.external_id, mi.external_source, uw.created_at
 		FROM user_wishlist uw
 		JOIN media_items mi ON mi.id = uw.media_item_id
 		WHERE uw.user_id = $1
@@ -42,7 +49,12 @@ func (h *Handler) GetWishlist(w http.ResponseWriter, r *http.Request) {
 	items := []WishlistEntry{}
 	for rows.Next() {
 		var item WishlistEntry
-		if utils.InternalError(w, rows.Scan(&item.MediaItemID, &item.MediaType, &item.ExternalID, &item.ExternalSource, &item.CreatedAt)) {
+		if utils.InternalError(w, rows.Scan(&item.MediaItemID, &item.MediaType, &item.Title, &item.CoverImageURL,
+			&item.ReleaseDate, &item.ExternalID, &item.ExternalSource, &item.CreatedAt)) {
+			return
+		}
+		item.ID = item.MediaItemID
+		if utils.InternalError(w, auth.SignCoverURL(item.CoverImageURL, user.UserID)) {
 			return
 		}
 		items = append(items, item)

@@ -3,6 +3,8 @@ import { Link } from "react-router-dom";
 import { Compass, SearchX, Sparkles } from "lucide-react";
 import useApi from "../../hooks/useApi";
 import useUserContent from "../../hooks/useUserContent";
+import useWishlistStore from "../../stores/useWishlistStore";
+import { WISHLIST_TYPES } from "../../utils/wishlist";
 import useSearchParamQuery from "../../hooks/useSearchParamQuery";
 import ContentList from "../../components/layout/ContentList";
 import AlbumList from "../../components/layout/AlbumList";
@@ -15,7 +17,7 @@ import MakeHomeButton from "../../components/layout/MakeHomeButton";
 import HomeSection from "./HomeSection";
 import { splitCollections, trackedOfType } from "./rows";
 import { filterByQuery } from "../../utils/search";
-import { albumSorts, artistSorts, collectionSorts, continueSorts, featuredSorts, librarySorts, trackedAlbumSorts, trackedSorts } from "../../utils/sortOptions";
+import { albumSorts, artistSorts, collectionSorts, continueSorts, featuredSorts, librarySorts, trackedAlbumSorts, trackedSorts, wishlistSorts } from "../../utils/sortOptions";
 import { homePage } from "../../utils/homePages";
 import { onCollectionsChanged } from "../../services/collectionsService";
 
@@ -31,6 +33,9 @@ export default function TypeHomePage({ pageKey }) {
 
     // music has no Continue: albums are played, not worked through
     const continuing = useApi(isMusic ? null : `/me/continue?type=${page.type}`, { initial: [] });
+    // the titles of this type the user asked to have downloaded, loaded by useUserContent
+    const wishlist = useWishlistStore();
+    const hasWishlist = WISHLIST_TYPES.includes(page.type);
     const library = useApi(isMusic ? "/albums" : `/media?available=true&type=${page.type}`, { initial: [] });
     // music only: the user's playlists and collections, featured playlists and one playlist per artist
     const collections = useApi(isMusic ? "/me/collections" : null, { initial: [] });
@@ -46,6 +51,7 @@ export default function TypeHomePage({ pageKey }) {
 
     const mine = matching(trackedOfType(userContent, page.type));
     const available = matching(library.data);
+    const wishlisted = hasWishlist ? matching(wishlist.entries.filter(item => item.media_type === page.type)) : [];
     const continueItems = matching(continuing.data);
     const lists = splitCollections(collections.data);
     const playlists = matching(lists.playlists);
@@ -71,6 +77,10 @@ export default function TypeHomePage({ pageKey }) {
         { key: "mine", label: page.label, count: mine.length,
             render: () => <ContentList expandKey={`home:${page.key}:mine`} items={mine} heading={page.label} sortOptions={trackedSorts(page.type)} loading={userLoading}
                 userContentMap={userContentMap} onListChange={refresh} emptyText={mineEmpty}/> },
+        ...(hasWishlist ? [{ key: "wishlist", label: "Wishlist", count: wishlisted.length, error: wishlist.error, reload: wishlist.load,
+            render: () => <ContentList expandKey={`home:${page.key}:wishlist`} items={wishlisted} heading="Wishlist" sortOptions={wishlistSorts} loading={wishlist.loading}
+                userContentMap={userContentMap} onListChange={refresh}
+                emptyText={searching ? `Nothing on your wishlist matches "${searchText}"` : `No ${page.noun} wishlisted yet`}/> }] : []),
     ];
 
     const availableRows = isMusic ? [

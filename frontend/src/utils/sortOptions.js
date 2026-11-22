@@ -68,6 +68,12 @@ export function trackedSorts(type) {
     ]
 }
 
+/** Titles on the user's wishlist; the newest wishlisted first */
+export const wishlistSorts = [
+    option("wishlisted", "Recently wishlisted", thenBy(date(i => i.created_at, true), byName)),
+    titleAsc, titleDesc, releaseNew, releaseOld,
+]
+
 /** Albums on the user's list */
 export const trackedAlbumSorts = [titleAsc, titleDesc, artistAsc, artistDesc, ratingHigh, ratingLow, updated, byStatus]
 
