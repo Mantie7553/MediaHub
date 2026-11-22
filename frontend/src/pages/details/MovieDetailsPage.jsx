@@ -12,6 +12,8 @@ import Format from "../../utils/format";
 import { ListPlus, PencilLine, Play, RotateCcw, Upload } from "lucide-react";
 import DetailsHero from "../../components/details/DetailsHero";
 import { ActionMenu, ActionMenuItem, ListStatusMenu } from "../../components/details/Menus";
+import WishlistButton from "../../components/WishlistButton";
+import useWishlistStore from "../../stores/useWishlistStore";
 import EditDetailsModal from "../../components/modals/EditDetailsModal";
 import UploadFilesModal from "../../components/modals/UploadFilesModal";
 import { userIsAdmin } from "../../utils/auth";
@@ -25,6 +27,7 @@ export default function MovieDetailsPage() {
     const { item: movie, loading, error, notFound, refetch } = useMediaItem(id);
     const picker = useCollectionPicker();
     const userEntry = userContentMap[id];
+    const wishlisted = useWishlistStore(state => state.keys.has(id));
     const removeEntry = useRemoveFromList(userEntry, refresh);
     const rating = useRating(userEntry, !listLoading, movie?.title, refresh);
     const editRef = useRef(null);
@@ -87,10 +90,13 @@ export default function MovieDetailsPage() {
                     <ListStatusMenu
                         status={userEntry?.status}
                         type={movie.type}
-                        options={["current", "completed", "wishlist"]}
+                        options={["current", "completed"]}
                         onSelect={updateStatus}
                         onRemove={removeEntry}
                     />
+                    {/* wishlisting a movie that isn't downloaded yet downloads it; the status stays */}
+                    {(!movie.metadata.file_path || wishlisted) &&
+                        <WishlistButton item={{ id, type: movie.type }}/>}
                     {rating.button}
                     <ActionMenu>
                         <ActionMenuItem icon={ListPlus} label="Add to a collection…" onClick={() => picker.open({ id, type: movie.type, title: movie.title })}/>

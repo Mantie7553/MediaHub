@@ -15,6 +15,8 @@ import { BookOpen, CheckCheck, Link2, PencilLine, RefreshCw, Undo2, Upload, List
 import DetailsHero from "../../components/details/DetailsHero";
 import StatusPill from "../../components/StatusPill";
 import { ActionMenu, ActionMenuItem, ListStatusMenu, SortMenu } from "../../components/details/Menus";
+import WishlistButton from "../../components/WishlistButton";
+import useWishlistStore from "../../stores/useWishlistStore";
 import ItemRow, { ItemList } from "../../components/details/ItemRow";
 import UploadChaptersModal from "../../components/modals/UploadChaptersModal";
 import EditDetailsModal from "../../components/modals/EditDetailsModal";
@@ -36,6 +38,7 @@ export default function MangaDetailsPage() {
     const { id } = useParams();
     const { item: manga, loading, error, notFound, refetch } = useMediaItem(id);
     const userEntry = userContentMap[id];
+    const wishlisted = useWishlistStore(state => state.keys.has(id));
     const rating = useRating(userEntry, !listLoading, manga?.title, refresh);
     const removeEntry = useRemoveFromList(userEntry, refresh);
     const [readChapters, setReadChapters] = useState(new Set());
@@ -166,12 +169,13 @@ export default function MangaDetailsPage() {
                     <ListStatusMenu
                         status={userEntry?.status}
                         type={manga.type}
-                        options={["current", "completed", "dropped", "planned",
-                            // wishlisting a manga that has no chapters yet downloads it
-                            ...(chapters.length === 0 || userEntry?.status === "wishlist" ? ["wishlist"] : [])]}
+                        options={["current", "completed", "dropped", "planned"]}
                         onSelect={updateStatus}
                         onRemove={removeEntry}
                     />
+                    {/* wishlisting a manga that has no chapters yet downloads it; the status stays */}
+                    {(chapters.length === 0 || wishlisted) &&
+                        <WishlistButton item={{ id, type: manga.type }}/>}
                     {rating.button}
                     <ActionMenu>
                         <ActionMenuItem icon={ListPlus} label="Add to a collection…" onClick={() => picker.open({ id, type: manga.type, title: manga.title })}/>

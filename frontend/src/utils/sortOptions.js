@@ -31,7 +31,7 @@ function progressOf(item, ctx) {
 const partsDone = (item, ctx) => entryOf(item, ctx)?.progress_count
 
 // where each list status sorts under "Status": what's on the go first
-const STATUS_ORDER = ["current", "planned", "wishlist", "completed", "dropped"]
+const STATUS_ORDER = ["current", "planned", "completed", "dropped"]
 const statusRank = item => {
     const index = STATUS_ORDER.indexOf(item.status)
     return index === -1 ? null : index

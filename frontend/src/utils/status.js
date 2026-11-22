@@ -38,7 +38,6 @@ export function mediaStatusDot(status) {
         case "current": return "bg-info"
         case "planned": return "bg-warning"
         case "dropped": return "bg-error"
-        case "wishlist": return "bg-secondary"
         default: return "bg-neutral-content"
     }
 }

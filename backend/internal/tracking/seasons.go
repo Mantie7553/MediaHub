@@ -68,7 +68,7 @@ func SeasonProgress(entries []ShowEntry, anilistID int, status string, progress 
 			return before + watched, "completed"
 		}
 		return before + watched, "current"
-	case "planned", "wishlist":
+	case "planned":
 		// planning a later entry says nothing about the earlier ones
 		return 0, status
 	default:
@@ -89,8 +89,6 @@ func statusRank(status string) int {
 		return 3
 	case "planned":
 		return 2
-	case "wishlist":
-		return 1
 	}
 	return 0
 }

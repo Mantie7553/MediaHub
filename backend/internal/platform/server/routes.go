@@ -242,6 +242,10 @@ func (s *Server) routes() {
 			r.Get("/me/media", listsHandler.GetAll)
 			r.Get("/me/continue", listsHandler.GetContinue)
 			r.Get("/me/progress/{id}", listsHandler.GetProgress)
+			// the wishlist sits beside the list status and is what asks for a title to be downloaded
+			r.Get("/me/wishlist", listsHandler.GetWishlist)
+			r.Put("/me/wishlist/{id}", listsHandler.AddToWishlist)
+			r.Delete("/me/wishlist/{id}", listsHandler.RemoveFromWishlist)
 			// playlists and collections; the computed playlists answer to /collections/listened and /unlistened
 			r.Get("/me/collections", collectionsHandler.List)
 			r.Post("/me/collections", collectionsHandler.Create)

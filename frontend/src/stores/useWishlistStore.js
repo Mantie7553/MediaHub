@@ -1,0 +1,48 @@
+import { create } from "zustand"
+import api from "../services/api"
+import { wishlistKeys } from "../utils/wishlist"
+
+/**
+ * The logged in user's wishlist: the titles they want downloaded. It is kept apart from their
+ * list status, so wishlisting a title never changes where they are with it
+ */
+const useWishlistStore = create(set => ({
+    keys: new Map(),
+    load: () => api.get("/me/wishlist")
+        .then(res => set({ keys: wishlistKeys(res.data ?? []) }))
+        .catch(() => {}),
+}))
+
+export function loadWishlist() {
+    return useWishlistStore.getState().load()
+}
+
+/**
+ * Put a title on the wishlist, which asks for it to be downloaded
+ * @param {object} item the title; one not in the library yet is saved from its search result
+ */
+export function addToWishlist(item) {
+    const mediaId = item.media_item_id ?? item.id
+    const request = mediaId
+        ? api.put(`/me/wishlist/${mediaId}`)
+        : api.post("/search/save", {
+            external_id: item.external_id,
+            external_source: item.external_source,
+            title: item.title ?? item.media_title,
+            cover_image_url: item.cover_image_url,
+            type: item.type ?? item.media_type,
+            action: "wishlist",
+            tvdb_id: item.tvdb_id,
+        })
+    return request.then(loadWishlist)
+}
+
+/**
+ * Take a title off the wishlist. A download already asked for carries on
+ * @param {string} mediaId the title's media id
+ */
+export function removeFromWishlist(mediaId) {
+    return api.delete(`/me/wishlist/${mediaId}`).then(loadWishlist)
+}
+
+export default useWishlistStore
