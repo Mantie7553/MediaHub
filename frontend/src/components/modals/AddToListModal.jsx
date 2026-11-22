@@ -3,6 +3,8 @@ import api from "../../services/api";
 import WheelPicker from "../WheelPicker";
 import Format from "../../utils/format";
 import { hasParts, partsLabel, progressRange } from "../../utils/progress";
+import { WISHLIST_TYPES } from "../../utils/wishlist";
+import WishlistButton from "../WishlistButton";
 
 /**
  * Add a title to the user's list or edit its entry
@@ -14,8 +16,9 @@ import { hasParts, partsLabel, progressRange } from "../../utils/progress";
  * @param {function} onAddToCollection opens the playlist / collection picker, for titles in the library
  * @param {string} mediaId the title's id in the library, to load the user's progress through it
  * @param {number} openCount goes up each time the dialog opens, which reloads that progress
+ * @param {function} onWishlistChange called after the title was put on or taken off the wishlist
  */
-export default function AddToListModal({item, onConfirm, dialogRef, initialValues, onRemove, onDelete, onAddToCollection, mediaId, openCount = 0}) {
+export default function AddToListModal({item, onConfirm, dialogRef, initialValues, onRemove, onDelete, onAddToCollection, mediaId, openCount = 0, onWishlistChange}) {
     const type = item.type || item.media_type;
     const [status, setStatus] = useState(initialValues?.status ?? 'planned');
     const [score, setScore] = useState(initialValues?.rating ?? 0);
@@ -54,13 +57,13 @@ export default function AddToListModal({item, onConfirm, dialogRef, initialValue
     const shownProgress = progress ?? startProgress;
     const progressChanged = progress !== null && progress !== startProgress;
 
-    // adding to a list only tracks a title; the wishlist is what asks for it to be downloaded
-    // (the server does nothing for one that is already downloaded or requested)
+    // the status only tracks a title; the wishlist button beside it is what asks for it to be
+    // downloaded, and never changes the status
     function statusOptions(type) {
         switch(type) {
             case "music_album": return ["completed", "planned"]
-            case "movie": return ["completed", "current", "wishlist"]
-            default: return ["completed", "current", "dropped", "planned", "wishlist"]
+            case "movie": return ["completed", "current"]
+            default: return ["completed", "current", "dropped", "planned"]
         }
     }
 
@@ -82,6 +85,15 @@ export default function AddToListModal({item, onConfirm, dialogRef, initialValue
                     ))}
                 </div>
             </section>
+            {WISHLIST_TYPES.includes(type) && (
+                <section>
+                    <h4 className="text-xs font-medium text-base-content/80 uppercase tracking-wide mb-1">Download</h4>
+                    {/* acts straight away, apart from Confirm; the server does nothing for a title
+                        already downloaded or requested */}
+                    <WishlistButton item={item} onChange={onWishlistChange}
+                        className="btn btn-sm btn-ghost bg-white/5 hover:bg-white/10 gap-2"/>
+                </section>
+            )}
             {showProgress && status !== "completed" && (
                 <section>
                     <h4 className="text-xs font-medium text-base-content/80 uppercase tracking-wide mb-1">

@@ -27,7 +27,8 @@ Function:	RequestWishlisted
 Purpose:	a user put a title on their wishlist: ask for it to be downloaded, the same way a
 download request does (approved and started at once for users allowed to, waiting for an admin
 otherwise). Nothing happens for a title that is already downloaded or requested, or one of a
-type the wishlist doesn't download. Adding a title to any other list never downloads it
+type the wishlist doesn't download. The wishlist is kept apart from list statuses, and a title's
+list status never downloads it
 Params:
   - db: the database
   - userID: who wishlisted it

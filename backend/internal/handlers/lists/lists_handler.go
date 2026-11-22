@@ -42,6 +42,10 @@ func (h *Handler) Add(w http.ResponseWriter, r *http.Request) {
 		utils.Error(w, http.StatusBadRequest, "status is required")
 		return
 	}
+	if !tracking.ValidStatus(req.Status) {
+		utils.Error(w, http.StatusBadRequest, "status must be current, planned, completed or dropped")
+		return
+	}
 	if !validRating(req.Rating) {
 		utils.Error(w, http.StatusBadRequest, "rating must be 1 to 10")
 		return
@@ -91,10 +95,6 @@ func (h *Handler) Add(w http.ResponseWriter, r *http.Request) {
 	if utils.InternalError(w, tx.Commit()) {
 		return
 	}
-	if req.Status == "wishlist" && req.MediaItemId != "" {
-		h.requestWishlisted(user.UserID, req.MediaItemId)
-	}
-
 	// return the id of the new entry
 	utils.JSON(w, map[string]string{"id": statusId}, http.StatusCreated)
 }
@@ -236,6 +236,10 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		utils.Error(w, http.StatusBadRequest, "status can't be empty")
 		return
 	}
+	if req.Status.Set && !tracking.ValidStatus(*req.Status.Value) {
+		utils.Error(w, http.StatusBadRequest, "status must be current, planned, completed or dropped")
+		return
+	}
 	if req.Rating.Set && !validRating(req.Rating.Value) {
 		utils.Error(w, http.StatusBadRequest, "rating must be 1 to 10")
 		return
@@ -294,17 +298,13 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	if utils.InternalError(w, tx.Commit()) {
 		return
 	}
-	if status != nil && *status == "wishlist" && mediaItemID.Valid {
-		h.requestWishlisted(user.UserID, mediaItemID.String)
-	}
-
 	// return the id for the updated status
 	utils.JSON(w, map[string]string{"id": mediaStatusId})
 }
 
 /*
 Function:	requestWishlisted
-Purpose:	download a title the user just wishlisted, if it isn't downloaded or requested yet. In
+Purpose:	download a title the user just put on their wishlist, if it isn't downloaded or requested yet. In
 the background: starting a Sonarr / Radarr download can take a few seconds, and the list entry
 is saved whether it works or not
 Params:

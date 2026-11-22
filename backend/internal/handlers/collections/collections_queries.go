@@ -134,7 +134,7 @@ ORDER BY best.updated_at DESC, mm.album_id, mm.track_number NULLS LAST, mi.title
 // the statuses that put a track in each computed playlist. Dropped ones are in neither
 var smartStatuses = map[string][]string{
 	smartListened:   {"completed"},
-	smartUnlistened: {"planned", "wishlist", "current"},
+	smartUnlistened: {"planned", "current"},
 }
 
 // when album {alias} came out: its own date, or else its newest track's

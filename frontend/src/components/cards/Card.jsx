@@ -9,11 +9,13 @@ import DeleteMediaModal from "../modals/DeleteMediaModal";
 import { rateTitle } from "../../stores/useRatingStore";
 import { removeFromList, saveListEntry } from "../../services/mediaService";
 import { userIsAdmin } from "../../utils/auth";
-import { Plus, Check, Play } from "lucide-react";
+import { Plus, Check, Play, BookmarkCheck } from "lucide-react";
 import Cover from "../Cover";
 import { toast } from "../../stores/useToastStore";
 import useAudioStore from "../../stores/useAudioStore"
 import useCollectionPicker from "../../hooks/useCollectionPicker";
+import useWishlistStore from "../../stores/useWishlistStore";
+import { wishlistedId } from "../../utils/wishlist";
 
 /**
  * A poster card for a title, linking to its details page (tracks play instead)
@@ -23,6 +25,7 @@ export default function Card({item, userContentMap={}, onListChange, fluid=false
     let {meta, progressPct, path} = mediaInfo(item);
     const userEntry = userContentMap[String(item.external_id ?? item.media_item_id ?? item.id)];
     const play = useAudioStore(state => state.play);
+    const wishlisted = useWishlistStore(state => !!wishlistedId(state.keys, item));
     // hidden as soon as an admin deletes it, without reloading the row it sits in
     const [deleted, setDeleted] = useState(false);
 
@@ -41,10 +44,16 @@ export default function Card({item, userContentMap={}, onListChange, fluid=false
                 className="size-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.04]"/>
             {/* darkens the bottom on hover so the controls over it stay readable */}
             <div className="absolute inset-x-0 bottom-0 h-2/5 bg-linear-to-t from-black/70 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100 pointer-events-none"></div>
-            {status &&
+            {(status || wishlisted) &&
                 <span className="glass absolute top-2 left-2 z-10 flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium text-white">
-                    <span className={`size-1.5 rounded-full ${mediaStatusDot(status)}`}></span>
-                    {Format.statusLabel(status, item.type ?? item.media_type)}
+                    {status && <>
+                        <span className={`size-1.5 rounded-full ${mediaStatusDot(status)}`}></span>
+                        {Format.statusLabel(status, item.type ?? item.media_type)}
+                    </>}
+                    {/* the wishlist sits beside the status, never in place of it */}
+                    {wishlisted && (status
+                        ? <BookmarkCheck size={12} className="text-primary" aria-label="On your wishlist"/>
+                        : <><BookmarkCheck size={12} className="text-primary"/> Wishlisted</>)}
                 </span>}
             {isTrack && <span className="absolute bottom-3 right-3 z-10 grid size-10 place-items-center rounded-full bg-primary text-primary-content shadow-glow
                 opacity-0 translate-y-2 transition-all duration-300 group-hover:opacity-100 group-hover:translate-y-0 hover-reveal">
@@ -181,8 +190,8 @@ function ActionButtons({item, userEntry, onListChange, onDeleted}) {
             .catch(err => toast.error(err, "Could not update your list"))
             .finally(() => setLoading(false))
         } else if (item.external_source) {
-            // not in DB yet: save it to the list. Only a wishlist entry downloads it, the server
-            // asks for that (started at once for users allowed to download)
+            // not in DB yet: save it to the list. This never downloads it, the wishlist button in
+            // the dialog does that
             api.post("/search/save", {
                 external_id: item.external_id,
                 external_source: item.external_source,
@@ -213,7 +222,7 @@ function ActionButtons({item, userEntry, onListChange, onDeleted}) {
     return <>
         {active && <>
             <AddToListModal item={item} onConfirm={handleConfirm} dialogRef={dialogRef} initialValues={userEntry}
-                mediaId={mediaId} openCount={openCount}
+                mediaId={mediaId} openCount={openCount} onWishlistChange={onListChange}
                 onRemove={userEntry ? handleRemove : undefined}
                 onDelete={canDelete ? () => deleteRef.current.showModal() : undefined}
                 onAddToCollection={collectable ? () => picker.open(collectable) : undefined}/>

@@ -16,6 +16,8 @@ import { CheckCheck, PencilLine, Play, RotateCcw, Undo2, Upload, ListPlus, Star 
 import DetailsHero from "../../components/details/DetailsHero";
 import StatusPill from "../../components/StatusPill";
 import { ActionMenu, ActionMenuItem, ListStatusMenu, SortMenu } from "../../components/details/Menus";
+import WishlistButton from "../../components/WishlistButton";
+import useWishlistStore from "../../stores/useWishlistStore";
 import ItemRow, { ItemList } from "../../components/details/ItemRow";
 import SegmentedTabs from "../../components/SegmentedTabs";
 import EditDetailsModal from "../../components/modals/EditDetailsModal";
@@ -41,6 +43,7 @@ export default function AnimeDetailsPage() {
     const navigate = useNavigate();
     const { userContentMap, loading: listLoading, refresh } = useUserContent();
     const userEntry = userContentMap[id];
+    const wishlisted = useWishlistStore(state => state.keys.has(id));
     const removeEntry = useRemoveFromList(userEntry, refresh);
     const { item: anime, loading, error, notFound, refetch } = useMediaItem(id);
     const rating = useRating(userEntry, !listLoading, anime?.title, refresh);
@@ -237,12 +240,13 @@ export default function AnimeDetailsPage() {
                     <ListStatusMenu
                         status={userEntry?.status}
                         type={anime.type}
-                        options={["current", "completed", "dropped", "planned",
-                            // wishlisting a title that has no episodes yet downloads it
-                            ...((episodesLoaded && episodes.length === 0) || userEntry?.status === "wishlist" ? ["wishlist"] : [])]}
+                        options={["current", "completed", "dropped", "planned"]}
                         onSelect={updateStatus}
                         onRemove={removeEntry}
                     />
+                    {/* wishlisting a title that has no episodes yet downloads it; the status stays */}
+                    {((episodesLoaded && episodes.length === 0) || wishlisted) &&
+                        <WishlistButton item={{ id, type: anime.type }}/>}
                     {rating.button}
                     <ActionMenu>
                         <ActionMenuItem icon={ListPlus} label="Add to a collection…" onClick={() => picker.open({ id, type: anime.type, title: anime.title })}/>

@@ -110,8 +110,13 @@ func (h *Handler) Save(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// check that action is valid
-	if req.Action != "list" && req.Action != "download" && req.Action != "both" {
-		utils.Error(w, http.StatusBadRequest, "action must be list, download, or both")
+	if req.Action != "list" && req.Action != "download" && req.Action != "both" && req.Action != "wishlist" {
+		utils.Error(w, http.StatusBadRequest, "action must be list, download, both or wishlist")
+		return
+	}
+	// the wishlist is its own action: a list save only takes the list's statuses
+	if (req.Action == "list" || req.Action == "both") && !tracking.ValidStatus(req.Status) {
+		utils.Error(w, http.StatusBadRequest, "status must be current, planned, completed or dropped")
 		return
 	}
 
@@ -359,13 +364,6 @@ func (h *Handler) Save(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		if status == "wishlist" {
-			go func(userID string) {
-				if err := downloader.RequestWishlisted(h.db, userID, mediaItemID); err != nil {
-					logger.Error("download request for wishlisted %s failed: %s", mediaItemID, err.Error())
-				}
-			}(user.UserID)
-		}
 	} else if req.Action == "list" || req.Action == "both" {
 		_, err = h.db.Exec(
 			`INSERT INTO user_media_status (user_id, media_item_id, status, rating)
@@ -381,18 +379,26 @@ func (h *Handler) Save(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		// only a wishlist downloads; tracking a title on any other list never does
-		if req.Status == "wishlist" {
-			go func(userID string) {
-				if err := downloader.RequestWishlisted(h.db, userID, mediaItemID); err != nil {
-					logger.Error("download request for wishlisted %s failed: %s", mediaItemID, err.Error())
-				}
-			}(user.UserID)
+	}
+
+	// wishlisting is kept apart from the list (it never sets a status) and is what asks for
+	// the title to be downloaded; tracking a title on the list never does
+	if req.Action == "wishlist" {
+		if _, err := h.db.Exec(
+			`INSERT INTO user_wishlist (user_id, media_item_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+			user.UserID, mediaItemID,
+		); utils.InternalError(w, err) {
+			return
 		}
+		go func(userID string) {
+			if err := downloader.RequestWishlisted(h.db, userID, mediaItemID); err != nil {
+				logger.Error("download request for wishlisted %s failed: %s", mediaItemID, err.Error())
+			}
+		}(user.UserID)
 	}
 
 	// create a download request when asked outright (music from Discover). "both" is a list
-	// save: its download, if any, comes from the wishlist above
+	// save only: downloads of anime, movies and manga come from the wishlist above
 	if req.Action == "download" {
 		// check the users download permissions
 		var downloadPermissions string

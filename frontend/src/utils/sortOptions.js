@@ -31,7 +31,7 @@ function progressOf(item, ctx) {
 const partsDone = (item, ctx) => entryOf(item, ctx)?.progress_count
 
 // where each list status sorts under "Status": what's on the go first
-const STATUS_ORDER = ["current", "planned", "wishlist", "completed", "dropped"]
+const STATUS_ORDER = ["current", "planned", "completed", "dropped"]
 const statusRank = item => {
     const index = STATUS_ORDER.indexOf(item.status)
     return index === -1 ? null : index
@@ -67,6 +67,12 @@ export function trackedSorts(type) {
         updated, byStatus,
     ]
 }
+
+/** Titles on the user's wishlist; the newest wishlisted first */
+export const wishlistSorts = [
+    option("wishlisted", "Recently wishlisted", thenBy(date(i => i.created_at, true), byName)),
+    titleAsc, titleDesc, releaseNew, releaseOld,
+]
 
 /** Albums on the user's list */
 export const trackedAlbumSorts = [titleAsc, titleDesc, artistAsc, artistDesc, ratingHigh, ratingLow, updated, byStatus]
