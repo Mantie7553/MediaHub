@@ -11,6 +11,7 @@ import { Avatar } from "../../components/layout/Sidebar";
 import StatusPill from "../../components/StatusPill";
 import TextField from "../../components/TextField";
 import useMe from "../../hooks/useMe";
+import { CURRENT_BUILD } from "../../utils/appUpdate";
 
 /**
  * Who is signed in, with forms to change their name, email and password, and ways to sign out
@@ -49,7 +50,9 @@ export default function AccountSection() {
             </button>
         </div>}
 
-        <div className="flex flex-wrap justify-end gap-2 border-t border-white/5 mt-5 pt-4">
+        <div className="flex flex-wrap items-center justify-end gap-2 border-t border-white/5 mt-5 pt-4">
+            {/* which build this tab is running, to tell an out-of-date tab apart */}
+            {CURRENT_BUILD && <span className="mr-auto text-xs text-base-content/35 tabular-nums">Build {CURRENT_BUILD}</span>}
             <button className="btn btn-ghost text-base-content/70" onClick={() => logout(navigate, true)}
                 title="Ends your sessions on every device, including this one">
                 <MonitorSmartphone size={16}/> Log out everywhere

@@ -23,11 +23,19 @@ import Toaster from './components/Toaster'
 import RatingPrompt from './components/RatingPrompt'
 import NotFound from './components/states/NotFound'
 import ErrorBoundary, { PageBoundary } from './components/states/ErrorBoundary'
+import useAppUpdate from './hooks/useAppUpdate'
+
+// reloads a tab left on an older build; needs the router for page changes
+function AppUpdater() {
+  useAppUpdate()
+  return null
+}
 
 function App() {
   return (
     <BrowserRouter>
       <ScrollToTop/>
+      <AppUpdater/>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route element={<ProtectedRoute><PageBoundary><Outlet/></PageBoundary></ProtectedRoute>}>

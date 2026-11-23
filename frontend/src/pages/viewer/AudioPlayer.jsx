@@ -15,6 +15,8 @@ const RESTART_AFTER_SECS = 3
 const KEY_SEEK_SECS = 5
 // how often the position is remembered while playing, for picking up after a reload
 const SAVE_EVERY_SECS = 5
+// the lock screen actions the bar registers, cleared again when it hides
+const MEDIA_ACTIONS = ["play", "pause", "previoustrack", "nexttrack", "seekto", "seekbackward", "seekforward"]
 
 // the cover and title, a link to the page the music is playing from when there is one
 function TrackInfo({ source, title, children }) {
@@ -216,9 +218,12 @@ export default function AudioPlayer() {
 
     // the lock screen, notification shade and headphone buttons control the bar too. There are no
     // seek forward/backward actions: iOS (lock screen, Dynamic Island, CarPlay) shows those in place
-    // of the previous/next track buttons, so seeking is done by dragging the system progress bar
-    useEffect(() => {
-        if (!("mediaSession" in navigator) || !visible) return
+    // of the previous/next track buttons, so seeking is done by dragging the system progress bar.
+    // iOS can lose what a page registered when its now-playing session is rebuilt (a new track, a
+    // re-signed stream link, coming back from the background) and falls back to its own ±10 s skip
+    // buttons, so this runs again at each of those moments, not just once
+    function registerMediaHandlers() {
+        if (!("mediaSession" in navigator)) return
         const session = navigator.mediaSession
         const handlers = {
             play: resume,
@@ -233,6 +238,8 @@ export default function AudioPlayer() {
                 // move the system bar now, so it doesn't snap back until the next timeupdate
                 updatePositionState()
             },
+            seekbackward: null,
+            seekforward: null,
         }
         for (const [action, handler] of Object.entries(handlers)) {
             try {
@@ -241,9 +248,19 @@ export default function AudioPlayer() {
                 // a browser without this action just doesn't show its button
             }
         }
+    }
+
+    useEffect(() => {
+        if (!("mediaSession" in navigator) || !visible) return
+        registerMediaHandlers()
+        function onVisible() {
+            if (document.visibilityState === "visible") registerMediaHandlers()
+        }
+        document.addEventListener("visibilitychange", onVisible)
         return () => {
-            for (const action of Object.keys(handlers)) {
-                try { session.setActionHandler(action, null) } catch { /* not supported */ }
+            document.removeEventListener("visibilitychange", onVisible)
+            for (const action of MEDIA_ACTIONS) {
+                try { navigator.mediaSession.setActionHandler(action, null) } catch { /* not supported */ }
             }
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the handlers read the store and audio element when they run
@@ -372,7 +389,8 @@ export default function AudioPlayer() {
             onTimeUpdate={handleTimeUpdate}
             onEnded={handleEnded}
             onError={handleError}
-            onPlaying={() => { remintedRef.current = false }}
+            onLoadedMetadata={registerMediaHandlers}
+            onPlaying={() => { remintedRef.current = false; registerMediaHandlers() }}
         />
         {/* sits above the mobile tab bar, and beside the sidebar on desktop */}
         <div ref={barRef} className={`fixed right-0 left-0 z-50 transition-[left] duration-200 ${onLogin ? "hidden" : ""}
