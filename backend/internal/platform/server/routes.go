@@ -9,6 +9,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/Mantie7553/MediaHub/backend/internal/animemerge"
 	"github.com/Mantie7553/MediaHub/backend/internal/covers"
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/collections"
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/curation"
@@ -58,6 +59,12 @@ storage snapshot), fetch Discover's lists so the first visit doesn't wait for th
 any covers still on other sites so they don't wait for the nightly sync
 */
 func (s *Server) StartBackgroundJobs() {
+	// before any sync, so anime entries an admin linked to a series land on it
+	if links, err := animemerge.LoadLinks(s.db); err != nil {
+		logger.Warn("reading the anime series links: %v", err)
+	} else if len(links) > 0 {
+		logger.Info("laid %d anime series links over Fribb's list", len(links))
+	}
 	s.sync.StartSchedule()
 	s.search.WarmDiscovery()
 	s.insights.StartDailySnapshots()
@@ -348,6 +355,12 @@ func (s *Server) routes() {
 			// anime seasons saved as titles of their own, folded into their series: a dry run, then the merge
 			r.Get("/admin/anime-merges", syncHandler.GetAnimeMerges)
 			r.Post("/admin/anime-merges", syncHandler.MergeAnime)
+			// an anime title Fribb's list leaves out of its series, attached to it by hand: the
+			// link is kept for later saves and syncs, and the title is merged into the series
+			r.Get("/admin/anime-series", syncHandler.GetAnimeSeries)
+			r.Post("/admin/anime/{id}/series", syncHandler.AttachToSeries)
+			r.Get("/admin/anime-series-links", syncHandler.GetSeriesLinks)
+			r.Delete("/admin/anime-series-links/{anilist_id}", syncHandler.DeleteSeriesLink)
 
 			// User Handler endpoints
 			r.Get("/admin/users", usersHandler.GetAll)

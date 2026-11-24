@@ -12,7 +12,7 @@ import { useMediaItem, useUserContent, useRemoveFromList } from "../../hooks";
 import DeleteFromServerButton from "../../components/DeleteFromServerButton";
 import { animeBadge } from "../../utils/status";
 import Format from "../../utils/format";
-import { CheckCheck, PencilLine, Play, RotateCcw, Undo2, Upload, ListPlus, Star } from "lucide-react";
+import { CheckCheck, Link2, PencilLine, Play, RotateCcw, Undo2, Upload, ListPlus, Star } from "lucide-react";
 import DetailsHero from "../../components/details/DetailsHero";
 import StatusPill from "../../components/StatusPill";
 import { ActionMenu, ActionMenuItem, ListStatusMenu, SortMenu } from "../../components/details/Menus";
@@ -22,6 +22,7 @@ import ItemRow, { ItemList } from "../../components/details/ItemRow";
 import SegmentedTabs from "../../components/SegmentedTabs";
 import EditDetailsModal from "../../components/modals/EditDetailsModal";
 import UploadFilesModal from "../../components/modals/UploadFilesModal";
+import AttachSeriesModal from "../../components/modals/AttachSeriesModal";
 import useAdminPieces from "../../hooks/useAdminPieces";
 import useCollectionPicker from "../../hooks/useCollectionPicker";
 import { saveListEntry } from "../../services/mediaService";
@@ -58,6 +59,7 @@ export default function AnimeDetailsPage() {
     const [episodeSort, setEpisodeSort] = useSort("details:episodes", episodeSorts);
     const editRef = useRef(null);
     const uploadRef = useRef(null);
+    const [attaching, setAttaching] = useState(false);
     // a cover just uploaded, with a version so the browser doesn't show the one it cached
     const [newCover, setNewCover] = useState(null);
     const isAdmin = userIsAdmin();
@@ -255,6 +257,9 @@ export default function AnimeDetailsPage() {
                         {isAdmin && <>
                             <ActionMenuItem icon={PencilLine} label="Edit details…" onClick={() => editRef.current.showModal()}/>
                             <ActionMenuItem icon={Upload} label="Add episode files…" onClick={() => uploadRef.current.showModal()}/>
+                            {/* a title saved from AniList the anime list leaves out of its series */}
+                            {anime.external_source === "anilist" && anime.metadata && !anime.metadata.in_series &&
+                                <ActionMenuItem icon={Link2} label="Attach to a series…" onClick={() => setAttaching(true)}/>}
                         </>}
                         <DeleteFromServerButton asMenuItem item={{ id, title: anime.title, type: anime.type }} />
                     </ActionMenu>
@@ -324,6 +329,12 @@ export default function AnimeDetailsPage() {
                     have={episodes.map(ep => `${ep.season_number}x${ep.episode_number}`)}
                     defaultSeason={season === "undefined" ? "1" : season}
                     onAdded={reloadEpisodes}
+                />
+                <AttachSeriesModal
+                    open={attaching}
+                    onClose={() => setAttaching(false)}
+                    item={{ id, title: anime.title }}
+                    onAttached={keepId => navigate(`/anime/${keepId}`, { replace: true })}
                 />
             </>}
             {pieces.modals}

@@ -274,6 +274,41 @@ func TestInsightsRouteIsAdminOnly(t *testing.T) {
 	}
 }
 
+func TestAnimeSeriesLinkRoutesAreAdminOnly(t *testing.T) {
+	t.Setenv("CORS_ORIGIN", "http://localhost")
+	t.Setenv("JWT_SECRET", "access-secret-for-tests")
+	t.Setenv("MEDIA_SIGNING_SECRET", "media-secret-for-tests")
+	t.Setenv("MEDIA_ROOT", t.TempDir())
+
+	s := New(nil)
+	userToken, err := auth.GenerateToken("user-1", "user")
+	if err != nil {
+		t.Fatal(err)
+	}
+	routes := []struct{ method, path string }{
+		{http.MethodGet, "/api/admin/anime-series"},
+		{http.MethodPost, "/api/admin/anime/00000000-0000-0000-0000-000000000001/series"},
+		{http.MethodGet, "/api/admin/anime-series-links"},
+		{http.MethodDelete, "/api/admin/anime-series-links/918"},
+	}
+	for _, route := range routes {
+		for _, c := range []struct {
+			bearer string
+			status int
+		}{{"", http.StatusUnauthorized}, {userToken, http.StatusForbidden}} {
+			req := httptest.NewRequest(route.method, route.path, nil)
+			if c.bearer != "" {
+				req.Header.Set("Authorization", "Bearer "+c.bearer)
+			}
+			rec := httptest.NewRecorder()
+			s.router.ServeHTTP(rec, req)
+			if rec.Code != c.status {
+				t.Errorf("%s %s with bearer=%t: status = %d, want %d", route.method, route.path, c.bearer != "", rec.Code, c.status)
+			}
+		}
+	}
+}
+
 func TestRecordPlayNeedsSignIn(t *testing.T) {
 	t.Setenv("CORS_ORIGIN", "http://localhost")
 	t.Setenv("JWT_SECRET", "access-secret-for-tests")

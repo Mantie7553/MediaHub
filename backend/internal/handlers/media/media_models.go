@@ -66,6 +66,9 @@ type AnimeMetadata struct {
 	Studio *string  `json:"studio"`
 	Status *string  `json:"status"`
 	Genres []string `json:"genres"`
+	// whether the title stands for a TVDB series (has its TVDB id or a Sonarr link); one that
+	// doesn't can be attached to a series by hand
+	InSeries bool `json:"in_series"`
 }
 
 type Episode struct {

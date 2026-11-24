@@ -74,6 +74,8 @@ type Result struct {
 	TvdbID int    `json:"tvdb_id"`
 	Series string `json:"series"`
 	Merged int    `json:"merged"`
+	// the title the series' others were folded into
+	KeepID string `json:"keep_id"`
 	Error  string `json:"error,omitempty"`
 }
 
@@ -107,7 +109,7 @@ func Merge(db *sql.DB, series Series, tvdbIDs []int) ([]Result, error) {
 
 	results := make([]Result, 0, len(picked))
 	for _, g := range picked {
-		res := Result{TvdbID: g.TvdbID, Series: g.Series}
+		res := Result{TvdbID: g.TvdbID, Series: g.Series, KeepID: g.Keep.ID}
 		show, ok := shows[g.TvdbID]
 		if !ok {
 			res.Error = "couldn't look up the series' seasons on AniList, try again"
@@ -237,6 +239,9 @@ func moveTitle(tx *sql.Tx, from Title, to string) error {
 			ON CONFLICT DO NOTHING`},
 		{"season MyAnimeList ids", `INSERT INTO anime_season_mal (media_item_id, season_number, mal_id)
 			SELECT $2, season_number, mal_id FROM anime_season_mal WHERE media_item_id = $1
+			ON CONFLICT DO NOTHING`},
+		{"wishlist", `INSERT INTO user_wishlist (user_id, media_item_id, created_at)
+			SELECT user_id, $2, created_at FROM user_wishlist WHERE media_item_id = $1
 			ON CONFLICT DO NOTHING`},
 		{"Sonarr link", `UPDATE sonarr_items SET media_item_id = $2 WHERE media_item_id = $1
 			AND NOT EXISTS (SELECT 1 FROM sonarr_items WHERE media_item_id = $2)`},

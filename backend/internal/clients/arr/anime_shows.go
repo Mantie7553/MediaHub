@@ -164,6 +164,16 @@ func (s *Shows) Load(tvdbIDs []int) map[int]Show {
 	return out
 }
 
+// Forget drops the series kept for these TVDB ids, so they're built again with the entries they
+// have now
+func (s *Shows) Forget(tvdbIDs ...int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, id := range tvdbIDs {
+		delete(s.cached, id)
+	}
+}
+
 // whether AniList gave every entry of a series
 func complete(show Show, media map[int]anilist.Media) bool {
 	for _, e := range show.Entries {
