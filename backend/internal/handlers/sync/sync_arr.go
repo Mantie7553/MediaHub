@@ -299,18 +299,88 @@ func (h *Handler) titleOfSeries(tvdbID int, maps arr.AnimeMaps) (string, *time.T
 	if !errors.Is(err, sql.ErrNoRows) {
 		return id, syncedAt, err
 	}
-	for _, entry := range maps.ShowSeasons[tvdbID] {
+	for _, anilistID := range seriesAnilistCandidates(tvdbID, maps) {
 		err = h.db.QueryRow(
 			`SELECT id, metadata_synced_at FROM media_items
 			WHERE type = 'anime' AND external_source = 'anilist' AND external_id = $1
 			AND NOT EXISTS (SELECT 1 FROM sonarr_items si WHERE si.media_item_id = media_items.id)`,
-			strconv.Itoa(entry.AnilistID),
+			strconv.Itoa(anilistID),
 		).Scan(&id, &syncedAt)
 		if !errors.Is(err, sql.ErrNoRows) {
 			return id, syncedAt, err
 		}
 	}
 	return "", nil, sql.ErrNoRows
+}
+
+// seriesAnilistCandidates: the AniList entries a title saved from a TVDB series could be,
+// its seasons in watch order and then the entry Fribb maps the series itself to (series Fribb
+// gives no seasons for have only that one)
+func seriesAnilistCandidates(tvdbID int, maps arr.AnimeMaps) []int {
+	ids := []int{}
+	seen := map[int]bool{}
+	for _, entry := range maps.ShowSeasons[tvdbID] {
+		if entry.AnilistID > 0 && !seen[entry.AnilistID] {
+			seen[entry.AnilistID] = true
+			ids = append(ids, entry.AnilistID)
+		}
+	}
+	if id, ok := maps.TvdbToAnilist[tvdbID]; ok && id > 0 && !seen[id] {
+		ids = append(ids, id)
+	}
+	return ids
+}
+
+/*
+Function:	titleOfMovie
+Purpose:	the movie title that already stands for a TMDB movie: the one with its TMDB id, else
+one saved from its AniList entry that no Radarr movie is linked to. A movie deleted in Radarr
+and added there again finds its old title this way
+Returns:	sql.ErrNoRows when there is none
+*/
+func (h *Handler) titleOfMovie(tmdbID int, maps arr.AnimeMaps) (string, *time.Time, error) {
+	var id string
+	var syncedAt *time.Time
+	if tmdbID <= 0 {
+		return "", nil, sql.ErrNoRows
+	}
+	err := h.db.QueryRow(
+		`SELECT id, metadata_synced_at FROM media_items WHERE type = 'movie' AND tmdb_id = $1`, tmdbID,
+	).Scan(&id, &syncedAt)
+	if !errors.Is(err, sql.ErrNoRows) {
+		return id, syncedAt, err
+	}
+	anilistID, ok := movieAnilistCandidate(tmdbID, maps)
+	if !ok {
+		return "", nil, sql.ErrNoRows
+	}
+	err = h.db.QueryRow(
+		`SELECT id, metadata_synced_at FROM media_items
+		WHERE type = 'movie' AND external_source = 'anilist' AND external_id = $1
+		AND NOT EXISTS (SELECT 1 FROM radarr_items ri WHERE ri.media_item_id = media_items.id)`,
+		strconv.Itoa(anilistID),
+	).Scan(&id, &syncedAt)
+	return id, syncedAt, err
+}
+
+// movieAnilistCandidate: the AniList entry Fribb maps a TMDB movie to
+func movieAnilistCandidate(tmdbID int, maps arr.AnimeMaps) (int, bool) {
+	id, ok := maps.TmdbToAnilist[tmdbID]
+	return id, ok && id > 0
+}
+
+// setTmdbID notes the TMDB movie a title is, unless another movie title already has it
+func (h *Handler) setTmdbID(mediaItemID string, tmdbID int) {
+	if tmdbID <= 0 {
+		return
+	}
+	if _, err := h.db.Exec(
+		`UPDATE media_items SET tmdb_id = $1 WHERE id = $2 AND tmdb_id IS DISTINCT FROM $1
+		AND NOT EXISTS (SELECT 1 FROM media_items o WHERE o.type = 'movie' AND o.tmdb_id = $1 AND o.id <> $2)`,
+		tmdbID, mediaItemID,
+	); err != nil {
+		logger.Error("failed to save TMDB id %d of %s: %s", tmdbID, mediaItemID, err.Error())
+	}
 }
 
 // setTvdbID notes the TVDB series a title is. When another title already has it (seasons
@@ -392,6 +462,10 @@ func (h *Handler) syncMovie(m arr.RadarrMovie, maps arr.AnimeMaps) error {
 	).Scan(&mediaItemID, &syncedAt)
 
 	if errors.Is(err, sql.ErrNoRows) {
+		// one Radarr forgot and has again, or one saved from its AniList entry
+		mediaItemID, syncedAt, err = h.titleOfMovie(m.TmdbID, maps)
+	}
+	if errors.Is(err, sql.ErrNoRows) {
 		err = h.db.QueryRow(
 			`INSERT INTO media_items (type, title, cover_image_url, description, release_date)
 			VALUES ('movie', $1, $2, $3, $4)
@@ -414,6 +488,8 @@ func (h *Handler) syncMovie(m arr.RadarrMovie, maps arr.AnimeMaps) error {
 	} else {
 		return fmt.Errorf("looking up radarr_items: %w", err)
 	}
+
+	h.setTmdbID(mediaItemID, m.TmdbID)
 
 	anilistID, mapped := maps.TmdbToAnilist[m.TmdbID]
 	enrich := m.TmdbID > 0 && mapped && needsEnrichment(syncedAt, time.Now())
