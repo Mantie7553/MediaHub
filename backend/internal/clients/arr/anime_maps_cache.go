@@ -38,18 +38,25 @@ type animeMapsCache struct {
 	fetched time.Time
 	fetch   func() (AnimeMaps, error)
 	now     func() time.Time
+
+	// the maps with the admin's series links laid over them, and what they were built from
+	linked        *AnimeMaps
+	linkedFrom    *AnimeMaps
+	linkedVersion int
+	links         func() ([]SeriesLink, int)
 }
 
 var sharedAnimeMaps = &animeMapsCache{
 	fetch: FetchAnimeMaps,
 	now:   time.Now,
+	links: currentLinks,
 }
 
 /*
 Function:	LoadAnimeMaps
 Purpose:	Fribb's anime list, downloaded at most once a day and shared by the full sync and the
-webhooks. When a download fails the last copy is returned with the error; with no copy yet the
-maps are empty
+webhooks, with the series links an admin made laid over it. When a download fails the last copy
+is returned with the error; with no copy yet the maps hold only the links
 */
 func LoadAnimeMaps() (AnimeMaps, error) {
 	return sharedAnimeMaps.load()
@@ -58,17 +65,33 @@ func LoadAnimeMaps() (AnimeMaps, error) {
 func (c *animeMapsCache) load() (AnimeMaps, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	base, err := c.fribb()
+	var links []SeriesLink
+	var version int
+	if c.links != nil {
+		links, version = c.links()
+	}
+	if base == nil {
+		empty := buildAnimeMaps(nil)
+		return applyLinks(empty, links), err
+	}
+	if c.linked == nil || c.linkedFrom != base || c.linkedVersion != version {
+		linked := applyLinks(*base, links)
+		c.linked, c.linkedFrom, c.linkedVersion = &linked, base, version
+	}
+	return *c.linked, err
+}
+
+// Fribb's list as last downloaded, fetched again once a day; nil when it never came
+func (c *animeMapsCache) fribb() (*AnimeMaps, error) {
 	if c.maps != nil && c.now().Sub(c.fetched) < animeMapsTTL {
-		return *c.maps, nil
+		return c.maps, nil
 	}
 	fresh, err := c.fetch()
 	if err != nil {
-		if c.maps != nil {
-			return *c.maps, err
-		}
-		return buildAnimeMaps(nil), err
+		return c.maps, err
 	}
 	c.maps = &fresh
 	c.fetched = c.now()
-	return fresh, nil
+	return c.maps, nil
 }

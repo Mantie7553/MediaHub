@@ -294,9 +294,12 @@ func (h *Handler) GetSpecific(w http.ResponseWriter, r *http.Request) {
 	case "anime":
 		var meta AnimeMetadata
 		err := h.db.QueryRow(
-			`SELECT studio, status, genres FROM anime_metadata WHERE media_item_id = $1`,
+			`SELECT am.studio, am.status, am.genres,
+			mi.tvdb_id IS NOT NULL OR EXISTS (SELECT 1 FROM sonarr_items si WHERE si.media_item_id = mi.id)
+			FROM media_items mi LEFT JOIN anime_metadata am ON am.media_item_id = mi.id
+			WHERE mi.id = $1`,
 			item.ID,
-		).Scan(&meta.Studio, &meta.Status, pq.Array(&meta.Genres))
+		).Scan(&meta.Studio, &meta.Status, pq.Array(&meta.Genres), &meta.InSeries)
 		if err != nil && !errors.Is(err, sql.ErrNoRows) {
 			utils.Error(w, http.StatusInternalServerError, "internal server error")
 			return

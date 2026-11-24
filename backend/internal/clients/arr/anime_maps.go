@@ -125,18 +125,23 @@ func showSeasons(entries []fribbEntry) map[int][]SeasonEntry {
 		})
 	}
 	for _, seasons := range out {
-		sort.SliceStable(seasons, func(i, j int) bool {
-			a, b := seasons[i], seasons[j]
-			if (a.Season == 0) != (b.Season == 0) {
-				return b.Season == 0
-			}
-			if a.Season != b.Season {
-				return a.Season < b.Season
-			}
-			return a.anidbID < b.anidbID
-		})
+		sortSeasons(seasons)
 	}
 	return out
+}
+
+// a series' entries in watch order: by TVDB season, specials last, then by AniDB id
+func sortSeasons(seasons []SeasonEntry) {
+	sort.SliceStable(seasons, func(i, j int) bool {
+		a, b := seasons[i], seasons[j]
+		if (a.Season == 0) != (b.Season == 0) {
+			return b.Season == 0
+		}
+		if a.Season != b.Season {
+			return a.Season < b.Season
+		}
+		return a.anidbID < b.anidbID
+	})
 }
 
 // the entry that stands for the whole series: the first of its lowest numbered season, or a
