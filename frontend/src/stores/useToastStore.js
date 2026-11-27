@@ -2,6 +2,8 @@ import { create } from "zustand"
 import { errorMessage } from "../utils/errors"
 
 const DISMISS_MS = 5000
+// a warning usually says what to do next, so it stays up longer
+const WARNING_DISMISS_MS = 12000
 let nextId = 1
 
 /**
@@ -14,7 +16,7 @@ const useToastStore = create((set, get) => ({
     show: (type, message, action = null) => {
         const id = nextId++
         set({ toasts: [...get().toasts, { id, type, message, action }] })
-        setTimeout(() => get().dismiss(id), DISMISS_MS)
+        setTimeout(() => get().dismiss(id), type === "warning" ? WARNING_DISMISS_MS : DISMISS_MS)
         return id
     },
 
@@ -26,6 +28,7 @@ const useToastStore = create((set, get) => ({
  */
 export const toast = {
     success: (message, action) => useToastStore.getState().show("success", message, action),
+    warning: (message, action) => useToastStore.getState().show("warning", message, action),
     error: (err, fallback) => useToastStore.getState().show("error", errorMessage(err, fallback)),
 }
 

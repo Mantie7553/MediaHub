@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { Bookmark, BookmarkCheck } from "lucide-react"
 import useWishlistStore, { addToWishlist, removeFromWishlist } from "../stores/useWishlistStore"
-import { wishlistedId } from "../utils/wishlist"
+import { wishlistMessage, wishlistedId } from "../utils/wishlist"
 import { toast } from "../stores/useToastStore"
 
 /**
@@ -22,7 +22,10 @@ export default function WishlistButton({ item, onChange, className = "btn border
         setBusy(true)
         const request = wishlisted
             ? removeFromWishlist(wishlisted).then(() => toast.success("Removed from your wishlist"))
-            : addToWishlist(item).then(() => toast.success("Added to your wishlist, download requested"))
+            : addToWishlist(item).then(outcome => {
+                const { type, message } = wishlistMessage(outcome)
+                toast[type](message)
+            })
         request
             .then(() => onChange?.())
             .catch(err => toast.error(err, "Could not update your wishlist"))

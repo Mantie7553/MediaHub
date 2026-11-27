@@ -29,6 +29,7 @@ export function loadWishlist() {
 /**
  * Put a title on the wishlist, which asks for it to be downloaded
  * @param {object} item the title; one not in the library yet is saved from its search result
+ * @returns {Promise<{download?: string, reason?: string}>} what the server did about the download
  */
 export function addToWishlist(item) {
     const mediaId = item.media_item_id ?? item.id
@@ -43,7 +44,7 @@ export function addToWishlist(item) {
             action: "wishlist",
             tvdb_id: item.tvdb_id,
         })
-    return request.then(loadWishlist)
+    return request.then(res => loadWishlist().then(() => res.data ?? {}))
 }
 
 /**

@@ -1,10 +1,13 @@
 package lists
 
 import (
+	"database/sql"
 	"net/http"
 	"time"
 
+	"github.com/Mantie7553/MediaHub/backend/internal/downloader"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/auth"
+	"github.com/Mantie7553/MediaHub/backend/internal/platform/logger"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/utils"
 )
 
@@ -67,8 +70,9 @@ func (h *Handler) GetWishlist(w http.ResponseWriter, r *http.Request) {
 
 /*
 Function:	AddToWishlist
-Purpose:	put a title on the user's wishlist and ask for it to be downloaded. Their list status,
-if any, is left as it is
+Purpose:	put a title on the user's wishlist and ask for it to be downloaded, answering with
+what happened about the download (downloader.WishlistOutcome). Their list status, if any, is
+left as it is
 Params:
   - w: http response writer to respond to the front end
   - r: http request with the media item id in the URL
@@ -99,8 +103,24 @@ func (h *Handler) AddToWishlist(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	h.requestWishlisted(user.UserID, id)
-	w.WriteHeader(http.StatusNoContent)
+	utils.JSON(w, requestWishlisted(h.db, user.UserID, id))
+}
+
+/*
+Function:	requestWishlisted
+Purpose:	ask for a title just put on the wishlist to be downloaded, and say what happened. The
+title is on the wishlist whether that works or not, so a failure is only logged
+Params:
+  - db: the database
+  - userID: the user
+  - mediaItemID: the title
+*/
+func requestWishlisted(db *sql.DB, userID, mediaItemID string) downloader.WishlistOutcome {
+	outcome, err := downloader.RequestWishlisted(db, userID, mediaItemID)
+	if err != nil {
+		logger.Error("download request for wishlisted %s failed: %s", mediaItemID, err.Error())
+	}
+	return outcome
 }
 
 /*

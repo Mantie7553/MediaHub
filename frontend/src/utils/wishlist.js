@@ -31,3 +31,22 @@ export function wishlistedId(keys, item) {
 
 // the title types wishlisting downloads (matches downloader.WishlistDownloads)
 export const WISHLIST_TYPES = ["anime", "movie", "manga"]
+
+/**
+ * What to tell the user after wishlisting a title, from what the server did about downloading
+ * it (downloader.WishlistOutcome)
+ * @param {{download?: string, reason?: string}} outcome the server's answer
+ * @returns {{type: "success"|"warning", message: string}}
+ */
+export function wishlistMessage(outcome) {
+    switch (outcome?.download) {
+        case "requested": return { type: "success", message: "Added to your wishlist, download started" }
+        case "pending": return { type: "success", message: "Added to your wishlist, download waiting for an admin" }
+        case "have": return { type: "success", message: "Added to your wishlist, it's already in the library" }
+        case "already_requested": return { type: "success", message: "Added to your wishlist, it was already requested" }
+        case "failed": return { type: "warning", message: `Added to your wishlist, but its last download failed: ${outcome.reason || "no reason given"}` }
+        case "rejected": return { type: "warning", message: "Added to your wishlist, but an admin turned down your request for it" }
+        case "not_downloadable": return { type: "success", message: "Added to your wishlist" }
+    }
+    return { type: "success", message: "Added to your wishlist" }
+}
