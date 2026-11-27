@@ -8,7 +8,7 @@ import navItems from "./navItems"
  */
 export default function MobileNav() {
     const { me } = useMe();
-    const items = navItems(me?.role ?? getRole());
+    const items = navItems(me?.role ?? getRole()).filter(item => item.mobile !== false);
     const { pathname } = useLocation();
 
     return <nav className="lg:hidden fixed inset-x-0 bottom-0 z-30 bg-base-200/85 backdrop-blur-xl border-t border-white/5 pb-[env(safe-area-inset-bottom)]"

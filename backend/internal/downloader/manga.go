@@ -17,6 +17,7 @@ import (
 	"github.com/Mantie7553/MediaHub/backend/internal/clients/mangadex"
 	"github.com/Mantie7553/MediaHub/backend/internal/clients/suwayomi"
 	"github.com/Mantie7553/MediaHub/backend/internal/mangafiles"
+	"github.com/Mantie7553/MediaHub/backend/internal/notify"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/logger"
 )
 
@@ -264,6 +265,13 @@ func RunMangaDex(db *sql.DB, jobID string, mediaItemID string, dest string) {
 	if err != nil {
 		markFailed(db, jobID, err.Error())
 		return
+	}
+	// the admins hear about it once there is something new to fetch, not for a check that finds nothing
+	for _, ch := range chapters {
+		if !have[ch.Value] {
+			notify.JobDownloading(db, jobID)
+			break
+		}
 	}
 
 	added, fromSuwayomi, failed, skipped := 0, 0, 0, 0

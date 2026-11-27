@@ -2,8 +2,12 @@ package webhooks
 
 import (
 	"database/sql"
+	"errors"
+	"fmt"
 	"net/http"
+	"strconv"
 
+	"github.com/Mantie7553/MediaHub/backend/internal/notify"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/logger"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/utils"
 	"github.com/lib/pq"
@@ -35,6 +39,7 @@ const (
 	syncItem          // sync the series or movie from Sonarr / Radarr
 	clearFiles        // its files (some episodes, or the movie's) were deleted
 	forgetItem        // the series or movie was removed from Sonarr / Radarr
+	notifyGrab        // something was grabbed to download: the admins are told
 )
 
 /*
@@ -56,6 +61,8 @@ func actionFor(eventType, deleteReason string) action {
 		return clearFiles
 	case "SeriesDelete", "MovieDelete":
 		return forgetItem
+	case "Grab":
+		return notifyGrab
 	}
 	return ignore
 }
@@ -76,6 +83,9 @@ func (h *Handler) SonarrWebhook(w http.ResponseWriter, r *http.Request) {
 	seriesID := payload.Series.ID
 
 	switch actionFor(payload.EventType, payload.DeleteReason) {
+	case notifyGrab:
+		title, body := payload.Series.Title, grabSummary(payload.Episodes)
+		h.run(func() { h.notifyGrabbed("sonarr_items", "sonarr_series_id", seriesID, "anime", title, body) })
 	case syncItem:
 		h.run(func() {
 			if err := h.syncer.SyncSeriesByID(seriesID); err != nil {
@@ -128,6 +138,11 @@ func (h *Handler) RadarrWebhook(w http.ResponseWriter, r *http.Request) {
 
 	var query string
 	switch actionFor(payload.EventType, payload.DeleteReason) {
+	case notifyGrab:
+		title := payload.Movie.Title
+		h.run(func() {
+			h.notifyGrabbed("radarr_items", "radarr_movie_id", movieID, "movie", title, "Grabbed by Radarr")
+		})
 	case syncItem:
 		h.run(func() {
 			if err := h.syncer.SyncMovieByID(movieID); err != nil {
@@ -147,4 +162,49 @@ func (h *Handler) RadarrWebhook(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	w.WriteHeader(http.StatusOK)
+}
+
+/*
+Function:	notifyGrabbed
+Purpose:	tell the admins Sonarr or Radarr grabbed something. A title MediaHub has opens its
+page and shares the one notification its download already has
+Params:
+  - table, column: where MediaHub links its titles to the app's ids, never user input
+  - arrID: the series or movie id in Sonarr / Radarr
+  - mediaType: anime or movie
+  - title: the name the app gave, for one MediaHub doesn't have yet
+  - body: what was grabbed
+*/
+func (h *Handler) notifyGrabbed(table, column string, arrID int, mediaType, title, body string) {
+	var mediaItemID, known sql.NullString
+	err := h.db.QueryRow(
+		`SELECT mi.id, mi.title FROM `+table+` x JOIN media_items mi ON mi.id = x.media_item_id
+		WHERE x.`+column+` = $1 LIMIT 1`,
+		arrID,
+	).Scan(&mediaItemID, &known)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		logger.Warn("looking up %s %d to notify about its grab: %s", column, arrID, err.Error())
+	}
+	if known.Valid {
+		title = known.String
+	}
+	if title == "" {
+		title = "Something"
+	}
+	key := mediaType + ":" + strconv.Itoa(arrID)
+	notify.Grabbed(h.db, mediaItemID.String, mediaType, title, "grab:"+key, body)
+}
+
+/*
+Function:	grabSummary
+Purpose:	what a Sonarr grab is of: "S01E05 grabbed by Sonarr", or how many episodes
+*/
+func grabSummary(episodes []sonarrEpisode) string {
+	switch len(episodes) {
+	case 0:
+		return "Grabbed by Sonarr"
+	case 1:
+		return fmt.Sprintf("S%02dE%02d grabbed by Sonarr", episodes[0].SeasonNumber, episodes[0].EpisodeNumber)
+	}
+	return fmt.Sprintf("%d episodes grabbed by Sonarr", len(episodes))
 }

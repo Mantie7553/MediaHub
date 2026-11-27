@@ -9,6 +9,7 @@ import (
 
 	"github.com/Mantie7553/MediaHub/backend/internal/clients/arr"
 	"github.com/Mantie7553/MediaHub/backend/internal/clients/ytdlp"
+	"github.com/Mantie7553/MediaHub/backend/internal/notify"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/logger"
 )
 
@@ -79,13 +80,19 @@ func Dispatch(db *sql.DB, requestID string, mediaItemID string,
 	}
 	logger.Info("Dispatched %s of type %s. Handled by %s", requestID, mediaType, handler)
 
+	// Sonarr and Radarr couldn't take it: the job is failed with why, so it isn't left queued
+	// forever, and the admins are told
+	fail := func(reason string, err error) (string, error) {
+		markFailed(db, jobID, reason)
+		return "", err
+	}
+
 	// handle each of the different download clients
 	switch handler {
 	case "sonarr":
 		// needs external ID
 		if externalID == nil {
-			logger.Error("External ID is null")
-			return "", fmt.Errorf("media item has no external_id")
+			return fail("the title has no external id to find it in Sonarr", fmt.Errorf("media item has no external_id"))
 		}
 
 		// connect to sonarr and start downloading
@@ -95,7 +102,7 @@ func Dispatch(db *sql.DB, requestID string, mediaItemID string,
 		var knownTvdb sql.NullInt64
 		err = db.QueryRow(`SELECT title, tvdb_id FROM media_items WHERE id = $1`, mediaItemID).Scan(&title, &knownTvdb)
 		if err != nil {
-			return "", fmt.Errorf("failed to get title: %w", err)
+			return fail(err.Error(), fmt.Errorf("failed to get title: %w", err))
 		}
 
 		// the series by its TVDB id when known, so a season's own name ("Nisemonogatari") can't
@@ -106,8 +113,7 @@ func Dispatch(db *sql.DB, requestID string, mediaItemID string,
 		}
 		tvdbID, sonarrID, err := sClient.LookupSeries(term)
 		if err != nil {
-			logger.Error("Sonarr lookup failed: %s", err.Error())
-			return "", fmt.Errorf("sonarr lookup failed: %w", err)
+			return fail("Sonarr lookup failed: "+err.Error(), fmt.Errorf("sonarr lookup failed: %w", err))
 		}
 
 		var seriesID int
@@ -116,8 +122,7 @@ func Dispatch(db *sql.DB, requestID string, mediaItemID string,
 		} else {
 			seriesID, err = sClient.AddSeries(tvdbID, qualityProfile(sClient, "SONARR_QUALITY_PROFILE"), dest, title)
 			if err != nil {
-				logger.Error("Sonarr: %s", err.Error())
-				return "", fmt.Errorf("internal server error")
+				return fail("Sonarr: "+err.Error(), fmt.Errorf("internal server error"))
 			}
 		}
 
@@ -130,6 +135,7 @@ func Dispatch(db *sql.DB, requestID string, mediaItemID string,
 		); err != nil {
 			logger.Error("failed to save sonarr_id %s", err.Error())
 		}
+		notify.JobDownloading(db, jobID)
 		if _, err := db.Exec(
 			`UPDATE media_items SET tvdb_id = $1 WHERE id = $2 AND tvdb_id IS NULL
 			AND NOT EXISTS (SELECT 1 FROM media_items o WHERE o.type = 'anime' AND o.tvdb_id = $1)`,
@@ -141,22 +147,19 @@ func Dispatch(db *sql.DB, requestID string, mediaItemID string,
 	case "radarr":
 		// needs external ID
 		if externalID == nil {
-			logger.Error("External ID is null")
-			return "", fmt.Errorf("media item has no external_id")
+			return fail("the title has no external id to find it in Radarr", fmt.Errorf("media item has no external_id"))
 		}
 
 		extIDInt, err := strconv.Atoi(*externalID)
 		if err != nil {
-			logger.Error("External ID is not a number")
-			return "", fmt.Errorf("invalid external_id")
+			return fail("the title's external id isn't a TMDB id", fmt.Errorf("invalid external_id"))
 		}
 		// connect to radarr and start downloading
 		rClient := arr.NewArrClient("RADARR_URL", "RADARR_API_KEY")
 		movieID, err := rClient.AddMovie(extIDInt, qualityProfile(rClient, "RADARR_QUALITY_PROFILE"), dest)
 
 		if err != nil {
-			logger.Error("Radarr: %s", err.Error())
-			return "", fmt.Errorf("internal server error")
+			return fail("Radarr: "+err.Error(), fmt.Errorf("internal server error"))
 		}
 
 		// save the content as a radarr item in the database
@@ -167,6 +170,7 @@ func Dispatch(db *sql.DB, requestID string, mediaItemID string,
 		); err != nil {
 			logger.Error("failed to save radarr_id %s", err.Error())
 		}
+		notify.JobDownloading(db, jobID)
 
 	case "mangadex":
 		go RunMangaDex(db, jobID, mediaItemID, dest)
@@ -214,14 +218,30 @@ Params:
   - db: a pointer to our database
 */
 func FailInterrupted(db *sql.DB) (int64, error) {
-	res, err := db.Exec(
+	rows, err := db.Query(
 		`UPDATE download_jobs
 		SET status = 'failed', error_message = $1, completed_at = NOW()
-		WHERE status IN ('queued', 'downloading') AND handler IN ('ytdlp', 'mangadex')`,
+		WHERE status IN ('queued', 'downloading') AND handler IN ('ytdlp', 'mangadex')
+		RETURNING id`,
 		interruptedMessage,
 	)
 	if err != nil {
 		return 0, err
 	}
-	return res.RowsAffected()
+	var ids []string
+	for rows.Next() {
+		var id string
+		if rows.Scan(&id) == nil {
+			ids = append(ids, id)
+		}
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+	// the admins are told, after the rows are read so the lookups don't wait on them
+	for _, id := range ids {
+		notify.JobFailed(db, id, interruptedMessage)
+	}
+	return int64(len(ids)), nil
 }

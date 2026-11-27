@@ -35,11 +35,20 @@ const views = [
  * @param {string} noun what one record is called, like "request"
  * @param {object} empty { title, hint, icon } when the Active view has nothing at all
  * @param {function} rowKey picks a record's key
+ * @param {string} highlightId a record to pick out, like one a notification links to: the filters
+ *  are cleared so it shows
  */
 export default function RecordsPanel({ title, icon, meta, items, loading, error, pollError, onRetry,
-    archived, onArchivedChange, statuses, titleOf, columns, onArchive, noun, empty, rowKey }) {
+    archived, onArchivedChange, statuses, titleOf, columns, onArchive, noun, empty, rowKey, highlightId }) {
     const [status, setStatus] = useState("all")
     const [query, setQuery] = useState("")
+    // a new record to pick out clears the filters, so it isn't hidden by them
+    const [shownHighlight, setShownHighlight] = useState(null)
+    if (highlightId && highlightId !== shownHighlight) {
+        setShownHighlight(highlightId)
+        setStatus("all")
+        setQuery("")
+    }
 
     const counts = statusCounts(items, statuses)
     // a status whose last record was archived falls back to All instead of an empty tab
@@ -99,7 +108,7 @@ export default function RecordsPanel({ title, icon, meta, items, loading, error,
             </div>
             {shown.length === 0
                 ? <EmptyState compact icon={Search} title="Nothing matches" hint="Try another status or title."/>
-                : <DataTable items={shown} rowKey={rowKey} columns={tableColumns}/>}
+                : <DataTable items={shown} rowKey={rowKey} columns={tableColumns} highlightKey={highlightId}/>}
         </>
     }
 

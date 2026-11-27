@@ -1,3 +1,5 @@
+import { useRef } from "react"
+
 /**
  * Rows of records: a table when there is room, a stack of cards when there isn't (phones, narrow
  * panels). Room is measured on the table's own container, not the window, so a half width
@@ -6,9 +8,18 @@
  *  The primary column is the card's title on phones; the "actions" key sits at the card's foot
  * @param {object[]} items the records
  * @param {function} rowKey picks a record's key, its id by default
+ * @param {any} highlightKey the key of a record to pick out and scroll to, like one a notification links to
  */
-export default function DataTable({ columns, items, rowKey = item => item.id }) {
+export default function DataTable({ columns, items, rowKey = item => item.id, highlightKey = null }) {
+    const scrolledTo = useRef(null)
     const cell = (col, item) => col.render ? col.render(item[col.key], item) : item[col.key]
+    const highlighted = item => highlightKey != null && rowKey(item) === highlightKey
+    // the table row and the card are both rendered, only the one on screen is scrolled to, once
+    const scrollTo = el => {
+        if (!el || el.offsetParent === null || scrolledTo.current === highlightKey) return
+        scrolledTo.current = highlightKey
+        el.scrollIntoView({ block: "center", behavior: "smooth" })
+    }
     const primary = columns.find(col => col.primary) ?? columns[0]
     const actions = columns.find(col => col.key === "actions")
     const details = columns.filter(col => col !== primary && col !== actions && !col.hideOnMobile)
@@ -24,7 +35,8 @@ export default function DataTable({ columns, items, rowKey = item => item.id }) 
             </thead>
             <tbody>
                 {items.map(item => (
-                    <tr key={rowKey(item)} className="group border-t border-white/5 transition-colors hover:bg-white/[0.03]">
+                    <tr key={rowKey(item)} ref={highlighted(item) ? scrollTo : undefined}
+                        className={`group border-t border-white/5 transition-colors hover:bg-white/[0.03] ${highlighted(item) ? "bg-primary/8 outline-2 -outline-offset-2 outline-primary/60" : ""}`}>
                         {columns.map(col => (
                             <td key={col.key} className={`px-3 py-3 align-middle ${col.key === "actions" ? "text-right" : ""} ${col.className ?? ""}`}>
                                 {cell(col, item)}
@@ -38,7 +50,8 @@ export default function DataTable({ columns, items, rowKey = item => item.id }) 
 
         <ul className="@2xl:hidden flex flex-col gap-2">
             {items.map(item => (
-                <li key={rowKey(item)} className="rounded-field bg-white/[0.03] ring-1 ring-white/5 p-3.5 flex flex-col gap-2.5">
+                <li key={rowKey(item)} ref={highlighted(item) ? scrollTo : undefined}
+                    className={`rounded-field p-3.5 flex flex-col gap-2.5 ring-1 ${highlighted(item) ? "bg-primary/8 ring-primary/60" : "bg-white/[0.03] ring-white/5"}`}>
                     <div className="font-medium min-w-0">{cell(primary, item)}</div>
                     {details.length > 0 && <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
                         {details.map(col => <div key={col.key} className="contents">

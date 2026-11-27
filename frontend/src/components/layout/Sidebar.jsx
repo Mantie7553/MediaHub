@@ -3,6 +3,8 @@ import { LogOut, PanelLeftClose, PanelLeftOpen } from "lucide-react"
 import { getRole, logout } from "../../utils/auth"
 import useMe from "../../hooks/useMe"
 import useSidebarStore from "../../stores/useSidebarStore"
+import useNotificationStore from "../../stores/useNotificationStore"
+import { badgeCount } from "../../utils/notifications"
 import Logo from "./Logo"
 import RailTooltip from "./RailTooltip"
 import navItems from "./navItems"
@@ -89,17 +91,20 @@ export function Avatar({ name, className = "size-9 text-sm" }) {
  * @param icon a lucide icon component
  * @param collapsed the sidebar is an icon rail, the title shows as a tooltip
  * @param isActive optional (pathname) => whether to highlight it, instead of matching the path
+ * @param badge "notifications" shows the unread count beside it, a dot in the icon rail
  * @returns a NavLink to some page
  */
-function NavItem({path, title, icon: Icon, collapsed, isActive: matches}) {
+function NavItem({path, title, icon: Icon, collapsed, isActive: matches, badge}) {
     const { pathname } = useLocation();
+    const unread = useNotificationStore(state => state.unread);
+    const count = badge === "notifications" ? unread : 0;
     const lit = navActive => matches ? matches(pathname) : navActive;
     return (
         <RailTooltip label={title} enabled={collapsed}>
             <NavLink
                 to={path}
                 end={path === "/"}
-                aria-label={title}
+                aria-label={count > 0 ? `${title}, ${count} unread` : title}
                 // closes the mobile drawer after picking a page
                 onClick={() => { const toggle = document.getElementById("my-drawer-3"); if (toggle) toggle.checked = false; }}
                 className={({ isActive: navActive }) => { const isActive = lit(navActive); return [
@@ -112,8 +117,14 @@ function NavItem({path, title, icon: Icon, collapsed, isActive: matches}) {
             >
                 {({ isActive: navActive }) => { const isActive = lit(navActive); return <>
                     {isActive && <span className="absolute -left-3 top-2 bottom-2 w-[3px] rounded-r-full bg-primary shadow-[0_0_12px_2px_rgb(242_89_18/0.6)]"></span>}
-                    <Icon size={19} strokeWidth={isActive ? 2.25 : 1.75} className="shrink-0"/>
+                    <span className="relative shrink-0">
+                        <Icon size={19} strokeWidth={isActive ? 2.25 : 1.75}/>
+                        {count > 0 && collapsed && <span className="hidden lg:block absolute -top-0.5 -right-0.5 size-2 rounded-full bg-primary ring-2 ring-base-200"></span>}
+                    </span>
                     <span className={collapsed ? "lg:hidden" : ""}>{title}</span>
+                    {count > 0 && <span className={`ml-auto min-w-5 h-5 px-1.5 rounded-full bg-primary text-primary-content text-[11px] font-semibold grid place-items-center tabular-nums ${collapsed ? "lg:hidden" : ""}`}>
+                        {badgeCount(count)}
+                    </span>}
                 </> }}
             </NavLink>
         </RailTooltip>

@@ -1,11 +1,13 @@
 import { isHomePath } from "../../utils/homePages"
-import { BarChart3, Compass, Download, LayoutDashboard, Settings, Users } from "lucide-react"
+import { BarChart3, Bell, Compass, Download, LayoutDashboard, Settings, Users } from "lucide-react"
 
 /**
  * The app's main pages, shared by the desktop sidebar and the mobile tab bar
  * @param {string} role the user's role, admins get the admin pages too
- * @returns { path, title, short, icon, group, isActive? } where group is "main", "admin" or "footer".
- *  isActive(pathname), when given, decides when the item is highlighted instead of the path
+ * @returns { path, title, short, icon, group, isActive?, badge?, mobile? } where group is "main", "admin"
+ *  or "footer". isActive(pathname), when given, decides when the item is highlighted instead of the
+ *  path. badge "notifications" shows the unread count beside it. mobile false keeps it off the
+ *  phone tab bar (the bell sits in the top bar there)
  */
 export default function navItems(role) {
     return [
@@ -16,6 +18,7 @@ export default function navItems(role) {
             { path: "/downloads", title: "Downloads", short: "Downloads", icon: Download, group: "admin" },
             { path: "/users", title: "Users", short: "Users", icon: Users, group: "admin" },
             { path: "/insights", title: "Insights", short: "Insights", icon: BarChart3, group: "admin" },
+            { path: "/notifications", title: "Notifications", short: "Alerts", icon: Bell, group: "admin", badge: "notifications", mobile: false },
         ] : []),
         { path: "/settings", title: "Settings", short: "Settings", icon: Settings, group: "footer" },
     ]

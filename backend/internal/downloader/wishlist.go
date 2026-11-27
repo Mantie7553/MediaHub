@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 
+	"github.com/Mantie7553/MediaHub/backend/internal/notify"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/logger"
 )
 
@@ -37,21 +38,35 @@ func ByHand(mediaType string) bool {
 /*
 Function:	CompleteByHand
 Purpose:	mark the approved requests for a title an admin downloads by hand complete, once it has
-files. Call after volumes are added
+files, and mark their notifications read. Call after volumes are added
 Params:
   - db: the database
   - mediaItemID: the title
 */
 func CompleteByHand(db *sql.DB, mediaItemID string) {
-	if _, err := db.Exec(
+	rows, err := db.Query(
 		`UPDATE download_requests r SET status = 'complete', resolved_at = COALESCE(r.resolved_at, NOW())
 		FROM media_items mi
 		WHERE r.media_item_id = $1 AND mi.id = r.media_item_id AND r.status = 'approved'
 			AND mi.type = 'light_novel'
-			AND EXISTS (SELECT 1 FROM light_novel_volumes WHERE media_item_id = mi.id)`,
+			AND EXISTS (SELECT 1 FROM light_novel_volumes WHERE media_item_id = mi.id)
+		RETURNING r.id`,
 		mediaItemID,
-	); err != nil {
+	)
+	if err != nil {
 		logger.Warn("completing requests for %s: %s", mediaItemID, err.Error())
+		return
+	}
+	var ids []string
+	for rows.Next() {
+		var id string
+		if rows.Scan(&id) == nil {
+			ids = append(ids, id)
+		}
+	}
+	rows.Close()
+	for _, id := range ids {
+		notify.Resolve(db, notify.RequestKey(id))
 	}
 }
 
@@ -185,9 +200,11 @@ func RequestWishlisted(db *sql.DB, userID, mediaItemID string) (WishlistOutcome,
 	}
 
 	if !autoApproved {
+		notify.RequestPending(db, requestID)
 		return WishlistOutcome{Download: WishlistPending}, nil
 	}
 	if ByHand(f.mediaType) {
+		notify.ByHand(db, requestID)
 		return WishlistOutcome{Download: WishlistByHand}, nil
 	}
 	go func() {

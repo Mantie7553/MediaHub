@@ -381,12 +381,13 @@ def check_quality_profile(api):
         log(f"  warning: {api.name} has no quality profile with id 1, MediaHub requests will fail")
 
 
-# the events each app sends MediaHub's webhook: new and renamed files sync the title, deleted
-# files and titles clear its files. A file deleted for an upgrade is followed by its Download
+# the events each app sends MediaHub's webhook: a grab tells the admins it's downloading, new
+# and renamed files sync the title, deleted files and titles clear its files. A file deleted
+# for an upgrade is followed by its Download
 WEBHOOK_EVENTS = {
-    "Sonarr": {"onDownload": True, "onUpgrade": True, "onRename": True, "onSeriesDelete": True,
+    "Sonarr": {"onGrab": True, "onDownload": True, "onUpgrade": True, "onRename": True, "onSeriesDelete": True,
                "onEpisodeFileDelete": True, "onEpisodeFileDeleteForUpgrade": False},
-    "Radarr": {"onDownload": True, "onUpgrade": True, "onRename": True, "onMovieDelete": True,
+    "Radarr": {"onGrab": True, "onDownload": True, "onUpgrade": True, "onRename": True, "onMovieDelete": True,
                "onMovieFileDelete": True, "onMovieFileDeleteForUpgrade": False},
 }
 

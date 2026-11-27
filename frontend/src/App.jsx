@@ -18,6 +18,7 @@ import {
 import { LightNovelReader, MangaReader, PlayerPage } from './pages/viewer'
 import UserManagementPage from './pages/management/UserManagementPage'
 import InsightsPage from './pages/insights/InsightsPage'
+import NotificationsPage from './pages/notifications/NotificationsPage'
 import AudioPlayer from './pages/viewer/AudioPlayer'
 import Toaster from './components/Toaster'
 import RatingPrompt from './components/RatingPrompt'
@@ -55,6 +56,7 @@ function App() {
           <Route path="/downloads" element={<DownloadsPage />} />
           <Route path='/users' element={<UserManagementPage/>} />
           <Route path='/insights' element={<InsightsPage/>} />
+          <Route path='/notifications' element={<NotificationsPage/>} />
           <Route path="/discover" element={<Discover />} />
           <Route path="/settings" element={<SettingsPage/>} />
           <Route path="/anime/:id" element={<AnimeDetailsPage/>} />

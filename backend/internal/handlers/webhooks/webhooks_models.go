@@ -1,7 +1,7 @@
 package webhooks
 
-// the fields MediaHub reads of Sonarr's webhook events (Download, Rename, EpisodeFileDelete,
-// SeriesDelete, Test, ...)
+// the fields MediaHub reads of Sonarr's webhook events (Grab, Download, Rename,
+// EpisodeFileDelete, SeriesDelete, Test, ...)
 type sonarrPayload struct {
 	EventType    string          `json:"eventType"`
 	Series       sonarrSeries    `json:"series"`
@@ -10,15 +10,18 @@ type sonarrPayload struct {
 }
 
 type sonarrSeries struct {
-	ID int `json:"id"`
+	ID    int    `json:"id"`
+	Title string `json:"title"`
 }
 
 type sonarrEpisode struct {
-	ID int `json:"id"`
+	ID            int `json:"id"`
+	SeasonNumber  int `json:"seasonNumber"`
+	EpisodeNumber int `json:"episodeNumber"`
 }
 
-// the fields MediaHub reads of Radarr's webhook events (Download, Rename, MovieFileDelete,
-// MovieDelete, Test, ...)
+// the fields MediaHub reads of Radarr's webhook events (Grab, Download, Rename,
+// MovieFileDelete, MovieDelete, Test, ...)
 type radarrPayload struct {
 	EventType    string      `json:"eventType"`
 	Movie        radarrMovie `json:"movie"`
@@ -26,5 +29,6 @@ type radarrPayload struct {
 }
 
 type radarrMovie struct {
-	ID int `json:"id"`
+	ID    int    `json:"id"`
+	Title string `json:"title"`
 }
