@@ -383,6 +383,7 @@ func (h *Handler) Save(w http.ResponseWriter, r *http.Request) {
 
 	// wishlisting is kept apart from the list (it never sets a status) and is what asks for
 	// the title to be downloaded; tracking a title on the list never does
+	var wishlisted *downloader.WishlistOutcome
 	if req.Action == "wishlist" {
 		if _, err := h.db.Exec(
 			`INSERT INTO user_wishlist (user_id, media_item_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
@@ -390,11 +391,12 @@ func (h *Handler) Save(w http.ResponseWriter, r *http.Request) {
 		); utils.InternalError(w, err) {
 			return
 		}
-		go func(userID string) {
-			if err := downloader.RequestWishlisted(h.db, userID, mediaItemID); err != nil {
-				logger.Error("download request for wishlisted %s failed: %s", mediaItemID, err.Error())
-			}
-		}(user.UserID)
+		// the title is on the wishlist whether the request works or not, so a failure is only logged
+		outcome, err := downloader.RequestWishlisted(h.db, user.UserID, mediaItemID)
+		if err != nil {
+			logger.Error("download request for wishlisted %s failed: %s", mediaItemID, err.Error())
+		}
+		wishlisted = &outcome
 	}
 
 	// create a download request when asked outright (music from Discover). "both" is a list
@@ -437,6 +439,11 @@ func (h *Handler) Save(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// a wishlist save also says what happened about the download
+	if wishlisted != nil {
+		utils.JSON(w, map[string]string{"id": mediaItemID, "download": wishlisted.Download, "reason": wishlisted.Reason}, http.StatusCreated)
+		return
+	}
 	utils.JSON(w, map[string]string{"id": mediaItemID}, http.StatusCreated)
 }
 
