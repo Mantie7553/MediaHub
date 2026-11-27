@@ -12,6 +12,7 @@ import (
 
 	"github.com/Mantie7553/MediaHub/backend/internal/clients/ytdlp"
 	"github.com/Mantie7553/MediaHub/backend/internal/musicfiles"
+	"github.com/Mantie7553/MediaHub/backend/internal/notify"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/logger"
 )
 
@@ -37,6 +38,7 @@ func Run(db *sql.DB, jobID string, mediaItemID string) {
 		markFailed(db, jobID, err.Error())
 		return
 	}
+	notify.JobDownloading(db, jobID)
 
 	// 2. Get artist and album from music_metadata
 	var artist, album string
@@ -258,9 +260,14 @@ func ytdlpArgs(outputTemplate, printFile, cookiesFile, sourceURL string) []strin
 	return append(args, "--", sourceURL)
 }
 
+/*
+Function: markFailed
+Purpose: mark a job failed with why, and tell the admins
+*/
 func markFailed(db *sql.DB, jobID string, message string) {
 	logger.Error("JOB-%s failed: %s", jobID, message)
 	db.Exec(`UPDATE download_jobs 
         SET status = 'failed', error_message = $1, completed_at = NOW()
         WHERE id = $2`, message, jobID)
+	notify.JobFailed(db, jobID, message)
 }

@@ -25,7 +25,8 @@ func TestActionFor(t *testing.T) {
 		// a MediaHub request linking the series and create the title twice
 		{"SeriesAdd", "", ignore},
 		{"MovieAdded", "", ignore},
-		{"Grab", "", ignore},
+		// the admins are told it's downloading
+		{"Grab", "", notifyGrab},
 		{"Test", "", ignore},
 	}
 	for _, tt := range tests {
@@ -61,5 +62,17 @@ func TestDownloadSyncsTheItem(t *testing.T) {
 	}
 	if len(f.series) != 1 || f.series[0] != 12 || len(f.movies) != 1 || f.movies[0] != 7 {
 		t.Errorf("synced series %v, movies %v; want [12], [7]", f.series, f.movies)
+	}
+}
+
+func TestGrabSummary(t *testing.T) {
+	if got := grabSummary(nil); got != "Grabbed by Sonarr" {
+		t.Errorf("none: %q", got)
+	}
+	if got := grabSummary([]sonarrEpisode{{SeasonNumber: 1, EpisodeNumber: 5}}); got != "S01E05 grabbed by Sonarr" {
+		t.Errorf("one: %q", got)
+	}
+	if got := grabSummary(make([]sonarrEpisode, 3)); got != "3 episodes grabbed by Sonarr" {
+		t.Errorf("several: %q", got)
 	}
 }

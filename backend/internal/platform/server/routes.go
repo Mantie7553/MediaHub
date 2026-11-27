@@ -21,6 +21,7 @@ import (
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/manga"
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/media"
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/music"
+	"github.com/Mantie7553/MediaHub/backend/internal/handlers/notifications"
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/requests"
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/search"
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/stream"
@@ -41,6 +42,7 @@ type Server struct {
 	sync     *sync.Handler
 	search   *search.Handler
 	insights *insights.Handler
+	notes    *notifications.Handler
 }
 
 func New(db *sql.DB) *Server {
@@ -68,6 +70,7 @@ func (s *Server) StartBackgroundJobs() {
 	s.sync.StartSchedule()
 	s.search.WarmDiscovery()
 	s.insights.StartDailySnapshots()
+	s.notes.StartPruning()
 	go func() {
 		saved, failed, err := covers.LocalizeAll(context.Background(), s.db)
 		if err != nil {
@@ -131,6 +134,8 @@ func (s *Server) routes() {
 	usersHandler := users.NewHandler(s.db)
 	insightsHandler := insights.NewHandler(s.db)
 	s.insights = insightsHandler
+	notificationsHandler := notifications.NewHandler(s.db)
+	s.notes = notificationsHandler
 
 	s.router.Use(secureHeaders)
 	s.router.Use(limitBody)
@@ -285,6 +290,12 @@ func (s *Server) routes() {
 
 			// Job Handler endpoints
 			r.Get("/me/jobs", jobsHandler.GetMine)
+
+			// the user's notifications (only admins get any for now)
+			r.Get("/me/notifications", notificationsHandler.List)
+			r.Get("/me/notifications/unread-count", notificationsHandler.UnreadCount)
+			r.Put("/me/notifications/{id}/read", notificationsHandler.MarkRead)
+			r.Post("/me/notifications/read-all", notificationsHandler.MarkAllRead)
 
 			// Search Handler endpoints
 			r.Get("/search", searchHandler.Search)

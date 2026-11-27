@@ -7,6 +7,7 @@ import (
 
 	"github.com/Mantie7553/MediaHub/backend/internal/clients/ytdlp"
 	"github.com/Mantie7553/MediaHub/backend/internal/downloader"
+	"github.com/Mantie7553/MediaHub/backend/internal/notify"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/archive"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/auth"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/logger"
@@ -95,14 +96,18 @@ func (h *Handler) Add(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if autoApproved {
+	if !autoApproved {
+		notify.RequestPending(h.db, requestId)
+	} else {
 		var mediaType string
 		var externalID *string
 		err = h.db.QueryRow(
 			`SELECT type, external_id FROM media_items WHERE id = $1`,
 			req.MediaItemId,
 		).Scan(&mediaType, &externalID)
-		if err == nil {
+		if err == nil && downloader.ByHand(mediaType) {
+			notify.ByHand(h.db, requestId)
+		} else if err == nil {
 			if _, err := downloader.Dispatch(
 				h.db, requestId, req.MediaItemId, req.SourceUrl, mediaType, externalID,
 			); err != nil {
@@ -246,6 +251,8 @@ func (h *Handler) Approve(w http.ResponseWriter, r *http.Request) {
 	if utils.InternalError(w, err) {
 		return
 	}
+	// whoever approved it, no admin needs to any more
+	notify.Resolve(h.db, notify.RequestKey(requestThingId))
 
 	// get the external id for the media item
 	var mediaType string
@@ -313,6 +320,7 @@ func (h *Handler) Reject(w http.ResponseWriter, r *http.Request) {
 	if utils.InternalError(w, err) {
 		return
 	}
+	notify.Resolve(h.db, notify.RequestKey(requestThingId))
 
 	// return the  request id from the database
 	utils.JSON(w, map[string]string{"id": requestThingId})

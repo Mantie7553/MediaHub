@@ -1,5 +1,6 @@
 import PageHeader from "../../components/layout/PageHeader"
 import { useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Check, Download, Inbox, X } from "lucide-react";
 import useJobs from "../../hooks/useJobs";
 import { useAdminRequests } from "../../hooks"
@@ -23,10 +24,14 @@ const jobStatuses = ["queued", "downloading", "complete", "failed"];
 const requestTitle = item => item.media_title || item.title_override || "Unknown";
 
 /**
- * Downloads and requests page layout
+ * Downloads and requests page layout. ?request=<id> or ?job=<id>, from a notification, picks
+ * that record out
  * @returns
  */
 export default function DownloadsPage() {
+    const [params] = useSearchParams();
+    const linkedRequest = params.get("request");
+    const linkedJob = params.get("job");
     const [requestsArchived, setRequestsArchivedView] = useState(false);
     const [jobsArchived, setJobsArchivedView] = useState(false);
     const { requests, loading: rLoading, error: rError, refetch: refetchRequests } = useAdminRequests(requestsArchived)
@@ -100,6 +105,7 @@ export default function DownloadsPage() {
                 statuses={requestStatuses}
                 titleOf={requestTitle}
                 onArchive={archiveRequests}
+                highlightId={linkedRequest}
                 empty={{ icon: Inbox, title: "No requests yet", hint: "Requests people make from Discover show up here for approval." }}
                     columns={[
                         { key: "media_title", header: "Title", primary: true, render: (_, item) => <div className="min-w-0">
@@ -148,6 +154,7 @@ export default function DownloadsPage() {
                 statuses={jobStatuses}
                 titleOf={job => job.media_title}
                 onArchive={archiveJobs}
+                highlightId={linkedJob}
                 rowKey={job => job.id ?? `${job.media_title}-${job.handler}`}
                 empty={{ icon: Download, title: "No downloads running", hint: "Approved requests appear here while they download." }}
                     columns={[
