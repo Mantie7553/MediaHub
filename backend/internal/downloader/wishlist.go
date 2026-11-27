@@ -9,17 +9,50 @@ import (
 
 /*
 Function:	WishlistDownloads
-Purpose:	whether putting a title of this type on a wishlist downloads it. Light novels have no
-downloader and music is requested from Discover, so for them the wishlist is only a list
+Purpose:	whether putting a title of this type on a wishlist asks for it to be downloaded.
+Music is requested from Discover, so for it the wishlist is only a list
 Params:
   - mediaType: the title's type
 */
 func WishlistDownloads(mediaType string) bool {
 	switch mediaType {
-	case "anime", "movie", "manga":
+	case "anime", "movie", "manga", "light_novel":
 		return true
 	}
 	return false
+}
+
+/*
+Function:	ByHand
+Purpose:	whether an admin downloads titles of this type themselves. Light novels come from a
+site behind Cloudflare's browser check, so the server can't fetch them: their requests are
+approved like any other, start no job, and are complete once volumes are added
+Params:
+  - mediaType: the title's type
+*/
+func ByHand(mediaType string) bool {
+	return mediaType == "light_novel"
+}
+
+/*
+Function:	CompleteByHand
+Purpose:	mark the approved requests for a title an admin downloads by hand complete, once it has
+files. Call after volumes are added
+Params:
+  - db: the database
+  - mediaItemID: the title
+*/
+func CompleteByHand(db *sql.DB, mediaItemID string) {
+	if _, err := db.Exec(
+		`UPDATE download_requests r SET status = 'complete', resolved_at = COALESCE(r.resolved_at, NOW())
+		FROM media_items mi
+		WHERE r.media_item_id = $1 AND mi.id = r.media_item_id AND r.status = 'approved'
+			AND mi.type = 'light_novel'
+			AND EXISTS (SELECT 1 FROM light_novel_volumes WHERE media_item_id = mi.id)`,
+		mediaItemID,
+	); err != nil {
+		logger.Warn("completing requests for %s: %s", mediaItemID, err.Error())
+	}
 }
 
 // what wishlisting a title did about downloading it, sent back so the user is told
@@ -38,6 +71,8 @@ const (
 	WishlistRejected = "rejected"
 	// the wishlist doesn't download titles of this type
 	WishlistNotDownloadable = "not_downloadable"
+	// a request was made and approved, and an admin downloads it by hand (ByHand)
+	WishlistByHand = "by_hand"
 )
 
 // WishlistOutcome is what wishlisting a title did about downloading it
@@ -101,7 +136,8 @@ func RequestWishlisted(db *sql.DB, userID, mediaItemID string) (WishlistOutcome,
 			EXISTS (SELECT 1 FROM sonarr_items WHERE media_item_id = mi.id)
 			OR EXISTS (SELECT 1 FROM radarr_items WHERE media_item_id = mi.id)
 			OR EXISTS (SELECT 1 FROM suwayomi_items WHERE media_item_id = mi.id)
-			OR EXISTS (SELECT 1 FROM manga_chapters WHERE media_item_id = mi.id AND file_path IS NOT NULL),
+			OR EXISTS (SELECT 1 FROM manga_chapters WHERE media_item_id = mi.id AND file_path IS NOT NULL)
+			OR EXISTS (SELECT 1 FROM light_novel_volumes WHERE media_item_id = mi.id),
 			EXISTS (SELECT 1 FROM download_requests WHERE media_item_id = mi.id AND status <> 'rejected'),
 			j.status::text, j.error_message
 		FROM media_items mi
@@ -150,6 +186,9 @@ func RequestWishlisted(db *sql.DB, userID, mediaItemID string) (WishlistOutcome,
 
 	if !autoApproved {
 		return WishlistOutcome{Download: WishlistPending}, nil
+	}
+	if ByHand(f.mediaType) {
+		return WishlistOutcome{Download: WishlistByHand}, nil
 	}
 	go func() {
 		if _, err := Dispatch(db, requestID, mediaItemID, "", f.mediaType, externalID); err != nil {

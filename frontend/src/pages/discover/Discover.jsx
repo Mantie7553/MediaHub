@@ -25,8 +25,8 @@ const tabs = [
     { key: "manga", type: "manga", label: "Manga", icon: BookOpen, noun: "manga" },
     { key: "movie", type: "movie", label: "Movies", icon: Film, noun: "movies" },
     { key: "music", type: "music_track", label: "Music", icon: Music, noun: "music" },
-    // nothing to search online: light novels come from the server's library folder
-    { key: "light_novel", type: "light_novel", label: "Light Novels", icon: BookText, noun: "light novels", libraryOnly: true },
+    // found on AniList; their files are downloaded by hand (see utils/novelSource)
+    { key: "light_novel", type: "light_novel", label: "Light Novels", icon: BookText, noun: "light novels" },
 ];
 const TAB_STORAGE_KEY = "discover_tab";
 
@@ -43,7 +43,7 @@ export default function Discover() {
     const activeTab = tab.type;
     const [query, setQuery] = useState("");
     const isMusic = activeTab === "music_track";
-    const sections = useApi(isMusic || tab.libraryOnly ? null : `/search?type=${activeTab}`, { initial: emptySections });
+    const sections = useApi(isMusic ? null : `/search?type=${activeTab}`, { initial: emptySections });
     const library = useApi(isMusic ? null : `/media?available=true&type=${activeTab}`, { initial: [] });
     // the finished search: its query, results and error. null when not searching
     const [search, setSearch] = useState(null);
@@ -85,8 +85,7 @@ export default function Discover() {
         </section>
     ) : (
         <ContentList items={library.data} heading="Available Now" userContentMap={userContentMap} onListChange={refresh}
-            loading={library.loading} expandKey={`discover:${tabKey}:available`} sortOptions={librarySorts(activeTab)} emptyText="Nothing downloaded yet"
-            emptyHint={tab.libraryOnly ? "Light novels show up here once they're added to the server's library folder." : undefined} />
+            loading={library.loading} expandKey={`discover:${tabKey}:available`} sortOptions={librarySorts(activeTab)} emptyText="Nothing downloaded yet" />
     );
 
     return <div className="flex flex-col gap-10">
@@ -97,8 +96,6 @@ export default function Discover() {
 
         {activeTab === "music_track" ? (
             <MusicDiscover onListChange={refresh}/>
-        ) : tab.libraryOnly ? (
-            availableNow
         ) : (
             <>
                 {availableNow}

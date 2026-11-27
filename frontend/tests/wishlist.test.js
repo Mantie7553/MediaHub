@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { wishlistKeys, wishlistMessage, wishlistedId } from "../src/utils/wishlist"
+import { WISHLIST_TYPES, wishlistKeys, wishlistMessage, wishlistedId } from "../src/utils/wishlist"
 
 const keys = wishlistKeys([
     { media_item_id: "m1", external_source: "anilist", external_id: "123" },
@@ -45,5 +45,10 @@ describe("telling the user what wishlisting did", () => {
     it("falls back to a plain message for an answer it doesn't know", () => {
         expect(wishlistMessage({})).toEqual({ type: "success", message: "Added to your wishlist" })
         expect(wishlistMessage(undefined)).toEqual({ type: "success", message: "Added to your wishlist" })
+    })
+
+    it("says an admin adds a light novel requested by someone allowed to download", () => {
+        expect(WISHLIST_TYPES).toContain("light_novel")
+        expect(wishlistMessage({ download: "by_hand" })).toEqual({ type: "success", message: "Added to your wishlist, an admin will add it" })
     })
 })

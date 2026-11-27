@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/Mantie7553/MediaHub/backend/internal/downloader"
 	"github.com/Mantie7553/MediaHub/backend/internal/tracking"
 	"net/http"
 	"os"
@@ -262,6 +263,7 @@ func (h *Handler) AddVolume(w http.ResponseWriter, r *http.Request) {
 	}
 	added = true
 	tracking.PartsAdded(h.db, id)
+	downloader.CompleteByHand(h.db, id)
 
 	if req.VolumeNumber == 1 {
 		if cover, err := novelfiles.CoverHref(dest); err == nil && cover != "" {

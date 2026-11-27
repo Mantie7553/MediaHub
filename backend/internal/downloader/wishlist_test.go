@@ -5,8 +5,10 @@ import "testing"
 func TestWishlistDownloads(t *testing.T) {
 	for typ, want := range map[string]bool{
 		"anime": true, "movie": true, "manga": true,
-		// no downloader of their own (light novels) or requested from Discover (music)
-		"light_novel": false, "music_track": false, "music_album": false, "": false,
+		// requested, then downloaded by an admin
+		"light_novel": true,
+		// requested from Discover
+		"music_track": false, "music_album": false, "": false,
 	} {
 		if got := WishlistDownloads(typ); got != want {
 			t.Errorf("WishlistDownloads(%q) = %v, want %v", typ, got, want)
@@ -22,6 +24,8 @@ func TestExistingOutcome(t *testing.T) {
 		done  bool
 	}{
 		{"new manga", wishlistFacts{mediaType: "manga"}, WishlistOutcome{}, false},
+		{"new light novel", wishlistFacts{mediaType: "light_novel"}, WishlistOutcome{}, false},
+		{"light novel with volumes", wishlistFacts{mediaType: "light_novel", have: true}, WishlistOutcome{Download: WishlistHave}, true},
 		{"music isn't downloaded", wishlistFacts{mediaType: "music_track"}, WishlistOutcome{Download: WishlistNotDownloadable}, true},
 		{"already in the library", wishlistFacts{mediaType: "anime", have: true, requested: true}, WishlistOutcome{Download: WishlistHave}, true},
 		{"requested, still going", wishlistFacts{mediaType: "movie", requested: true, lastJobStatus: "downloading"}, WishlistOutcome{Download: WishlistAlreadyRequested}, true},
@@ -35,6 +39,17 @@ func TestExistingOutcome(t *testing.T) {
 		got, done := existingOutcome(c.facts)
 		if got != c.want || done != c.done {
 			t.Errorf("%s: existingOutcome = %+v, %v, want %+v, %v", c.name, got, done, c.want, c.done)
+		}
+	}
+}
+
+func TestByHand(t *testing.T) {
+	if !ByHand("light_novel") {
+		t.Error("light novels are downloaded by an admin")
+	}
+	for _, typ := range []string{"anime", "movie", "manga", "music_track"} {
+		if ByHand(typ) {
+			t.Errorf("ByHand(%q) = true, want a download job", typ)
 		}
 	}
 }

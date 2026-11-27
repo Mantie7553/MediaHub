@@ -184,3 +184,24 @@ func TestLoadAnimeDiscoveryKeepsEarlierPagesWhenALaterOneFails(t *testing.T) {
 		t.Errorf("got %v, %v; want the first page", got.TopRated, err)
 	}
 }
+
+func TestLightNovelsSearchAnilistNovels(t *testing.T) {
+	if anilistType("light_novel") != "MANGA" || anilistFormat("light_novel") != "NOVEL" {
+		t.Errorf("light novels = %s %s, want MANGA NOVEL", anilistType("light_novel"), anilistFormat("light_novel"))
+	}
+	if anilistType("movie") != "ANIME" || anilistFormat("movie") != "MOVIE" || anilistFormat("anime") != "TV" {
+		t.Error("anime and movies should keep their AniList type and format")
+	}
+}
+
+func TestFromAnilistCountsLightNovelVolumes(t *testing.T) {
+	volumes, episodes := 26, 12
+	m := anilist.Media{ID: 1, Volumes: &volumes, Episodes: &episodes}
+
+	if got := fromAnilist([]anilist.Media{m}, "light_novel")[0].TotalParts; got == nil || *got != volumes {
+		t.Errorf("light novel parts = %v, want %d volumes", got, volumes)
+	}
+	if got := fromAnilist([]anilist.Media{m}, "anime")[0].TotalParts; got == nil || *got != episodes {
+		t.Errorf("anime parts = %v, want %d episodes", got, episodes)
+	}
+}

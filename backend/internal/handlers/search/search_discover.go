@@ -16,7 +16,7 @@ import (
 )
 
 // the media types Discover lists, as the API names them
-var discoverTypes = []string{"anime", "movie", "manga"}
+var discoverTypes = []string{"anime", "movie", "manga", "light_novel"}
 
 // Discover's Trending, Popular and Top Rated (Latest Updates for manga) lists
 type discoveryResponse struct {
@@ -66,7 +66,7 @@ func (h *Handler) Search(w http.ResponseWriter, r *http.Request) {
 		known = known || t == mediaType
 	}
 	if !known {
-		utils.Error(w, http.StatusBadRequest, "type must be anime, movie or manga")
+		utils.Error(w, http.StatusBadRequest, "type must be anime, movie, manga or light_novel")
 		return
 	}
 
@@ -128,7 +128,7 @@ func loadDiscovery(mediaType string) (discoveryResponse, error) {
 	if mediaType == "anime" {
 		return loadAnimeDiscovery(anilist.NewAnilistClient("").DiscoveryPage, arr.AnimeShows())
 	}
-	d, err := anilist.NewAnilistClient("").Discovery("ANIME", anilistFormat(mediaType), 50)
+	d, err := anilist.NewAnilistClient("").Discovery(anilistType(mediaType), anilistFormat(mediaType), 50)
 	if err != nil {
 		return discoveryResponse{}, err
 	}
@@ -188,7 +188,7 @@ func loadAnimeDiscovery(page discoveryPager, shows seriesSource) (discoveryRespo
 	return out, nil
 }
 
-// search results for a query from AniList or MangaDex
+// search results for a query from AniList (anime, movies, light novels) or MangaDex
 func loadSearch(mediaType, q string) ([]SearchResult, error) {
 	if mediaType == "manga" {
 		results, err := mangadex.NewMangaDexClient("").Search(q)
@@ -198,7 +198,7 @@ func loadSearch(mediaType, q string) ([]SearchResult, error) {
 		return fromMangaDex(results), nil
 	}
 
-	results, err := anilist.NewAnilistClient("").Search("ANIME", q, 100, anilistFormat(mediaType))
+	results, err := anilist.NewAnilistClient("").Search(anilistType(mediaType), q, 100, anilistFormat(mediaType))
 	if err != nil {
 		return nil, err
 	}
@@ -303,10 +303,21 @@ func seriesResult(r SearchResult, show arr.Show) SearchResult {
 	return r
 }
 
-// AniList's format for a media type: anime are TV series, movies are MOVIE
+// AniList's type for a media type: light novels are AniList MANGA, the rest ANIME
+func anilistType(mediaType string) string {
+	if mediaType == "light_novel" {
+		return "MANGA"
+	}
+	return "ANIME"
+}
+
+// AniList's format for a media type: anime are TV series, movies are MOVIE, light novels NOVEL
 func anilistFormat(mediaType string) string {
-	if mediaType == "movie" {
+	switch mediaType {
+	case "movie":
 		return "MOVIE"
+	case "light_novel":
+		return "NOVEL"
 	}
 	return "TV"
 }
@@ -319,13 +330,18 @@ func fromAnilist(media []anilist.Media, mediaType string) []SearchResult {
 		if title == "" {
 			title = m.Title.Romaji
 		}
+		// a light novel's parts are its volumes
+		parts := m.Episodes
+		if mediaType == "light_novel" {
+			parts = m.Volumes
+		}
 		out = append(out, SearchResult{
 			ExternalID:     strconv.Itoa(m.ID),
 			ExternalSource: "anilist",
 			Title:          title,
 			CoverImageURL:  m.CoverImage.Large,
 			Type:           mediaType,
-			TotalParts:     m.Episodes,
+			TotalParts:     parts,
 		})
 	}
 	return out

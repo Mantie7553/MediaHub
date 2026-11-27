@@ -37,7 +37,7 @@ export default function ContentList({items: given, heading, userContentMap=NO_EN
     if (loading) return <CardRowSkeleton heading={heading}/>
 
     const canExpand = items.length > ROW_LIMIT;
-    const card = (item, fluid) => <Card key={item.id} item={item} userContentMap={userContentMap} onListChange={onListChange} fluid={fluid}/>
+    const card = (item, fluid) => <Card key={item.id ?? item.external_id}item={item} userContentMap={userContentMap} onListChange={onListChange} fluid={fluid}/>
 
     return <section className="animate-fade-up">
         <SectionHeader title={heading} count={items.length} expanded={expanded}

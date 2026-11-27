@@ -176,7 +176,7 @@ func (h *Handler) GetAllAdmin(w http.ResponseWriter, r *http.Request) {
 
 	// archived requests with ?archived=true, the rest otherwise
 	queryString := `SELECT dr.id, dr.status, dr.auto_approved, dr.requested_at,
-	dr.title_override, mi.title, u.username, dr.archived_at
+	dr.title_override, mi.title, mi.type::text, u.username, dr.archived_at
 	FROM download_requests dr
 	LEFT JOIN media_items mi ON mi.id = dr.media_item_id
 	JOIN users u ON u.id = dr.requested_by
@@ -195,7 +195,7 @@ func (h *Handler) GetAllAdmin(w http.ResponseWriter, r *http.Request) {
 		var item downloadRequestResponse
 		err := rows.Scan(
 			&item.ID, &item.Status, &item.AutoApproved, &item.RequestedAt,
-			&item.TitleOverride, &item.MediaTitle, &item.RequestedBy, &item.ArchivedAt,
+			&item.TitleOverride, &item.MediaTitle, &item.MediaType, &item.RequestedBy, &item.ArchivedAt,
 		)
 
 		if utils.InternalError(w, err) {
