@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/Mantie7553/MediaHub/backend/internal/clients/anilist"
+	"github.com/Mantie7553/MediaHub/backend/internal/downloader"
 	"github.com/Mantie7553/MediaHub/backend/internal/locks"
 	"github.com/Mantie7553/MediaHub/backend/internal/mangafiles"
 	"github.com/Mantie7553/MediaHub/backend/internal/novelfiles"
@@ -251,14 +252,24 @@ func (h *Handler) syncLightNovels() error {
 				if !known {
 					continue
 				}
-			} else if mediaItemID, err = h.saveLightNovel(entry.Name(), mediaItemID, lightNovel); err != nil {
-				logger.Warn("%s", err.Error())
-				continue
+			} else {
+				if !known {
+					// saved from Discover under AniList's title, which the folder may not match
+					if mediaItemID, err = h.titleByAnilist(lightNovel.ID); err != nil {
+						logger.Warn("failed to look up light novel anilist %d for %s: %v", lightNovel.ID, entry.Name(), err)
+						continue
+					}
+				}
+				if mediaItemID, err = h.saveLightNovel(entry.Name(), mediaItemID, lightNovel); err != nil {
+					logger.Warn("%s", err.Error())
+					continue
+				}
 			}
 		}
 
 		h.addVolumes(mediaItemID, folder, files)
 		tracking.PartsAdded(h.db, mediaItemID)
+		downloader.CompleteByHand(h.db, mediaItemID)
 	}
 	return nil
 }
@@ -293,6 +304,24 @@ func (h *Handler) findLightNovel(folder string, anilistID int) (*anilist.Media, 
 		return nil, fmt.Errorf("no anilist entry %d for %s, skipping", anilistID, folder)
 	}
 	return lightNovel, nil
+}
+
+/*
+Function:	titleByAnilist
+Purpose:	the light novel already linked to an AniList entry, "" for none. A title saved from
+Discover has AniList's name, so its folder can be named otherwise
+*/
+func (h *Handler) titleByAnilist(anilistID int) (string, error) {
+	var id string
+	err := h.db.QueryRow(
+		`SELECT id FROM media_items
+		WHERE type = 'light_novel' AND external_source = 'anilist' AND external_id = $1`,
+		strconv.Itoa(anilistID),
+	).Scan(&id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	return id, err
 }
 
 /*

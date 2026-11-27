@@ -25,6 +25,12 @@ Params:
 */
 func Dispatch(db *sql.DB, requestID string, mediaItemID string,
 	sourceURL string, mediaType string, externalID *string) (string, error) {
+	// an admin downloads these themselves: nothing to start
+	if ByHand(mediaType) {
+		logger.Info("Request %s of type %s is downloaded by hand, no job started", requestID, mediaType)
+		return "", nil
+	}
+
 	mediaRoot := os.Getenv("MEDIA_ROOT")
 	var dest string
 	var handler string

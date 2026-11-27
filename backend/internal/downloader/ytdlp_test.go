@@ -85,12 +85,21 @@ func TestFailureMessageExplainsAgeRestrictions(t *testing.T) {
 
 // Exercises validation only; a refused source never reaches the database.
 func TestDispatchRefusesNonYouTubeSourcesForYtdlp(t *testing.T) {
-	for _, mediaType := range []string{"music_track", "light_novel"} {
+	// any type without a handler of its own falls through to yt-dlp
+	for _, mediaType := range []string{"music_track", "unknown_type"} {
 		for _, source := range []string{"--exec=touch /tmp/pwned", "", "http://sonarr:8989/api", "file:///etc/passwd"} {
 			_, err := Dispatch(nil, "request-1", "media-1", source, mediaType, nil)
 			if !errors.Is(err, ytdlp.ErrNotYouTubeVideo) {
 				t.Errorf("Dispatch(%s, %q) error = %v, want it refused before a job is made", mediaType, source, err)
 			}
 		}
+	}
+}
+
+// light novels are downloaded by an admin: no job, so no yt-dlp and no database
+func TestDispatchStartsNothingForLightNovels(t *testing.T) {
+	jobID, err := Dispatch(nil, "request-1", "media-1", "--exec=touch /tmp/pwned", "light_novel", nil)
+	if err != nil || jobID != "" {
+		t.Errorf("Dispatch(light_novel) = %q, %v, want no job and no error", jobID, err)
 	}
 }

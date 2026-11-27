@@ -11,6 +11,7 @@ import StatusPill from "../../components/StatusPill";
 import NoteModal from "../../components/modals/NoteModal";
 import RecordsPanel from "./RecordsPanel";
 import SubmissionsPanel from "./SubmissionsPanel";
+import NovelSiteButton from "../../components/NovelSiteButton";
 
 // pending requests first, the rest newest first
 const byPendingThenNewest = (a, b) =>
@@ -34,10 +35,17 @@ export default function DownloadsPage() {
     const [busyId, setBusyId] = useState(null);
     const modalRef = useRef(null);
 
-    function handleApprove(id) {
+    function handleApprove(item) {
+        const id = item.id
         setBusyId(id)
         approveRequest(id)
-            .then(() => { toast.success("Request approved, the download is starting"); refetchRequests(false) })
+            .then(() => {
+                // nothing downloads a light novel: the admin gets it from elscione
+                toast.success(item.media_type === "light_novel"
+                    ? "Request approved. Get it from elscione, then add its volumes"
+                    : "Request approved, the download is starting")
+                refetchRequests(false)
+            })
             .catch(err => toast.error(err, "Could not approve the request"))
             .finally(() => setBusyId(null))
     }
@@ -100,7 +108,10 @@ export default function DownloadsPage() {
                         </div> },
                         { key: "status", header: "Status", render: (val) => <StatusPill label={val} tone={statusBadge(val).replace("badge-", "")}/> },
                         { key: "requested_at", header: "Requested", render: (val) => <span className="text-base-content/60 whitespace-nowrap" title={Format.dateTime(val)}>{Format.shortDateTime(val)}</span> },
-                        { key: "actions", header: "", render: (_, item) => item.status === "pending" && (
+                        { key: "actions", header: "", render: (_, item) => item.status === "approved" && item.media_type === "light_novel" ? (
+                            // approved and waiting on an admin to download it; complete once it has volumes
+                            <NovelSiteButton title={requestTitle(item)} className="btn btn-sm btn-ghost bg-white/5 hover:bg-white/10 gap-1.5"/>
+                        ) : item.status === "pending" && (
                             <div className="inline-flex gap-1.5">
                                 {/* in the table Reject is just an X, the cards have room for the word */}
                                 <button
@@ -114,7 +125,7 @@ export default function DownloadsPage() {
                                 <button
                                     className="btn btn-sm btn-primary"
                                     disabled={busyId === item.id}
-                                    onClick={() => handleApprove(item.id)}
+                                    onClick={() => handleApprove(item)}
                                 >
                                     {busyId === item.id ? <span className="loading loading-spinner loading-xs"/> : <Check size={15}/>} Approve
                                 </button>

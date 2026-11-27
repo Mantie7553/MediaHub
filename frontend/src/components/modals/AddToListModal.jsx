@@ -5,6 +5,8 @@ import Format from "../../utils/format";
 import { hasParts, partsLabel, progressRange } from "../../utils/progress";
 import { WISHLIST_TYPES } from "../../utils/wishlist";
 import WishlistButton from "../WishlistButton";
+import NovelSiteButton from "../NovelSiteButton";
+import { userIsAdmin } from "../../utils/auth";
 
 /**
  * Add a title to the user's list or edit its entry
@@ -90,8 +92,13 @@ export default function AddToListModal({item, onConfirm, dialogRef, initialValue
                     <h4 className="text-xs font-medium text-base-content/80 uppercase tracking-wide mb-1">Download</h4>
                     {/* acts straight away, apart from Confirm; the server does nothing for a title
                         already downloaded or requested */}
-                    <WishlistButton item={item} onChange={onWishlistChange}
-                        className="btn btn-sm btn-ghost bg-white/5 hover:bg-white/10 gap-2"/>
+                    <div className="flex flex-wrap gap-2">
+                        <WishlistButton item={item} onChange={onWishlistChange}
+                            className="btn btn-sm btn-ghost bg-white/5 hover:bg-white/10 gap-2"/>
+                        {/* admins download light novels by hand from there */}
+                        {type === "light_novel" && userIsAdmin() && <NovelSiteButton title={item.title || item.media_title}
+                            className="btn btn-sm btn-ghost bg-white/5 hover:bg-white/10 gap-2"/>}
+                    </div>
                 </section>
             )}
             {showProgress && status !== "completed" && (

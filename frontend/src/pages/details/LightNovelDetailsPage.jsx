@@ -19,6 +19,8 @@ import { ActionMenu, ActionMenuItem, ListStatusMenu, SortMenu } from "../../comp
 import ItemRow, { ItemList } from "../../components/details/ItemRow";
 import EditDetailsModal from "../../components/modals/EditDetailsModal";
 import UploadFilesModal from "../../components/modals/UploadFilesModal";
+import NovelSiteButton from "../../components/NovelSiteButton";
+import WishlistButton from "../../components/WishlistButton";
 import useAdminPieces from "../../hooks/useAdminPieces";
 import useCollectionPicker from "../../hooks/useCollectionPicker";
 import { saveListEntry } from "../../services/mediaService";
@@ -135,7 +137,8 @@ export default function LightNovelDetailsPage() {
                 genres={ln.metadata.genres ?? []}
                 description={ln.description}
                 html
-                primary={volumes.length > 0 && <button className="btn btn-primary btn-lg shadow-glow px-6" onClick={() => read(nextVolume ?? volumes[0])}>
+                primary={volumes.length === 0 ? isAdmin && <NovelSiteButton title={ln.title} className="btn btn-primary btn-lg shadow-glow px-6 gap-2"/>
+                    : <button className="btn btn-primary btn-lg shadow-glow px-6" onClick={() => read(nextVolume ?? volumes[0])}>
                     <BookOpen size={18}/>
                     {nextVolume
                         ? `${nextStarted ? "Continue" : readVolumes.size > 0 ? "Read" : "Start reading"} Vol. ${nextVolume.volume_number}`
@@ -150,6 +153,8 @@ export default function LightNovelDetailsPage() {
                         onRemove={removeEntry}
                     />
                     {rating.button}
+                    {volumes.length === 0 && <WishlistButton item={{ id, type: ln.type, title: ln.title }}/>}
+                    {isAdmin && volumes.length > 0 && <NovelSiteButton title={ln.title}/>}
                     <ActionMenu>
                         <ActionMenuItem icon={ListPlus} label="Add to a collection…" onClick={() => picker.open({ id, type: ln.type, title: ln.title })}/>
                         <ActionMenuItem icon={CheckCheck} label="Mark all read" onClick={() => markAll(true)}/>
@@ -164,7 +169,9 @@ export default function LightNovelDetailsPage() {
             />
 
             {volumes.length === 0 ? (
-                <EmptyState compact title="No volumes yet" hint="Volumes show up here once they've downloaded."
+                <EmptyState compact title="No volumes yet" hint={isAdmin
+                    ? "Download its EPUBs from elscione, then add them to its Light Novels folder or upload them here."
+                    : "Wishlist it to ask an admin to add it."}
                     action={isAdmin ? { label: "Add volume files", onClick: () => uploadRef.current.showModal() } : undefined} />
             ) : (
                 <ItemList title="Volumes" actions={volumes.length > 1 &&
