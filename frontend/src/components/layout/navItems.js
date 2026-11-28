@@ -14,11 +14,11 @@ export default function navItems(role) {
         // "/" opens the user's home page, so Home is lit on every home page
         { path: "/", title: "Home", short: "Home", icon: LayoutDashboard, group: "main", isActive: isHomePath },
         { path: "/discover", title: "Discover", short: "Discover", icon: Compass, group: "main" },
+        { path: "/notifications", title: "Notifications", short: "Alerts", icon: Bell, group: "main", badge: "notifications", mobile: false },
         ...(role === "admin" ? [
             { path: "/downloads", title: "Downloads", short: "Downloads", icon: Download, group: "admin" },
             { path: "/users", title: "Users", short: "Users", icon: Users, group: "admin" },
             { path: "/insights", title: "Insights", short: "Insights", icon: BarChart3, group: "admin" },
-            { path: "/notifications", title: "Notifications", short: "Alerts", icon: Bell, group: "admin", badge: "notifications", mobile: false },
         ] : []),
         { path: "/settings", title: "Settings", short: "Settings", icon: Settings, group: "footer" },
     ]

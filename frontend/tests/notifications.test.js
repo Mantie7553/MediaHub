@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
-import { badgeCount, notificationKind, sortNotifications, visibleNotifications } from "../src/utils/notifications"
+import { badgeCount, notificationKind, notificationKinds, notificationSettings, settingsFor, sortNotifications, visibleNotifications } from "../src/utils/notifications"
+import navItems from "../src/components/layout/navItems"
 
 const items = [
     { id: "old-read", created_at: "2026-11-01T10:00:00Z", read_at: "2026-11-02T10:00:00Z" },
@@ -46,5 +47,27 @@ describe("badge count", () => {
     it("caps at 99+", () => {
         expect(badgeCount(5)).toBe("5")
         expect(badgeCount(100)).toBe("99+")
+    })
+})
+
+describe("user notifications", () => {
+    it("every kind has a look and a setting", () => {
+        for (const kind of ["request_approved", "request_rejected", "title_ready", "new_parts"]) {
+            expect(notificationKinds[kind]).toBeDefined()
+        }
+        expect(notificationSettings.map(s => s.kind).sort()).toEqual(Object.keys(notificationKinds).sort())
+    })
+
+    it("only lists the settings the server sent, in order", () => {
+        expect(settingsFor({ new_parts: false, title_ready: true }).map(s => s.kind)).toEqual(["title_ready", "new_parts"])
+        expect(settingsFor(null)).toEqual([])
+    })
+
+    it("every user has the notifications page, off the phone tab bar", () => {
+        for (const role of ["user", "admin"]) {
+            const item = navItems(role).find(i => i.path === "/notifications")
+            expect(item?.badge).toBe("notifications")
+            expect(item?.mobile).toBe(false)
+        }
     })
 })

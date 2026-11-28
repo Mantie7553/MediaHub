@@ -25,10 +25,22 @@ type Handler struct {
 	syncer Syncer
 	// runs a sync; in the background, so Sonarr / Radarr aren't kept waiting on AniList
 	run func(func())
+	// tells users new content arrived, after a Download synced it
+	arrived func(table, column string, arrID, added int)
 }
 
 func NewHandler(db *sql.DB, syncer Syncer) *Handler {
-	return &Handler{db: db, syncer: syncer, run: func(f func()) { go f() }}
+	h := &Handler{db: db, syncer: syncer, run: func(f func()) { go f() }}
+	h.arrived = h.notifyArrived
+	return h
+}
+
+/*
+Function:	newContent
+Purpose:	whether an event brings content users haven't had: a Download that isn't an upgrade
+*/
+func newContent(eventType string, isUpgrade bool) bool {
+	return eventType == "Download" && !isUpgrade
 }
 
 // what a webhook event asks MediaHub to do
@@ -90,6 +102,10 @@ func (h *Handler) SonarrWebhook(w http.ResponseWriter, r *http.Request) {
 		h.run(func() {
 			if err := h.syncer.SyncSeriesByID(seriesID); err != nil {
 				logger.Error("webhook sync of Sonarr series %d failed: %s", seriesID, err.Error())
+				return
+			}
+			if newContent(payload.EventType, payload.IsUpgrade) && h.arrived != nil {
+				h.arrived("sonarr_items", "sonarr_series_id", seriesID, max(len(payload.Episodes), 1))
 			}
 		})
 	case clearFiles:
@@ -147,6 +163,10 @@ func (h *Handler) RadarrWebhook(w http.ResponseWriter, r *http.Request) {
 		h.run(func() {
 			if err := h.syncer.SyncMovieByID(movieID); err != nil {
 				logger.Error("webhook sync of Radarr movie %d failed: %s", movieID, err.Error())
+				return
+			}
+			if newContent(payload.EventType, payload.IsUpgrade) && h.arrived != nil {
+				h.arrived("radarr_items", "radarr_movie_id", movieID, 1)
 			}
 		})
 	case clearFiles:
@@ -193,6 +213,33 @@ func (h *Handler) notifyGrabbed(table, column string, arrID int, mediaType, titl
 	}
 	key := mediaType + ":" + strconv.Itoa(arrID)
 	notify.Grabbed(h.db, mediaItemID.String, mediaType, title, "grab:"+key, body)
+}
+
+/*
+Function:	notifyArrived
+Purpose:	tell users a Sonarr series or Radarr movie got new files
+Params:
+  - table, column: where MediaHub links its titles to the app's ids, never user input
+  - arrID: the series or movie id in Sonarr / Radarr
+  - added: how many episodes arrived
+*/
+func (h *Handler) notifyArrived(table, column string, arrID, added int) {
+	rows, err := h.db.Query(`SELECT DISTINCT media_item_id::text FROM `+table+` WHERE `+column+` = $1`, arrID)
+	if err != nil {
+		logger.Warn("looking up %s %d to notify about its download: %s", column, arrID, err.Error())
+		return
+	}
+	var ids []string
+	for rows.Next() {
+		var id string
+		if rows.Scan(&id) == nil {
+			ids = append(ids, id)
+		}
+	}
+	rows.Close()
+	for _, id := range ids {
+		notify.TitleArrived(h.db, id, added)
+	}
 }
 
 /*

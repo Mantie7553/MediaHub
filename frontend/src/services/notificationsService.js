@@ -17,3 +17,20 @@ export function markNotificationRead(id, read = true) {
 export function markAllNotificationsRead() {
     return api.post('/me/notifications/read-all')
 }
+
+/**
+ * Which kinds of notification the user gets
+ * @returns the response, kind → on
+ */
+export function getNotificationPrefs() {
+    return api.get('/me/notification-prefs')
+}
+
+/**
+ * Turn kinds of notification on or off
+ * @param {Record<string, boolean>} prefs kind → on, the ones to change
+ * @returns the response, every kind → on
+ */
+export function setNotificationPrefs(prefs) {
+    return api.put('/me/notification-prefs', prefs)
+}

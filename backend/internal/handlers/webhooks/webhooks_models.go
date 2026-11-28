@@ -7,6 +7,8 @@ type sonarrPayload struct {
 	Series       sonarrSeries    `json:"series"`
 	Episodes     []sonarrEpisode `json:"episodes"`
 	DeleteReason string          `json:"deleteReason"`
+	// a Download replacing a file it already had
+	IsUpgrade bool `json:"isUpgrade"`
 }
 
 type sonarrSeries struct {
@@ -26,6 +28,8 @@ type radarrPayload struct {
 	EventType    string      `json:"eventType"`
 	Movie        radarrMovie `json:"movie"`
 	DeleteReason string      `json:"deleteReason"`
+	// a Download replacing a file it already had
+	IsUpgrade bool `json:"isUpgrade"`
 }
 
 type radarrMovie struct {

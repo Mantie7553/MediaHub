@@ -70,7 +70,7 @@ export default function NotificationsPage() {
         if (shown.length === 0) return view === "unread" && items.length > 0
             ? <EmptyState icon={CheckCheck} title="You're all caught up" hint="Nothing unread. Switch to All to see older notifications."
                 action={{ label: "Show all", onClick: () => pickView("all") }}/>
-            : <EmptyState icon={BellOff} title="No notifications yet" hint="Requests to approve, failed downloads and new downloads show up here."/>
+            : <EmptyState icon={BellOff} title="No notifications yet" hint="Your requests, and new episodes and chapters of what you follow, show up here."/>
         return <ul className="flex flex-col gap-2">
             {shown.map(item => <NotificationRow key={item.id} item={item} onOpen={open} onToggleRead={setRead}/>)}
         </ul>
