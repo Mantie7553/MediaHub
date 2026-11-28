@@ -11,6 +11,7 @@ import (
 
 	"github.com/Mantie7553/MediaHub/backend/internal/animemerge"
 	"github.com/Mantie7553/MediaHub/backend/internal/covers"
+	"github.com/Mantie7553/MediaHub/backend/internal/downloader"
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/collections"
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/curation"
 	"github.com/Mantie7553/MediaHub/backend/internal/handlers/deletion"
@@ -71,6 +72,7 @@ func (s *Server) StartBackgroundJobs() {
 	s.search.WarmDiscovery()
 	s.insights.StartDailySnapshots()
 	s.notes.StartPruning()
+	go downloader.StartStuckChecks(context.Background(), s.db)
 	go func() {
 		saved, failed, err := covers.LocalizeAll(context.Background(), s.db)
 		if err != nil {

@@ -1,7 +1,7 @@
 /*
 Package notify tells people about things that need them, in the app. Each recipient gets a
 row of their own, read once its read_at is set. Admins are told about requests to approve,
-downloads that failed and new content downloading; every user about their own requests and
+downloads that failed or are stuck and new content downloading; every user about their own requests and
 about titles they follow getting new content. Anyone can turn a kind off (notification_mutes)
 */
 package notify
@@ -9,6 +9,7 @@ package notify
 import (
 	"database/sql"
 	"slices"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -23,6 +24,7 @@ const (
 	KindDownloadFailed = "download_failed"
 	KindDownloading    = "downloading"
 	KindByHand         = "download_by_hand"
+	KindDownloadStuck  = "download_stuck"
 
 	KindRequestApproved = "request_approved"
 	KindRequestRejected = "request_rejected"
@@ -32,7 +34,7 @@ const (
 
 // AdminKinds are only sent to admins, UserKinds to anyone
 var (
-	AdminKinds = []string{KindApprovalNeeded, KindDownloadFailed, KindDownloading, KindByHand}
+	AdminKinds = []string{KindApprovalNeeded, KindDownloadFailed, KindDownloading, KindByHand, KindDownloadStuck}
 	UserKinds  = []string{KindRequestApproved, KindRequestRejected, KindTitleReady, KindNewParts}
 )
 
@@ -146,6 +148,21 @@ func PruneRead(db *sql.DB, days int) (int64, error) {
 func RequestKey(requestID string) string       { return "request:" + requestID }
 func JobKey(jobID string) string               { return "job:" + jobID }
 func DownloadingKey(mediaItemID string) string { return "downloading:" + mediaItemID }
+
+/*
+Function:	StuckKey
+Purpose:	the key of a Sonarr series' / Radarr movie's stuck downloads, one a title however
+many of its episodes are stuck
+Params:
+  - arrName: "sonarr" or "radarr"
+  - arrID: the Sonarr series / Radarr movie id
+*/
+func StuckKey(arrName string, arrID int) string {
+	return "stuck:" + arrName + ":" + strconv.Itoa(arrID)
+}
+
+// the key of a request Sonarr / Radarr hasn't found a release for
+func NoReleaseKey(requestID string) string { return "norelease:" + requestID }
 
 // the keys of what users are told: apart from the admins' so resolving those leaves them be
 func MyRequestKey(requestID string) string { return "myrequest:" + requestID }

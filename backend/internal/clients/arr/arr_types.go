@@ -59,6 +59,7 @@ type RadarrMovie struct {
 	ID              int      `json:"id"`
 	Title           string   `json:"title"`
 	HasFile         bool     `json:"hasFile"`
+	IsAvailable     bool     `json:"isAvailable"` // past its minimum availability, worth searching for
 	DigitalRelease  string   `json:"digitalRelease"`
 	PhysicalRelease string   `json:"physicalRelease"`
 	TmdbID          int      `json:"tmdbId"`

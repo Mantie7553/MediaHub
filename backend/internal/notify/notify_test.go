@@ -35,6 +35,12 @@ func TestLinksAndKeys(t *testing.T) {
 	if RequestKey("r1") == JobKey("r1") || DownloadingKey("r1") == JobKey("r1") {
 		t.Error("keys of different things must differ")
 	}
+	if got := StuckKey("sonarr", 12); got != "stuck:sonarr:12" {
+		t.Errorf("StuckKey = %q", got)
+	}
+	if StuckKey("sonarr", 12) == StuckKey("radarr", 12) || NoReleaseKey("r1") == RequestKey("r1") {
+		t.Error("stuck keys must differ by arr, and from a request's own key")
+	}
 }
 
 func TestShorten(t *testing.T) {
