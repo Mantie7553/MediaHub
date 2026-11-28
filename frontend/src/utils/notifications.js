@@ -1,4 +1,4 @@
-import { AlertTriangle, BookOpen, CheckCircle2, Download, Inbox, PlayCircle, Sparkles, XCircle } from "lucide-react"
+import { AlertTriangle, BookOpen, CheckCircle2, Download, Hourglass, Inbox, PlayCircle, Sparkles, XCircle } from "lucide-react"
 
 /**
  * How each kind of notification looks: its icon, a short label and the tone of its icon
@@ -8,6 +8,7 @@ export const notificationKinds = {
     download_failed: { icon: AlertTriangle, label: "Failed", tone: "text-error bg-error/12" },
     downloading: { icon: Download, label: "Downloading", tone: "text-info bg-info/12" },
     download_by_hand: { icon: BookOpen, label: "Download by hand", tone: "text-secondary bg-secondary/12" },
+    download_stuck: { icon: Hourglass, label: "Stuck", tone: "text-warning bg-warning/12" },
     request_approved: { icon: CheckCircle2, label: "Approved", tone: "text-success bg-success/12" },
     request_rejected: { icon: XCircle, label: "Not approved", tone: "text-error bg-error/12" },
     title_ready: { icon: PlayCircle, label: "Ready", tone: "text-primary bg-primary/12" },
@@ -27,6 +28,7 @@ export const notificationSettings = [
     { kind: "download_by_hand", title: "Downloads by hand", hint: "Light novels to fetch and add yourself." },
     { kind: "downloading", title: "Downloads started", hint: "New content started downloading." },
     { kind: "download_failed", title: "Failed downloads", hint: "A download stopped with an error." },
+    { kind: "download_stuck", title: "Stuck downloads", hint: "Sonarr or Radarr has a download stuck for over an hour, or found nothing for a request in a day." },
 ]
 
 /**
