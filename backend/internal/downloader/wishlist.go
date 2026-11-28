@@ -38,35 +38,22 @@ func ByHand(mediaType string) bool {
 /*
 Function:	CompleteByHand
 Purpose:	mark the approved requests for a title an admin downloads by hand complete, once it has
-files, and mark their notifications read. Call after volumes are added
+volumes, and tell their requesters it's ready. For the library sync, which can't tell new
+volumes apart: an upload tells everyone following the title with notify.TitleArrived instead
 Params:
   - db: the database
   - mediaItemID: the title
 */
 func CompleteByHand(db *sql.DB, mediaItemID string) {
-	rows, err := db.Query(
-		`UPDATE download_requests r SET status = 'complete', resolved_at = COALESCE(r.resolved_at, NOW())
-		FROM media_items mi
-		WHERE r.media_item_id = $1 AND mi.id = r.media_item_id AND r.status = 'approved'
-			AND mi.type = 'light_novel'
-			AND EXISTS (SELECT 1 FROM light_novel_volumes WHERE media_item_id = mi.id)
-		RETURNING r.id`,
-		mediaItemID,
-	)
-	if err != nil {
+	var hasVolumes bool
+	if err := db.QueryRow(
+		`SELECT EXISTS (SELECT 1 FROM light_novel_volumes WHERE media_item_id = $1)`, mediaItemID,
+	).Scan(&hasVolumes); err != nil {
 		logger.Warn("completing requests for %s: %s", mediaItemID, err.Error())
 		return
 	}
-	var ids []string
-	for rows.Next() {
-		var id string
-		if rows.Scan(&id) == nil {
-			ids = append(ids, id)
-		}
-	}
-	rows.Close()
-	for _, id := range ids {
-		notify.Resolve(db, notify.RequestKey(id))
+	if hasVolumes {
+		notify.RequestsFulfilled(db, mediaItemID)
 	}
 }
 

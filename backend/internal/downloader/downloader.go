@@ -150,6 +150,7 @@ func Run(db *sql.DB, jobID string, mediaItemID string) {
 	db.Exec(`UPDATE download_jobs 
         SET status = 'complete', progress_pct = 100, completed_at = NOW()
         WHERE id = $1`, jobID)
+	notify.JobArrived(db, jobID, 1)
 }
 
 /*

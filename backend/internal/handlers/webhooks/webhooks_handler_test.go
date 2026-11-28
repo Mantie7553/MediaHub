@@ -65,6 +65,31 @@ func TestDownloadSyncsTheItem(t *testing.T) {
 	}
 }
 
+func TestOnlyNewDownloadsNotify(t *testing.T) {
+	type call struct {
+		column string
+		id     int
+		added  int
+	}
+	var calls []call
+	h := &Handler{syncer: &fakeSyncer{}, run: func(fn func()) { fn() }}
+	h.arrived = func(_, column string, id, added int) { calls = append(calls, call{column, id, added}) }
+
+	post := func(handler http.HandlerFunc, body string) {
+		handler(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body)))
+	}
+	post(h.SonarrWebhook, `{"eventType":"Download","series":{"id":12},"episodes":[{"id":3},{"id":4}]}`)
+	post(h.SonarrWebhook, `{"eventType":"Download","isUpgrade":true,"series":{"id":12},"episodes":[{"id":3}]}`)
+	post(h.SonarrWebhook, `{"eventType":"Rename","series":{"id":12}}`)
+	post(h.RadarrWebhook, `{"eventType":"Download","movie":{"id":7}}`)
+	post(h.RadarrWebhook, `{"eventType":"Download","isUpgrade":true,"movie":{"id":7}}`)
+
+	want := []call{{"sonarr_series_id", 12, 2}, {"radarr_movie_id", 7, 1}}
+	if len(calls) != len(want) || calls[0] != want[0] || calls[1] != want[1] {
+		t.Errorf("notified %v, want %v", calls, want)
+	}
+}
+
 func TestGrabSummary(t *testing.T) {
 	if got := grabSummary(nil); got != "Grabbed by Sonarr" {
 		t.Errorf("none: %q", got)

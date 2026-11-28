@@ -1,6 +1,7 @@
 import { userIsAdmin } from "../../utils/auth";
 import AccountSection from "./AccountSection";
 import PlaybackSection from "./PlaybackSection";
+import NotificationsSection from "./NotificationsSection";
 import HomePageSection from "./HomePageSection";
 import LibrarySyncSection from "./LibrarySyncSection";
 import AnimeMergeSection from "./AnimeMergeSection";
@@ -21,6 +22,7 @@ export default function SettingsPage() {
                     <AccountSection/>
                     <HomePageSection/>
                     <PlaybackSection/>
+                    <NotificationsSection/>
                 </div>
                 {isAdmin && <div className="grid gap-6">
                     <LibrarySyncSection />

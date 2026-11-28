@@ -253,6 +253,7 @@ func (h *Handler) Approve(w http.ResponseWriter, r *http.Request) {
 	}
 	// whoever approved it, no admin needs to any more
 	notify.Resolve(h.db, notify.RequestKey(requestThingId))
+	notify.RequestApproved(h.db, requestThingId, adminID(r))
 
 	// get the external id for the media item
 	var mediaType string
@@ -321,7 +322,16 @@ func (h *Handler) Reject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	notify.Resolve(h.db, notify.RequestKey(requestThingId))
+	notify.RequestRejected(h.db, requestThingId, adminID(r), req.AdminNotes)
 
 	// return the  request id from the database
 	utils.JSON(w, map[string]string{"id": requestThingId})
+}
+
+// the admin acting on a request, "" when unknown
+func adminID(r *http.Request) string {
+	if u := auth.GetUser(r); u != nil {
+		return u.UserID
+	}
+	return ""
 }

@@ -355,6 +355,9 @@ func RunMangaDex(db *sql.DB, jobID string, mediaItemID string, dest string) {
 		SET status = 'complete', progress_pct = 100, completed_at = NOW(), error_message = $1
 		WHERE id = $2`, note, jobID)
 	logger.Info("Manga download completed job %s: %s", jobID, note)
+	if added > 0 {
+		notify.TitleArrived(db, mediaItemID, added)
+	}
 }
 
 /*

@@ -15,6 +15,7 @@ import (
 
 	"github.com/Mantie7553/MediaHub/backend/internal/downloader"
 	"github.com/Mantie7553/MediaHub/backend/internal/mangafiles"
+	"github.com/Mantie7553/MediaHub/backend/internal/notify"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/auth"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/logger"
 	"github.com/Mantie7553/MediaHub/backend/internal/platform/utils"
@@ -129,6 +130,7 @@ func (h *Handler) UploadChapter(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tracking.PartsAdded(h.db, id)
+	notify.TitleArrived(h.db, id, 1)
 	logger.Info("added chapter %s of %s (%d pages) from an upload", chapter.Number, mangaTitle, pages)
 	utils.JSON(w, map[string]any{
 		"id":             chapterID,

@@ -291,11 +291,13 @@ func (s *Server) routes() {
 			// Job Handler endpoints
 			r.Get("/me/jobs", jobsHandler.GetMine)
 
-			// the user's notifications (only admins get any for now)
+			// the user's notifications, and which kinds they get
 			r.Get("/me/notifications", notificationsHandler.List)
 			r.Get("/me/notifications/unread-count", notificationsHandler.UnreadCount)
 			r.Put("/me/notifications/{id}/read", notificationsHandler.MarkRead)
 			r.Post("/me/notifications/read-all", notificationsHandler.MarkAllRead)
+			r.Get("/me/notification-prefs", notificationsHandler.GetPrefs)
+			r.Put("/me/notification-prefs", notificationsHandler.SetPrefs)
 
 			// Search Handler endpoints
 			r.Get("/search", searchHandler.Search)
